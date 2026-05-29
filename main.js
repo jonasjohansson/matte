@@ -883,6 +883,10 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
     // segmentation results — earlier regions = smaller pixelT, background = 1).
     let reg = textureSampleLevel(texRegions, samp, uv, 0.0);
     mask = clamp(reg.r, 0.0, 1.0);
+  } else if (p.mode == 32u) {
+    // Particles mode: the base never crosses over — the particle layer (drawn
+    // additively on top) IS the transition. Base stays at A (black image-free).
+    mask = 1.0;
   } else {
     let eA = edgeMag(texA, uv, p.scaleA, p.offsetA, p.validA, p.slotAColor);
     let eB = edgeMag(texB, uv, p.scaleB, p.offsetB, p.validB, p.slotBColor);
@@ -909,6 +913,8 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
   if (p.mode == 27u) {
     mixT = select(0.0, 1.0, t >= mask);
   }
+  // Particles mode: base does not transition at all — particles paint the reveal.
+  if (p.mode == 32u) { mixT = 0.0; }
 
   // ---- wet diffusion (mode 4): anticipatory tint of B into A ----
   var colA_eff = cA.rgb;
@@ -2596,7 +2602,7 @@ function renderFrame() {
   pass.end();
 
   // Particle overlay: simulate then additively draw on top of the transition.
-  if (state.partEnable) simAndDrawParticles(enc, canvasView);
+  if (state.partEnable || state.mode === 32) simAndDrawParticles(enc, canvasView);
 
   device.queue.submit([enc.finish()]);
 }
@@ -3278,12 +3284,13 @@ const MODE_OPTIONS = {
   'Film melt — ink burn from center':     29,
   'Light bloom — overexposure to reveal': 30,
   'SAM — sequential region reveal':       31,
+  'Particles — particles drive it':       32,
 };
 const MODE_NAMES_FULL = Object.fromEntries(Object.entries(MODE_OPTIONS).map(([n, id]) => [id, n]));
 fWater.addBinding(state, 'mode', {
   label: 'mode',
   options: MODE_OPTIONS,
-}).on('change', () => { updateModeFolders(); advec.needsReset = true; });
+}).on('change', () => { updateModeFolders(); advec.needsReset = true; particles.needsReset = true; });
 
 const fRim    = fWater.addFolder({ title: 'Pigment rim',    expanded: true });
 fRim.addBinding(state, 'rimWidth', { min: 0, max: 0.4, step: 0.005, label: 'rim width' });
