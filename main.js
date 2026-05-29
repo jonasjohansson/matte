@@ -2115,7 +2115,7 @@ const state = {
   maskScale: 0.9,
   curve: 0,        // 0 linear
   seed: 42,
-  mode: 0,
+  mode: 2,   // default to paper-grain: image-free, this reads as a clear B/W matte
   // mode-specific defaults (mirrors v1)
   rimWidth: 0.12, rimDark: 0.6,
   paperAngle: 0, paperAniso: 4, paperGranulation: 0.5,
