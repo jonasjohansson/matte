@@ -96,7 +96,7 @@ struct Params {
   boundsEnable: u32, boundsCx: f32, boundsCy: f32, boundsW: f32,
   boundsH: f32, boundsSoftness: f32, weBLumaBias: f32, maskShift: f32,
   slotAColor: vec3f, keepAOutsideB: u32,
-  slotBColor: vec3f, _slotBPad: f32,
+  slotBColor: vec3f, texFit: u32,
   burnEdgeWobble: f32, burnCharIntensity: f32, burnCharWidth: f32, burnGlowIntensity: f32,
   burnGlowWidth: f32, burnSeedCount: u32, burnBrowning: f32, burnBrowningWidth: f32,
   burnAshSpatter: f32, burnCharPersistence: f32, burnEmberTrail: f32, burnBIgnite: f32,
@@ -119,14 +119,25 @@ struct Params {
 @group(0) @binding(6) var texRegions: texture_2d<f32>;
 @group(0) @binding(7) var texTexture: texture_2d<f32>;
 
-fn texContainLuma(uv: vec2f) -> f32 {
-  // Contain-fit the texture inside the canvas (preserve the texture's aspect);
-  // the letterbox area returns 0.5 (neutral — no modulation / no tint).
+fn texFitUV(uv: vec2f) -> vec2f {
+  // texFit: 0 = stretch (fill, distort), 1 = contain (fit inside, letterbox),
+  // 2 = cover (fill, crop). Aspect-correct using canvas vs texture aspect.
+  if (p.texFit == 0u) { return uv; }
   let cAR = p.canvasAspect;
   let tAR = p.texAspect;
   var u = uv;
-  if (tAR > cAR) { let s = cAR / tAR; u.y = (uv.y - 0.5) / s + 0.5; }
-  else           { let s = tAR / cAR; u.x = (uv.x - 0.5) / s + 0.5; }
+  if (p.texFit == 2u) {            // cover — contract to a centred sub-rect
+    if (tAR > cAR) { u.x = (uv.x - 0.5) * (cAR / tAR) + 0.5; }
+    else           { u.y = (uv.y - 0.5) * (tAR / cAR) + 0.5; }
+  } else {                          // contain — expand past edges (letterbox)
+    if (tAR > cAR) { u.y = (uv.y - 0.5) * (tAR / cAR) + 0.5; }
+    else           { u.x = (uv.x - 0.5) * (cAR / tAR) + 0.5; }
+  }
+  return u;
+}
+fn texFitLuma(uv: vec2f) -> f32 {
+  let u = texFitUV(uv);
+  // Outside [0,1] only happens for 'contain' letterbox → neutral 0.5 (no effect).
   if (u.x < 0.0 || u.x > 1.0 || u.y < 0.0 || u.y > 1.0) { return 0.5; }
   return luma(textureSampleLevel(texTexture, samp, u, 0.0).rgb);
 }
@@ -896,9 +907,10 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
     let reg = textureSampleLevel(texRegions, samp, uv, 0.0);
     mask = clamp(reg.r, 0.0, 1.0);
   } else if (p.mode == 32u) {
-    // Particles mode: the base never crosses over — the particle layer (drawn
-    // additively on top) IS the transition. Base stays at A (black image-free).
-    mask = 1.0;
+    // Texture-source reveal: the loaded texture's luminance IS the mask, so the
+    // transition reveals along the texture's tones (e.g. a watercolor wash
+    // dissolving in by value). Contain-fit so the texture keeps its aspect.
+    mask = texFitLuma(uv);
   } else {
     let eA = edgeMag(texA, uv, p.scaleA, p.offsetA, p.validA, p.slotAColor);
     let eB = edgeMag(texB, uv, p.scaleB, p.offsetB, p.validB, p.slotBColor);
@@ -913,7 +925,7 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
   // luminance perturbs the reveal threshold, so the transition breaks up and
   // wicks along the texture instead of advancing as a clean front.
   if (p.texAmount > 0.0001) {
-    let texL = texContainLuma(uv);
+    let texL = texFitLuma(uv);
     mask = clamp(mask + (texL - 0.5) * p.texAmount, 0.0, 1.0);
   }
   mask = clamp(mask + p.maskShift, 0.0, 1.0);
@@ -925,8 +937,6 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
   if (p.mode == 27u) {
     mixT = select(0.0, 1.0, t >= mask);
   }
-  // Particles mode: base does not transition at all — particles paint the reveal.
-  if (p.mode == 32u) { mixT = 0.0; }
 
   // ---- wet diffusion (mode 4): anticipatory tint of B into A ----
   var colA_eff = cA.rgb;
@@ -1285,7 +1295,7 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
   // Texture overlay on the composite (image/preview look only — the matte path
   // returned above, keeping the matte clean). Paper/grunge multiplied in.
   if (p.texBg > 0.0001) {
-    let texL = texContainLuma(uv);
+    let texL = texFitLuma(uv);
     outc = mix(outc, outc * (0.4 + 1.2 * texL), p.texBg);
   }
   let rgb = clamp(outc, vec3f(0.0), vec3f(1.0));
@@ -1364,7 +1374,7 @@ struct Params {
   boundsEnable: u32, boundsCx: f32, boundsCy: f32, boundsW: f32,
   boundsH: f32, boundsSoftness: f32, weBLumaBias: f32, maskShift: f32,
   slotAColor: vec3f, keepAOutsideB: u32,
-  slotBColor: vec3f, _slotBPad: f32,
+  slotBColor: vec3f, texFit: u32,
   burnEdgeWobble: f32, burnCharIntensity: f32, burnCharWidth: f32, burnGlowIntensity: f32,
   burnGlowWidth: f32, burnSeedCount: u32, burnBrowning: f32, burnBrowningWidth: f32,
   burnAshSpatter: f32, burnCharPersistence: f32, burnEmberTrail: f32, burnBIgnite: f32,
@@ -1592,7 +1602,7 @@ struct Params {
   boundsEnable: u32, boundsCx: f32, boundsCy: f32, boundsW: f32,
   boundsH: f32, boundsSoftness: f32, weBLumaBias: f32, maskShift: f32,
   slotAColor: vec3f, keepAOutsideB: u32,
-  slotBColor: vec3f, _slotBPad: f32,
+  slotBColor: vec3f, texFit: u32,
   burnEdgeWobble: f32, burnCharIntensity: f32, burnCharWidth: f32, burnGlowIntensity: f32,
   burnGlowWidth: f32, burnSeedCount: u32, burnBrowning: f32, burnBrowningWidth: f32,
   burnAshSpatter: f32, burnCharPersistence: f32, burnEmberTrail: f32, burnBIgnite: f32,
@@ -2106,7 +2116,7 @@ const state = {
   reverse: false,
   duration: 15.0,
   // texture input (grunge / watercolor paper) — modulates the reveal + bg tint
-  texImg: null, texAmount: 0.0, texBg: 0.0, texAspect: 1.0,
+  texImg: null, texAmount: 0.0, texBg: 0.0, texAspect: 1.0, texFit: 1,  // fit: 0 stretch,1 contain,2 cover
   // custom transition dimensions (independent of source footage size).
   // Default ON: trans is primarily a matte-video builder, so it boots to a
   // fixed canvas showing the B/W matte without requiring any footage.
@@ -2440,7 +2450,7 @@ function writeUniforms() {
   const cb = hexToRgb(state.slotBColor);
   uboF32[120] = ca[0]; uboF32[121] = ca[1]; uboF32[122] = ca[2];
   uboU32[123] = state.keepAOutsideB ? 1 : 0;
-  uboF32[124] = cb[0]; uboF32[125] = cb[1]; uboF32[126] = cb[2]; uboF32[127] = 0;
+  uboF32[124] = cb[0]; uboF32[125] = cb[1]; uboF32[126] = cb[2]; uboU32[127] = state.texFit;
   // -- 128..135 -- burn mode 27 (paper scorch from edges)
   uboF32[128] = state.burnEdgeWobble;
   uboF32[129] = state.burnCharIntensity;
@@ -2618,7 +2628,7 @@ function renderFrame() {
   pass.end();
 
   // Particle overlay: simulate then additively draw on top of the transition.
-  if (state.partEnable || state.mode === 32) simAndDrawParticles(enc, canvasView);
+  if (state.partEnable) simAndDrawParticles(enc, canvasView);
 
   device.queue.submit([enc.finish()]);
 }
@@ -3345,6 +3355,7 @@ const MODE_OPTIONS = {
   'Video mask (T slot)':                  28,
   'Film melt — ink burn from center':     29,
   'Light bloom — overexposure to reveal': 30,
+  'Texture — reveal by luminance':        32,
 };
 const MODE_NAMES_FULL = Object.fromEntries(Object.entries(MODE_OPTIONS).map(([n, id]) => [id, n]));
 fWater.addBinding(state, 'mode', {
@@ -3639,6 +3650,7 @@ fTex.addButton({ title: 'Load texture…' }).on('click', () => {
   inp.onchange = () => { if (inp.files && inp.files[0]) loadTextureFile(inp.files[0]); };
   inp.click();
 });
+fTex.addBinding(state, 'texFit', { label: 'fit', options: { 'contain': 1, 'cover': 2, 'stretch': 0 } });
 fTex.addBinding(state, 'texAmount', { min: 0, max: 1, step: 0.01, label: 'dissolve along texture' });
 fTex.addBinding(state, 'texBg', { min: 0, max: 1, step: 0.01, label: 'bg tint (image mode)' });
 fTex.addButton({ title: 'Clear texture' }).on('click', () => clearTexture());
@@ -4613,7 +4625,7 @@ const SESSION_LS_KEY = 'trans:session';
 const PERSIST_KEYS = [
   ...PRESET_KEYS,
   'fit', 'bg',
-  'customSize', 'outW', 'outH', 'texAmount', 'texBg',
+  'customSize', 'outW', 'outH', 'texAmount', 'texBg', 'texFit',
   'exportFps', 'exportSizeMode', 'exportPadBottom', 'matteOutput', 'matteInvert',
   'slotAFillMode', 'slotAColor', 'slotBFillMode', 'slotBColor', 'keepAOutsideB',
   'partEnable', 'partCount', 'partBurst', 'partSpeed', 'partCurl', 'partTrail',
