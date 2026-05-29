@@ -940,13 +940,13 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
     var d = 1.0;
     if (p.originCount > 0u) {
       // grow from the nearest placed emission point (multiple blooms)
-      for (var i = 0u; i < 16u; i = i + 1u) {
+      for (var i = 0u; i < 8u; i = i + 1u) {
         if (i >= p.originCount) { break; }
-        let v = p.originPts[i >> 1u];
-        let pt = select(v.zw, v.xy, (i & 1u) == 0u);
-        var duv = uv - pt;
+        let v = p.originPts[i];          // xy = point, z = start time (stagger)
+        var duv = uv - v.xy;
         duv.x = duv.x * p.canvasAspect;
-        d = min(d, length(duv) / (0.5 * diag));
+        let dist = length(duv) / (0.5 * diag);
+        d = min(d, clamp(dist + v.z, 0.0, 1.0));
       }
     } else {
       var duv = uv - vec2f(p.originX, p.originY);
@@ -2195,6 +2195,7 @@ const state = {
   // from image A's bright focal region when an image is loaded.
   originAmount: 0.4, originX: 0.5, originY: 0.5, originFromImage: true,
   originPoints: [], placePoints: false,  // click-placed emission points
+  pointStagger: 0, pointRandom: 0.5,     // stagger point start times + randomness
   turbulence: 0.35,  // organic ink-in-water break-up of the reveal front
   // custom transition dimensions (independent of source footage size).
   // Default ON: trans is primarily a matte-video builder, so it boots to a
@@ -2579,12 +2580,17 @@ function writeUniforms() {
   uboF32[173] = state.originX;
   uboF32[174] = state.originY;
   uboF32[175] = state.turbulence;
-  // -- 176..207 -- origin points (packed 2 per vec4), 208 = count
+  // -- 176..207 -- origin points: one vec4 each (x, y, startTime, _), 208 = count
   const pts = state.originPoints || [];
-  const nPts = Math.min(16, pts.length);
+  const nPts = Math.min(8, pts.length);
+  const stag = state.pointStagger || 0, rnd = state.pointRandom || 0;
+  const maxI = Math.max(1, nPts - 1);
   for (let i = 0; i < nPts; i++) {
-    const o = 176 + (i >> 1) * 4 + (i & 1) * 2;
-    uboF32[o] = pts[i].x; uboF32[o + 1] = pts[i].y;
+    const orderFrac = i / maxI;                 // 0..1 in placement order
+    const r = (pts[i].r != null) ? pts[i].r : 0; // per-point random
+    const startT = Math.min(0.95, Math.max(0, (orderFrac + (r - orderFrac) * rnd) * stag));
+    const o = 176 + i * 4;
+    uboF32[o] = pts[i].x; uboF32[o + 1] = pts[i].y; uboF32[o + 2] = startT; uboF32[o + 3] = 0;
   }
   uboU32[208] = nPts;
   // -- 80..95 -- new painterly modes (16..21) + global paper grain
@@ -2621,12 +2627,9 @@ function render() {
     let pT = elapsed / state.duration;
     if (pT >= 1) {
       if (state.loop) {
-        state.startTime = now; pT = 0;
-        // Skip the ping-pong reverse when a transition video is loaded —
-        // HTMLVideoElement can't actually play backward, so reverse playback
-        // would require per-frame seeking and lag badly. Loop just restarts
-        // forward instead.
-        if (!state.videoT) state.reverse = !state.reverse;
+        // Restart forward each loop (start → stop → restart), not ping-pong.
+        state.startTime = now; pT = 0; state.reverse = false;
+        if (state.partEnable) particles.needsReset = true;
       } else {
         pT = 1; state.playing = false;
         if (typeof updateTransportLabels !== 'undefined') updateTransportLabels();
@@ -3720,6 +3723,8 @@ btnPlace.on('click', () => {
 fDis.addButton({ title: 'Clear points' }).on('click', () => {
   state.originPoints = []; drawOriginPoints(); restartPlayback();
 });
+fDis.addBinding(state, 'pointStagger', { min: 0, max: 1, step: 0.01, label: 'point stagger' });
+fDis.addBinding(state, 'pointRandom', { min: 0, max: 1, step: 0.01, label: 'stagger random' });
 fDis.addBinding(state, 'originFromImage', { label: 'else: from image A' })
   .on('change', () => { if (state.originFromImage && state.imgA) computeOriginFromImage(state.imgA); });
 // — advanced shaping (collapsed) —
@@ -4567,7 +4572,7 @@ function onPlaceClick(e) {
   const r = canvas.getBoundingClientRect();
   const x = (e.clientX - r.left) / r.width;
   const y = (e.clientY - r.top) / r.height;  // y-down to match the shader origin
-  state.originPoints.push({ x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) });
+  state.originPoints.push({ x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)), r: Math.random() });
   drawOriginPoints();
   restartPlayback();  // replay so the bloom from the new point is visible
 }
@@ -4758,6 +4763,7 @@ const PERSIST_KEYS = [
   'fit', 'bg',
   'customSize', 'outW', 'outH', 'texAmount', 'texBg', 'texFit',
   'originAmount', 'originX', 'originY', 'originFromImage', 'turbulence', 'originPoints',
+  'pointStagger', 'pointRandom',
   'exportFps', 'exportSizeMode', 'exportPadBottom', 'matteOutput', 'matteInvert',
   'slotAFillMode', 'slotAColor', 'slotBFillMode', 'slotBColor', 'keepAOutsideB',
   'partEnable', 'partCount', 'partBurst', 'partSpeed', 'partCurl', 'partTrail',
