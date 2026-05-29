@@ -5029,5 +5029,5 @@ function loadSession() {
 loadSession();
 pane.on('change', () => saveSession());
 
-window.__tool = { state, pane, device, adapter, uploadTexture, loadTextureFile, clearTexture };
+window.__tool = { state, pane, device, adapter, uploadTexture, loadTextureFile, clearTexture, loadFromUrl };
 console.log('[trans] WebGPU ready, format:', presentationFormat);
