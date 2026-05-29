@@ -111,7 +111,7 @@ struct Params {
   originAmount: f32, originX: f32, originY: f32, turbulence: f32,
   originPts: array<vec4f, 8>,
   originCount: u32, flow: f32, undulate: f32, auroraDensity: f32,
-  auroraHeight: f32, auroraSpeed: f32, _aa0: f32, _aa1: f32,
+  auroraHeight: f32, auroraSpeed: f32, auroraDark: f32, auroraWave: f32,
 };
 
 @group(0) @binding(0) var<uniform> p: Params;
@@ -261,7 +261,13 @@ fn ambAurora(uv: vec2f) -> f32 {
     let env = exp(-up * reach) * smoothstep(base + 0.12, base - 0.03, uv.y) * smoothstep(0.0, 0.12, uv.y);
     v = v + cluster * mix(0.5, 1.0, rays) * env * (0.7 + 0.3 * sin(ph * 1.1 + x * 2.0 + fi * 2.0));
   }
-  return clamp(v * 1.5, 0.0, 1.0);
+  // a broad brightness wave of borealis travelling sideways through the curtains
+  let wave = 0.5 + 0.5 * sin(x * 0.55 - ph * 0.7 + fbm(vec2f(x * 0.4, ph * 0.1)) * 3.5);
+  v = v * mix(1.0, wave, p.auroraWave);
+  v = clamp(v * 1.5, 0.0, 1.0);
+  // darkness: deepen the gaps and boost contrast for more variance
+  v = pow(v, 1.0 + p.auroraDark * 3.0);
+  return v;
 }
 fn ambGlare(uv: vec2f) -> f32 {
   let ph = p.t * 6.2831853;
@@ -1534,7 +1540,7 @@ struct Params {
   originAmount: f32, originX: f32, originY: f32, turbulence: f32,
   originPts: array<vec4f, 8>,
   originCount: u32, flow: f32, undulate: f32, auroraDensity: f32,
-  auroraHeight: f32, auroraSpeed: f32, _aa0: f32, _aa1: f32,
+  auroraHeight: f32, auroraSpeed: f32, auroraDark: f32, auroraWave: f32,
 };
 
 @group(0) @binding(0) var<uniform> p: Params;
@@ -1766,7 +1772,7 @@ struct Params {
   originAmount: f32, originX: f32, originY: f32, turbulence: f32,
   originPts: array<vec4f, 8>,
   originCount: u32, flow: f32, undulate: f32, auroraDensity: f32,
-  auroraHeight: f32, auroraSpeed: f32, _aa0: f32, _aa1: f32,
+  auroraHeight: f32, auroraSpeed: f32, auroraDark: f32, auroraWave: f32,
 };
 @group(0) @binding(0) var<uniform> p: Params;
 @group(0) @binding(1) var texA: texture_2d<f32>;
@@ -2311,7 +2317,7 @@ const state = {
   flow: 0.3,         // animate the turbulence over time (churning/rising)
   undulate: 0.0,     // slow large-scale wave/dance of the reveal (aurora-like)
   animate: 0.0,      // evolve each mode's own pattern over the loop (per-mode movement)
-  auroraDensity: 0.5, auroraHeight: 0.5, auroraSpeed: 0.4,  // aurora mode settings
+  auroraDensity: 0.5, auroraHeight: 0.5, auroraSpeed: 0.4, auroraDark: 0.3, auroraWave: 0.5,  // aurora settings
   // custom transition dimensions (independent of source footage size).
   // Default ON: trans is primarily a matte-video builder, so it boots to a
   // fixed canvas showing the B/W matte without requiring any footage.
@@ -2716,6 +2722,8 @@ function writeUniforms() {
   uboF32[211] = state.auroraDensity;
   uboF32[212] = state.auroraHeight;
   uboF32[213] = state.auroraSpeed;
+  uboF32[214] = state.auroraDark;
+  uboF32[215] = state.auroraWave;
   // -- 80..95 -- new painterly modes (16..21) + global paper grain
   uboF32[80] = state.strokeScale;
   uboF32[81] = state.strokeAniso;
@@ -3819,6 +3827,8 @@ const fAurora = fWater.addFolder({ title: 'Aurora', expanded: true });
 fAurora.addBinding(state, 'auroraDensity', { min: 0, max: 1, step: 0.01, label: 'curtain density' });
 fAurora.addBinding(state, 'auroraHeight',  { min: 0, max: 1, step: 0.01, label: 'ray height' });
 fAurora.addBinding(state, 'auroraSpeed',   { min: 0, max: 1, step: 0.01, label: 'speed' });
+fAurora.addBinding(state, 'auroraWave',    { min: 0, max: 1, step: 0.01, label: 'wave through' });
+fAurora.addBinding(state, 'auroraDark',    { min: 0, max: 1, step: 0.01, label: 'darkness' });
 
 function updateModeFolders() {
   fAurora.hidden = state.mode !== 38;
@@ -4978,14 +4988,14 @@ fSamHelp.addBinding(samHelp, 'altClick',   { readonly: true, label: 'alt-click' 
 const SESSION_LS_KEY = 'trans:session';
 // Bump when default values change so stale saved sessions don't mask new
 // defaults (e.g. matte-first, cover texture fit, turbulence, origin).
-const SESSION_VERSION = 8;
+const SESSION_VERSION = 9;
 const PERSIST_KEYS = [
   ...PRESET_KEYS,
   'fit', 'bg',
   'customSize', 'outW', 'outH', 'texAmount', 'texBg', 'texFit',
   'originAmount', 'originX', 'originY', 'originFromImage', 'turbulence', 'flow', 'undulate', 'animate', 'originPoints',
   'pointStagger', 'pointRandom', 'paintBrush',
-  'auroraDensity', 'auroraHeight', 'auroraSpeed',
+  'auroraDensity', 'auroraHeight', 'auroraSpeed', 'auroraDark', 'auroraWave',
   'exportFps', 'exportSizeMode', 'exportPadBottom', 'matteOutput', 'matteInvert',
   'slotAFillMode', 'slotAColor', 'slotBFillMode', 'slotBColor', 'keepAOutsideB',
   'partEnable', 'partCount', 'partBurst', 'partSpeed', 'partCurl', 'partTrail',
