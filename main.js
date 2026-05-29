@@ -969,6 +969,11 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
     // transition reveals along the texture's tones (e.g. a watercolor wash
     // dissolving in by value). Contain-fit so the texture keeps its aspect.
     mask = texFitLuma(uv);
+  } else if (p.mode == 37u) {
+    // Paint: the painted field (in texTexture) drives the reveal. Bright paint =
+    // reveals early; the soft brush falloff makes each stroke grow/expand. Stroke
+    // brightness encodes its start time (stagger).
+    mask = clamp(1.0 - texFitLuma(uv), 0.0, 1.0);
   } else {
     let eA = edgeMag(texA, uv, p.scaleA, p.offsetA, p.validA, p.slotAColor);
     let eB = edgeMag(texB, uv, p.scaleB, p.offsetB, p.validB, p.slotBColor);
@@ -2263,6 +2268,7 @@ const state = {
   originAmount: 0.4, originX: 0.5, originY: 0.5, originFromImage: true,
   originPoints: [], placePoints: false,  // click-placed emission points
   pointStagger: 0.5, pointRandom: 0.7,   // stagger point start times + randomness
+  paintBrush: 0.12,                      // paint-mode brush radius (fraction of width)
   turbulence: 0.35,  // organic ink-in-water break-up of the reveal front
   flow: 0.3,         // animate the turbulence over time (churning/rising)
   // custom transition dimensions (independent of source footage size).
@@ -3519,12 +3525,13 @@ const MODE_OPTIONS = {
   'Ambient — water ripples (looping)':    34,
   'Ambient — sun glare (looping)':        35,
   'Ambient — light streaks (looping)':    36,
+  'Paint — paint the movement':           37,
 };
 const MODE_NAMES_FULL = Object.fromEntries(Object.entries(MODE_OPTIONS).map(([n, id]) => [id, n]));
 fWater.addBinding(state, 'mode', {
   label: 'mode',
   options: MODE_OPTIONS,
-}).on('change', () => { updateModeFolders(); advec.needsReset = true; particles.needsReset = true; restartPlayback(); });
+}).on('change', () => { updateModeFolders(); advec.needsReset = true; particles.needsReset = true; if (typeof syncPaintMode === 'function') syncPaintMode(); restartPlayback(); });
 
 const fRim    = fWater.addFolder({ title: 'Pigment rim',    expanded: true });
 fRim.addBinding(state, 'rimWidth', { min: 0, max: 0.4, step: 0.005, label: 'rim width' });
@@ -3808,8 +3815,10 @@ btnPlace.on('click', () => {
 fDis.addButton({ title: 'Clear points' }).on('click', () => {
   state.originPoints = []; drawOriginPoints(); restartPlayback();
 });
-fDis.addBinding(state, 'pointStagger', { min: 0, max: 1, step: 0.01, label: 'point stagger' });
+fDis.addBinding(state, 'pointStagger', { min: 0, max: 1, step: 0.01, label: 'point/paint stagger' });
 fDis.addBinding(state, 'pointRandom', { min: 0, max: 1, step: 0.01, label: 'stagger random' });
+fDis.addBinding(state, 'paintBrush', { min: 0.02, max: 0.4, step: 0.01, label: 'paint brush (mode: Paint)' });
+fDis.addButton({ title: 'Clear paint' }).on('click', () => { if (typeof clearPaint === 'function') clearPaint(); });
 fDis.addBinding(state, 'originFromImage', { label: 'else: from image A' })
   .on('change', () => { if (state.originFromImage && state.imgA) computeOriginFromImage(state.imgA); });
 // — advanced shaping (collapsed) —
@@ -4663,7 +4672,71 @@ function onPlaceClick(e) {
 }
 canvas.addEventListener('click', onPlaceClick);
 samOverlay.addEventListener('click', onPlaceClick);
-window.addEventListener('resize', () => { if (state.originPoints.length || state.placePoints) drawOriginPoints(); });
+window.addEventListener('resize', () => { if (state.originPoints.length || state.placePoints) drawOriginPoints(); else if (state.mode === 37) drawPaintPreview(); });
+
+// ---- paint mode (37): paint movement strokes that drive & grow the reveal ----
+let paintCanvas = null, paintCtx = null, paintStrokeIdx = 0, painting = false, paintDirty = false, _curStrokeVal = 1;
+function ensurePaintCanvas() {
+  const aspect = canvas.width / Math.max(1, canvas.height);
+  const W = 1024, H = Math.max(2, Math.round(1024 / aspect));
+  if (!paintCanvas) { paintCanvas = document.createElement('canvas'); paintCtx = paintCanvas.getContext('2d'); }
+  if (paintCanvas.width !== W || paintCanvas.height !== H) {
+    paintCanvas.width = W; paintCanvas.height = H;
+    paintCtx.fillStyle = '#000'; paintCtx.fillRect(0, 0, W, H);
+  }
+}
+async function uploadPaintTexture() {
+  ensurePaintCanvas();
+  const bmp = await createImageBitmap(paintCanvas);
+  const tex = device.createTexture({ label: 'paint', size: [paintCanvas.width, paintCanvas.height, 1], format: 'rgba8unorm',
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT });
+  device.queue.copyExternalImageToTexture({ source: bmp }, { texture: tex }, [paintCanvas.width, paintCanvas.height, 1]);
+  texTexture.destroy(); texTexture = tex; bmp.close();
+  state.texAspect = paintCanvas.width / paintCanvas.height;
+  bindGroup = makeBindGroup();
+}
+function clearPaint() { ensurePaintCanvas(); paintCtx.fillStyle = '#000'; paintCtx.fillRect(0, 0, paintCanvas.width, paintCanvas.height); paintStrokeIdx = 0; uploadPaintTexture(); drawPaintPreview(); }
+function paintDab(sx, sy, val) {
+  ensurePaintCanvas();
+  const x = sx * paintCanvas.width, y = sy * paintCanvas.height;
+  const R = Math.max(6, state.paintBrush * paintCanvas.width);
+  const c = Math.round(Math.min(1, Math.max(0, val)) * 255);
+  const g = paintCtx.createRadialGradient(x, y, 0, x, y, R);
+  g.addColorStop(0, `rgba(${c},${c},${c},1)`); g.addColorStop(1, `rgba(${c},${c},${c},0)`);
+  paintCtx.globalCompositeOperation = 'lighten';
+  paintCtx.fillStyle = g; paintCtx.fillRect(x - R, y - R, R * 2, R * 2);
+}
+function drawPaintPreview() {
+  samSyncOverlay();
+  samOverlayCtx.clearRect(0, 0, samOverlay.width, samOverlay.height);
+  if (paintCanvas) { samOverlayCtx.globalAlpha = 0.35; samOverlayCtx.drawImage(paintCanvas, 0, 0, samOverlay.width, samOverlay.height); samOverlayCtx.globalAlpha = 1; }
+  samOverlay.classList.toggle('visible', state.mode === 37);
+}
+function syncPaintMode() {
+  const on = state.mode === 37;
+  if (on) { ensurePaintCanvas(); uploadPaintTexture(); drawPaintPreview(); }
+  samOverlay.classList.toggle('interactive', on || state.placePoints);
+  samOverlay.classList.toggle('visible', on || state.placePoints || state.originPoints.length > 0);
+}
+function paintAt(e) {
+  const r = canvas.getBoundingClientRect();
+  const sx = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+  const sy = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+  paintDab(sx, sy, _curStrokeVal); drawPaintPreview(); paintDirty = true;
+}
+samOverlay.addEventListener('pointerdown', e => {
+  if (state.mode !== 37) return;
+  painting = true;
+  // each stroke staggers like the points (order + randomness)
+  const k = paintStrokeIdx, rr = Math.random();
+  const orderFrac = Math.min(1, k * 0.18);
+  const startT = Math.min(0.92, (orderFrac + (rr - orderFrac) * (state.pointRandom || 0)) * (state.pointStagger || 0));
+  _curStrokeVal = 1 - startT;
+  paintAt(e);
+});
+samOverlay.addEventListener('pointermove', e => { if (painting) paintAt(e); });
+window.addEventListener('pointerup', () => { if (!painting) return; painting = false; paintStrokeIdx++; uploadPaintTexture(); restartPlayback(); });
+setInterval(() => { if (painting && paintDirty) { paintDirty = false; uploadPaintTexture(); } }, 160);
 
 function samSetSegmentMode(on) {
   sam.segmentMode = on;
@@ -4874,6 +4947,7 @@ function loadSession() {
     pane.refresh();
     updateModeFolders();
     if (Array.isArray(state.originPoints) && state.originPoints.length) drawOriginPoints();
+    if (state.mode === 37 && typeof syncPaintMode === 'function') syncPaintMode();
     if (state.mode >= 10 && state.mode <= 14) advec.needsReset = true;
   } catch {}
 }
