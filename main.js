@@ -89,10 +89,10 @@ struct Params {
   edgeFirstScale: f32, flowAmount: f32, dabsCount: u32, dabsReach: f32,
   // -- 368..383 -- dabs wobble / density / global paper grain
   dabsWobble: f32, densityGravity: f32, densitySmear: f32, paperGrain: f32,
-  formStrokeCount: u32, formStrokeSize: f32, formStrokeWobble: f32, _f1: f32,
+  formStrokeCount: u32, formStrokeSize: f32, formStrokeWobble: f32, texAmount: f32,
   bloomLightBias: f32, bloomWobble: f32, bloomPaperShow: f32, bloomImageBias: f32,
   stageBands: f32, stageOverlap: f32, matteOutput: u32, matteInvert: u32,
-  migrationStrength: f32, migrationDir: u32, migrationTurb: f32, _m1: f32,
+  migrationStrength: f32, migrationDir: u32, migrationTurb: f32, texBg: f32,
   boundsEnable: u32, boundsCx: f32, boundsCy: f32, boundsW: f32,
   boundsH: f32, boundsSoftness: f32, weBLumaBias: f32, maskShift: f32,
   slotAColor: vec3f, keepAOutsideB: u32,
@@ -117,6 +117,7 @@ struct Params {
 @group(0) @binding(4) var advState: texture_2d<f32>;
 @group(0) @binding(5) var texT: texture_2d<f32>;
 @group(0) @binding(6) var texRegions: texture_2d<f32>;
+@group(0) @binding(7) var texTexture: texture_2d<f32>;
 
 @vertex fn vs(@builtin(vertex_index) idx: u32) -> VSOut {
   // 6-vertex fullscreen triangle pair, with UV in [0,1] (y up to match WebGL).
@@ -892,6 +893,13 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
   // earlier (negative) or later (positive) without touching its inner logic.
   // Useful for image-driven masks whose values cluster around the source's
   // tonal distribution rather than spreading evenly across [0,1].
+  // Texture-driven dissolve: a loaded grunge / watercolor-paper texture's
+  // luminance perturbs the reveal threshold, so the transition breaks up and
+  // wicks along the texture instead of advancing as a clean front.
+  if (p.texAmount > 0.0001) {
+    let texL = luma(textureSampleLevel(texTexture, samp, uv, 0.0).rgb);
+    mask = clamp(mask + (texL - 0.5) * p.texAmount, 0.0, 1.0);
+  }
   mask = clamp(mask + p.maskShift, 0.0, 1.0);
   var mixT = clamp(smoothstep(mask - sp, mask + sp, t), 0.0, 1.0);
   // Burn mode: hard step at the front — no crossfade between A and B at all.
@@ -1256,6 +1264,12 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
     return vec4f(vec3f(mv), 1.0);
   }
 
+  // Texture overlay on the composite (image/preview look only — the matte path
+  // returned above, keeping the matte clean). Paper/grunge multiplied in.
+  if (p.texBg > 0.0001) {
+    let texL = luma(textureSampleLevel(texTexture, samp, uv, 0.0).rgb);
+    outc = mix(outc, outc * (0.4 + 1.2 * texL), p.texBg);
+  }
   let rgb = clamp(outc, vec3f(0.0), vec3f(1.0));
   return vec4f(rgb * alpha, alpha);
 }
@@ -1279,6 +1293,7 @@ const bindGroupLayout = device.createBindGroupLayout({
     { binding: 4, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
     { binding: 5, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
     { binding: 6, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+    { binding: 7, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
   ],
 });
 device.pushErrorScope('validation');
@@ -1324,10 +1339,10 @@ struct Params {
   glazeDirection: u32, glazeWarm: f32, edgeFirstInk: f32, edgeFirstFade: f32,
   edgeFirstScale: f32, flowAmount: f32, dabsCount: u32, dabsReach: f32,
   dabsWobble: f32, densityGravity: f32, densitySmear: f32, paperGrain: f32,
-  formStrokeCount: u32, formStrokeSize: f32, formStrokeWobble: f32, _f1: f32,
+  formStrokeCount: u32, formStrokeSize: f32, formStrokeWobble: f32, texAmount: f32,
   bloomLightBias: f32, bloomWobble: f32, bloomPaperShow: f32, bloomImageBias: f32,
   stageBands: f32, stageOverlap: f32, matteOutput: u32, matteInvert: u32,
-  migrationStrength: f32, migrationDir: u32, migrationTurb: f32, _m1: f32,
+  migrationStrength: f32, migrationDir: u32, migrationTurb: f32, texBg: f32,
   boundsEnable: u32, boundsCx: f32, boundsCy: f32, boundsW: f32,
   boundsH: f32, boundsSoftness: f32, weBLumaBias: f32, maskShift: f32,
   slotAColor: vec3f, keepAOutsideB: u32,
@@ -1552,10 +1567,10 @@ struct Params {
   glazeDirection: u32, glazeWarm: f32, edgeFirstInk: f32, edgeFirstFade: f32,
   edgeFirstScale: f32, flowAmount: f32, dabsCount: u32, dabsReach: f32,
   dabsWobble: f32, densityGravity: f32, densitySmear: f32, paperGrain: f32,
-  formStrokeCount: u32, formStrokeSize: f32, formStrokeWobble: f32, _f1: f32,
+  formStrokeCount: u32, formStrokeSize: f32, formStrokeWobble: f32, texAmount: f32,
   bloomLightBias: f32, bloomWobble: f32, bloomPaperShow: f32, bloomImageBias: f32,
   stageBands: f32, stageOverlap: f32, matteOutput: u32, matteInvert: u32,
-  migrationStrength: f32, migrationDir: u32, migrationTurb: f32, _m1: f32,
+  migrationStrength: f32, migrationDir: u32, migrationTurb: f32, texBg: f32,
   boundsEnable: u32, boundsCx: f32, boundsCy: f32, boundsW: f32,
   boundsH: f32, boundsSoftness: f32, weBLumaBias: f32, maskShift: f32,
   slotAColor: vec3f, keepAOutsideB: u32,
@@ -1656,6 +1671,7 @@ function makeSimBindGroup(stateIn) {
       { binding: 4, resource: stateIn.createView() },
       { binding: 5, resource: (texT || placeholderTexT).createView() },
       { binding: 6, resource: texRegions.createView() },
+      { binding: 7, resource: texTexture.createView() },
     ],
   });
 }
@@ -1670,6 +1686,7 @@ function makeDisplayBindGroup(finalState) {
       { binding: 4, resource: finalState.createView() },
       { binding: 5, resource: (texT || placeholderTexT).createView() },
       { binding: 6, resource: texRegions.createView() },
+      { binding: 7, resource: texTexture.createView() },
     ],
   });
 }
@@ -1709,6 +1726,7 @@ function makePlaceholderTexture() {
 }
 let texA = makePlaceholderTexture();
 let texB = makePlaceholderTexture();
+let texTexture = makePlaceholderTexture();  // grunge / paper texture (binding 7)
 let placeholderTexT = makePlaceholderTexture();
 let texT = null;
 // Per-pixel "fade time" texture for mode 31 (sequential region reveal). r =
@@ -1746,6 +1764,7 @@ function makeBindGroup(stateView) {
       { binding: 4, resource: stateView || placeholderState.createView() },
       { binding: 5, resource: (texT || placeholderTexT).createView() },
       { binding: 6, resource: texRegions.createView() },
+      { binding: 7, resource: texTexture.createView() },
     ],
   });
 }
@@ -2015,6 +2034,46 @@ async function uploadImageToSlot(img, slot) {
   console.log(`[upload ${slot}] new bind group ready`);
 }
 
+// ---- texture input (grunge / watercolor paper) ----
+async function uploadTexture(img) {
+  let bitmap = await createImageBitmap(img, { premultiplyAlpha: 'none' });
+  let w = bitmap.width, h = bitmap.height;
+  const longer = Math.max(w, h);
+  if (longer > GPU_MAX_TEX) {
+    const s = GPU_MAX_TEX / longer;
+    const nw = Math.round(w * s), nh = Math.round(h * s);
+    const big = bitmap;
+    bitmap = await createImageBitmap(big, { resizeWidth: nw, resizeHeight: nh, resizeQuality: 'high', premultiplyAlpha: 'none' });
+    big.close(); w = nw; h = nh;
+  }
+  const tex = device.createTexture({
+    label: 'texTexture', size: [w, h, 1], format: 'rgba8unorm',
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+  });
+  device.queue.copyExternalImageToTexture({ source: bitmap }, { texture: tex }, [w, h, 1]);
+  texTexture.destroy(); texTexture = tex;
+  bitmap.close();
+  bindGroup = makeBindGroup();
+  state.texImg = img;
+  if (state.texAmount < 0.001 && state.texBg < 0.001) state.texAmount = 0.4;  // make it visible on first load
+  if (typeof pane !== 'undefined') pane.refresh();
+}
+function loadTextureFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  idbPut('texture', file);
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => { uploadTexture(img); URL.revokeObjectURL(url); };
+  img.src = url;
+}
+function clearTexture() {
+  state.texImg = null; state.texAmount = 0; state.texBg = 0;
+  texTexture.destroy(); texTexture = makePlaceholderTexture();
+  bindGroup = makeBindGroup();
+  idbPut('texture', null);
+  if (typeof pane !== 'undefined') pane.refresh();
+}
+
 // ============================================================================
 // State
 // ============================================================================
@@ -2027,6 +2086,8 @@ const state = {
   startTime: 0,
   reverse: false,
   duration: 15.0,
+  // texture input (grunge / watercolor paper) — modulates the reveal + bg tint
+  texImg: null, texAmount: 0.0, texBg: 0.0,
   // custom transition dimensions (independent of source footage size).
   // Default ON: trans is primarily a matte-video builder, so it boots to a
   // fixed canvas showing the B/W matte without requiring any footage.
@@ -2327,7 +2388,7 @@ function writeUniforms() {
   uboU32[96]  = state.formStrokeCount;
   uboF32[97]  = state.formStrokeSize;
   uboF32[98]  = state.formStrokeWobble;
-  uboF32[99]  = 0;
+  uboF32[99]  = state.texImg ? state.texAmount : 0;  // texAmount (0 if no texture loaded)
   uboF32[100] = state.bloomLightBias;
   uboF32[101] = state.bloomWobble;
   uboF32[102] = state.bloomPaperShow;
@@ -2343,7 +2404,7 @@ function writeUniforms() {
   uboF32[108] = state.migrationStrength;
   uboU32[109] = state.migrationDir;
   uboF32[110] = state.migrationTurb;
-  uboF32[111] = 0;
+  uboF32[111] = state.texImg ? state.texBg : 0;  // texBg (0 if no texture loaded)
   // -- 112..119 -- global transition bounds
   uboU32[112] = state.boundsEnable ? 1 : 0;
   uboF32[113] = state.boundsCx;
@@ -2866,6 +2927,8 @@ async function seedLibraryWithDefaultsIfEmpty() {
   if (blobA) loadFromUrl(URL.createObjectURL(blobA), 'A');
   if (blobB) loadFromUrl(URL.createObjectURL(blobB), 'B');
   if (blobT) loadVideoToT(blobT);  // restores last-used transition video
+  const texBlob = await idbGet('texture');
+  if (texBlob) loadTextureFile(texBlob);  // restore last-used grunge/paper texture
   await seedLibraryWithDefaultsIfEmpty();
   renderLibrary();
   resizeCanvas();          // size + reveal the matte canvas (works image-free)
@@ -3522,6 +3585,18 @@ fSize.addBinding(state, 'outW', { min: 16, max: 8192, step: 2, label: 'width' })
   .on('change', () => { sizePresets._v = 'custom'; if (state.customSize) resizeCanvas(); });
 fSize.addBinding(state, 'outH', { min: 16, max: 8192, step: 2, label: 'height' })
   .on('change', () => { sizePresets._v = 'custom'; if (state.customSize) resizeCanvas(); });
+
+// ----- Texture (grunge / watercolor paper drives the dissolve) -----
+const fTex = tabFrame.addFolder({ title: 'Texture', expanded: true });
+fTex.addButton({ title: 'Load texture…' }).on('click', () => {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/*';
+  inp.onchange = () => { if (inp.files && inp.files[0]) loadTextureFile(inp.files[0]); };
+  inp.click();
+});
+fTex.addBinding(state, 'texAmount', { min: 0, max: 1, step: 0.01, label: 'dissolve along texture' });
+fTex.addBinding(state, 'texBg', { min: 0, max: 1, step: 0.01, label: 'bg tint (image mode)' });
+fTex.addButton({ title: 'Clear texture' }).on('click', () => clearTexture());
 
 const fImg = tabFrame.addFolder({ title: 'Framing', expanded: true });
 fImg.addBinding(state, 'zoomA', { min: 0.5, max: 4, step: 0.01, label: 'A zoom' });
@@ -4496,7 +4571,7 @@ const SESSION_LS_KEY = 'trans:session';
 const PERSIST_KEYS = [
   ...PRESET_KEYS,
   'fit', 'bg',
-  'customSize', 'outW', 'outH',
+  'customSize', 'outW', 'outH', 'texAmount', 'texBg',
   'exportFps', 'exportSizeMode', 'exportPadBottom', 'matteOutput', 'matteInvert',
   'slotAFillMode', 'slotAColor', 'slotBFillMode', 'slotBColor', 'keepAOutsideB',
   'partEnable', 'partCount', 'partBurst', 'partSpeed', 'partCurl', 'partTrail',
@@ -4527,5 +4602,5 @@ function loadSession() {
 loadSession();
 pane.on('change', () => saveSession());
 
-window.__tool = { state, pane, device, adapter };
+window.__tool = { state, pane, device, adapter, uploadTexture, loadTextureFile, clearTexture };
 console.log('[trans] WebGPU ready, format:', presentationFormat);
