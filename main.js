@@ -965,6 +965,10 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
     let n = fbm(uv * sc * 1.8 + w * 2.5 + p.seed * 0.31);
     mask = clamp(mask + (n - 0.5) * p.turbulence * 0.9, 0.0, 1.0);
   }
+  // Spread the mask across the full [0,1] timeline so the reveal keeps arriving
+  // as organic shapes right up to t=1, instead of the bulk crossing by ~0.7 and
+  // overblowing to white early. (Masks tend to cluster mid-range otherwise.)
+  mask = clamp((mask - 0.1) / 0.78, 0.0, 1.0);
   mask = clamp(mask + p.maskShift, 0.0, 1.0);
   var mixT = clamp(smoothstep(mask - sp, mask + sp, t), 0.0, 1.0);
   // Burn mode: hard step at the front — no crossfade between A and B at all.
@@ -2195,7 +2199,7 @@ const state = {
   // from image A's bright focal region when an image is loaded.
   originAmount: 0.4, originX: 0.5, originY: 0.5, originFromImage: true,
   originPoints: [], placePoints: false,  // click-placed emission points
-  pointStagger: 0, pointRandom: 0.5,     // stagger point start times + randomness
+  pointStagger: 0.5, pointRandom: 0.7,   // stagger point start times + randomness
   turbulence: 0.35,  // organic ink-in-water break-up of the reveal front
   // custom transition dimensions (independent of source footage size).
   // Default ON: trans is primarily a matte-video builder, so it boots to a
@@ -2223,7 +2227,7 @@ const state = {
   partGlowColor: '#bcd4ff',
   organic: 0.65,
   edges: 0.25,
-  spread: 0.55,
+  spread: 0.2,
   maskScale: 0.9,
   curve: 0,        // 0 linear
   seed: 42,
@@ -4757,7 +4761,7 @@ fSamHelp.addBinding(samHelp, 'altClick',   { readonly: true, label: 'alt-click' 
 const SESSION_LS_KEY = 'trans:session';
 // Bump when default values change so stale saved sessions don't mask new
 // defaults (e.g. matte-first, cover texture fit, turbulence, origin).
-const SESSION_VERSION = 3;
+const SESSION_VERSION = 4;
 const PERSIST_KEYS = [
   ...PRESET_KEYS,
   'fit', 'bg',
