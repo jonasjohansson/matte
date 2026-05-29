@@ -110,7 +110,8 @@ struct Params {
   paperGrowth: f32, paperFollow: f32, paperPatches: f32, videoDisplaceAmount: f32,
   originAmount: f32, originX: f32, originY: f32, turbulence: f32,
   originPts: array<vec4f, 8>,
-  originCount: u32, flow: f32, undulate: f32, _oc2: u32,
+  originCount: u32, flow: f32, undulate: f32, auroraDensity: f32,
+  auroraHeight: f32, auroraSpeed: f32, _aa0: f32, _aa1: f32,
 };
 
 @group(0) @binding(0) var<uniform> p: Params;
@@ -220,8 +221,8 @@ fn ambBokeh(uv: vec2f) -> f32 {
 }
 fn ambStreaks(uv: vec2f) -> f32 {
   let ph = p.t * 6.2831853;
-  let sc = vec2f(uv.x * 6.0 + sin(ph) * 0.25 + ph * 0.06, uv.y * 1.0);
-  var s = fbm(sc) + 0.55 * fbm(sc * vec2f(2.2, 1.0) + vec2f(ph * 0.04, 0.0));
+  let sc = vec2f(uv.x * 6.0 + ph * 0.16, uv.y * 1.0);          // continuous one-way drift
+  var s = fbm(sc) + 0.55 * fbm(sc * vec2f(2.2, 1.0) + vec2f(ph * 0.1, 0.0));
   s = pow(clamp((s - 0.45) * 1.9, 0.0, 1.0), 1.5);             // sharpen into streaks
   let smear = (fbm(sc + vec2f(0.0, 0.05)) + fbm(sc - vec2f(0.0, 0.05))) * 0.12;
   return clamp(s + smear, 0.0, 1.0);
@@ -240,17 +241,27 @@ fn ambRipples(uv: vec2f) -> f32 {
   return clamp(pow(clamp(v / 3.0, 0.0, 1.0), 2.0), 0.0, 1.0);   // caustic sharpen
 }
 fn ambAurora(uv: vec2f) -> f32 {
-  let ph = p.t * 6.2831853;
+  let ph = p.t * 6.2831853 * (0.4 + p.auroraSpeed * 1.4);
   let x = uv.x * p.canvasAspect;                 // aspect-consistent horizontal
-  let drift = ph * 0.06;
-  let curtains = fbm(vec2f(x * 1.5 + drift, ph * 0.12 + 2.0));  // lit clusters drifting
-  let waver = fbm(vec2f(x * 5.0 + drift, ph * 0.2)) * 4.0;
-  let rays = 0.4 + 0.6 * pow(0.5 + 0.5 * sin(x * 20.0 + waver), 2.0);  // vertical ray striations
-  let edge = 0.35 + 0.28 * fbm(vec2f(x * 2.0 + drift, 5.0));     // wavy lower edge of curtain
-  let curtain = smoothstep(edge + 0.5, edge - 0.05, uv.y) * smoothstep(0.0, 0.18, uv.y);
-  var v = curtains * rays * curtain;
-  v = v * (0.65 + 0.35 * sin(ph * 1.4 + x * 3.0));               // slow intensity flicker
-  return clamp(v * 2.1, 0.0, 1.0);
+  let dens = mix(0.8, 3.2, p.auroraDensity);
+  let reach = mix(5.5, 1.6, p.auroraHeight);     // smaller = rays reach higher
+  var v = 0.0;
+  // a few overlapping curtain layers at different depths and drift speeds
+  for (var i = 0u; i < 3u; i = i + 1u) {
+    let fi = f32(i) + 1.0;
+    let drift = ph * (0.04 + 0.03 * fi);
+    // soft, irregular lit clusters along x (not evenly spaced)
+    let cluster = pow(clamp(fbm(vec2f(x * dens * (0.6 + 0.3 * fi) + drift, ph * 0.1 + fi * 3.0)), 0.0, 1.0), 1.4);
+    // fine wavering vertical ray striations
+    let waver = fbm(vec2f(x * 4.0 + drift, ph * 0.2 + fi)) * 6.0;
+    let rays = 0.45 + 0.55 * pow(0.5 + 0.5 * sin(x * (12.0 + 5.0 * fi) + waver), 2.2);
+    // wavy base height; rays shoot UP from it (uv.y is y-down) and fade
+    let base = 0.6 + 0.18 * fbm(vec2f(x * 1.4 + drift, 7.0 + fi));
+    let up = clamp(base - uv.y, 0.0, 1.0);
+    let env = exp(-up * reach) * smoothstep(base + 0.12, base - 0.03, uv.y) * smoothstep(0.0, 0.12, uv.y);
+    v = v + cluster * mix(0.5, 1.0, rays) * env * (0.7 + 0.3 * sin(ph * 1.1 + x * 2.0 + fi * 2.0));
+  }
+  return clamp(v * 1.5, 0.0, 1.0);
 }
 fn ambGlare(uv: vec2f) -> f32 {
   let ph = p.t * 6.2831853;
@@ -1522,7 +1533,8 @@ struct Params {
   paperGrowth: f32, paperFollow: f32, paperPatches: f32, videoDisplaceAmount: f32,
   originAmount: f32, originX: f32, originY: f32, turbulence: f32,
   originPts: array<vec4f, 8>,
-  originCount: u32, flow: f32, undulate: f32, _oc2: u32,
+  originCount: u32, flow: f32, undulate: f32, auroraDensity: f32,
+  auroraHeight: f32, auroraSpeed: f32, _aa0: f32, _aa1: f32,
 };
 
 @group(0) @binding(0) var<uniform> p: Params;
@@ -1753,7 +1765,8 @@ struct Params {
   paperGrowth: f32, paperFollow: f32, paperPatches: f32, videoDisplaceAmount: f32,
   originAmount: f32, originX: f32, originY: f32, turbulence: f32,
   originPts: array<vec4f, 8>,
-  originCount: u32, flow: f32, undulate: f32, _oc2: u32,
+  originCount: u32, flow: f32, undulate: f32, auroraDensity: f32,
+  auroraHeight: f32, auroraSpeed: f32, _aa0: f32, _aa1: f32,
 };
 @group(0) @binding(0) var<uniform> p: Params;
 @group(0) @binding(1) var texA: texture_2d<f32>;
@@ -1869,7 +1882,7 @@ function makeDisplayBindGroup(finalState) {
 //   5  seed         13  scaleB.y                                          29 bloomCount     37 saltContrast
 //   6  validA       14  offsetB.x                                         30 bloomRim       38 saltBias
 //   7  validB       15  offsetB.y                                         31 bloomRate      39 saltImage
-const UBO_SIZE = 848;  // origin (172-175) + originPts array (176-207) + originCount (208)
+const UBO_SIZE = 864;  // + aurora settings (auroraDensity 211, height 212, speed 213)
 const uniformBuffer = device.createBuffer({
   size: UBO_SIZE,
   usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
@@ -2298,6 +2311,7 @@ const state = {
   flow: 0.3,         // animate the turbulence over time (churning/rising)
   undulate: 0.0,     // slow large-scale wave/dance of the reveal (aurora-like)
   animate: 0.0,      // evolve each mode's own pattern over the loop (per-mode movement)
+  auroraDensity: 0.5, auroraHeight: 0.5, auroraSpeed: 0.4,  // aurora mode settings
   // custom transition dimensions (independent of source footage size).
   // Default ON: trans is primarily a matte-video builder, so it boots to a
   // fixed canvas showing the B/W matte without requiring any footage.
@@ -2699,6 +2713,9 @@ function writeUniforms() {
   uboU32[208] = nPts;
   uboF32[209] = state.flow;  // turbulence time-drift (animated ink)
   uboF32[210] = state.undulate;  // slow large-scale dance of the reveal front
+  uboF32[211] = state.auroraDensity;
+  uboF32[212] = state.auroraHeight;
+  uboF32[213] = state.auroraSpeed;
   // -- 80..95 -- new painterly modes (16..21) + global paper grain
   uboF32[80] = state.strokeScale;
   uboF32[81] = state.strokeAniso;
@@ -3333,18 +3350,18 @@ fPlay.addBinding(sizePresets, '_v', {
     'custom': 'custom',
   },
 }).on('change', (e) => {
-  if (e.value === 'custom') return;
+  if (e.value === 'custom') { syncSizeFields(); return; }
   const [w, h] = e.value.split('x').map(Number);
   state.outW = w; state.outH = h; state.customSize = true;
-  pane.refresh(); resizeCanvas();
+  pane.refresh(); resizeCanvas(); syncSizeFields();
 });
-// Plain number fields (type a value) — mattes don't need huge res, and the
-// presets cover the common surfaces. Canvas is clamped to the GPU max if needed.
-fPlay.addBinding(state, 'outW', { step: 1, format: (v) => `${Math.round(v)}`, label: 'width' })
+// Width/height only show when "custom" is picked (otherwise the preset says it).
+const bOutW = fPlay.addBinding(state, 'outW', { step: 1, format: (v) => `${Math.round(v)}`, label: 'width' })
   .on('change', () => { sizePresets._v = 'custom'; resizeCanvas(); });
-fPlay.addBinding(state, 'outH', { step: 1, format: (v) => `${Math.round(v)}`, label: 'height' })
+const bOutH = fPlay.addBinding(state, 'outH', { step: 1, format: (v) => `${Math.round(v)}`, label: 'height' })
   .on('change', () => { sizePresets._v = 'custom'; resizeCanvas(); });
-fPlay.addBinding(state, 'customSize', { label: 'lock to size (vs image)' }).on('change', () => resizeCanvas());
+function syncSizeFields() { const custom = sizePresets._v === 'custom'; bOutW.hidden = !custom; bOutH.hidden = !custom; }
+syncSizeFields();
 
 // — B/W matte output (always). Invert flips black<->white direction. —
 fPlay.addBinding(state, 'matteInvert', { label: 'invert (B↔W)' });
@@ -3798,7 +3815,13 @@ fLight.addBinding(state, 'lightFlashWidth',  { min: 0.03, max: 0.4,  step: 0.01,
 fLight.addBinding(state, 'lightColor',       { view: 'color', label: 'light color' });
 addModeFooter(fLight, 30);
 
+const fAurora = fWater.addFolder({ title: 'Aurora', expanded: true });
+fAurora.addBinding(state, 'auroraDensity', { min: 0, max: 1, step: 0.01, label: 'curtain density' });
+fAurora.addBinding(state, 'auroraHeight',  { min: 0, max: 1, step: 0.01, label: 'ray height' });
+fAurora.addBinding(state, 'auroraSpeed',   { min: 0, max: 1, step: 0.01, label: 'speed' });
+
 function updateModeFolders() {
+  fAurora.hidden = state.mode !== 38;
   fRim.hidden    = state.mode !== 1;
   fPaper.hidden  = state.mode !== 2;
   fBlooms.hidden = state.mode !== 3;
@@ -3833,28 +3856,34 @@ function updateModeFolders() {
 updateModeFolders();
 
 const fDis = tabMode.addFolder({ title: 'Reveal', expanded: true });
-// — core: where it starts and how organic it feels (every mode) —
+// — core: where it starts and how soft the edge is —
 fDis.addBinding(state, 'originAmount', { min: 0, max: 1, step: 0.01, label: 'from within' });
-fDis.addBinding(state, 'turbulence', { min: 0, max: 1, step: 0.01, label: 'turbulence (ink)' });
-fDis.addBinding(state, 'flow', { min: 0, max: 1, step: 0.01, label: 'flow (animate)' });
-fDis.addBinding(state, 'undulate', { min: 0, max: 1, step: 0.01, label: 'undulate (dance)' });
-fDis.addBinding(state, 'animate', { min: 0, max: 1, step: 0.01, label: 'animate (per-mode)' });
 fDis.addBinding(state, 'spread',    { min: 0, max: 1, step: 0.01, label: 'edge softness' });
-// — start points: click on the canvas to set where the reveal emanates from —
-const btnPlace = fDis.addButton({ title: '✛ Place start points' });
+
+// — movement (collapsed) — animation that works on every mode —
+const fMove = fDis.addFolder({ title: 'Movement', expanded: false });
+fMove.addBinding(state, 'turbulence', { min: 0, max: 1, step: 0.01, label: 'turbulence (ink)' });
+fMove.addBinding(state, 'flow', { min: 0, max: 1, step: 0.01, label: 'flow' });
+fMove.addBinding(state, 'undulate', { min: 0, max: 1, step: 0.01, label: 'undulate (dance)' });
+fMove.addBinding(state, 'animate', { min: 0, max: 1, step: 0.01, label: 'animate (per-mode)' });
+
+// — start points & paint (collapsed) — where the reveal emanates from —
+const fPts = fDis.addFolder({ title: 'Start points / paint', expanded: false });
+const btnPlace = fPts.addButton({ title: '✛ Place start points' });
 btnPlace.on('click', () => {
   setPlacePoints(!state.placePoints);
   btnPlace.title = state.placePoints ? '✓ Click canvas to add — done' : '✛ Place start points';
 });
-fDis.addButton({ title: 'Clear points' }).on('click', () => {
+fPts.addButton({ title: 'Clear points' }).on('click', () => {
   state.originPoints = []; drawOriginPoints(); restartPlayback();
 });
-fDis.addBinding(state, 'pointStagger', { min: 0, max: 1, step: 0.01, label: 'point/paint stagger' });
-fDis.addBinding(state, 'pointRandom', { min: 0, max: 1, step: 0.01, label: 'stagger random' });
-fDis.addBinding(state, 'paintBrush', { min: 0.02, max: 0.4, step: 0.01, label: 'paint brush (mode: Paint)' });
-fDis.addButton({ title: 'Clear paint' }).on('click', () => { if (typeof clearPaint === 'function') clearPaint(); });
-fDis.addBinding(state, 'originFromImage', { label: 'else: from image A' })
+fPts.addBinding(state, 'originFromImage', { label: 'else: from image A' })
   .on('change', () => { if (state.originFromImage && state.imgA) computeOriginFromImage(state.imgA); });
+fPts.addBinding(state, 'pointStagger', { min: 0, max: 1, step: 0.01, label: 'stagger' });
+fPts.addBinding(state, 'pointRandom', { min: 0, max: 1, step: 0.01, label: 'stagger random' });
+fPts.addBinding(state, 'paintBrush', { min: 0.02, max: 0.4, step: 0.01, label: 'paint brush' });
+fPts.addButton({ title: 'Clear paint' }).on('click', () => { if (typeof clearPaint === 'function') clearPaint(); });
+
 // — advanced shaping (collapsed) —
 const fAdv = fDis.addFolder({ title: 'Advanced', expanded: false });
 fAdv.addBinding(state, 'originX', { min: 0, max: 1, step: 0.01, label: 'origin x' });
@@ -4949,13 +4978,14 @@ fSamHelp.addBinding(samHelp, 'altClick',   { readonly: true, label: 'alt-click' 
 const SESSION_LS_KEY = 'trans:session';
 // Bump when default values change so stale saved sessions don't mask new
 // defaults (e.g. matte-first, cover texture fit, turbulence, origin).
-const SESSION_VERSION = 7;
+const SESSION_VERSION = 8;
 const PERSIST_KEYS = [
   ...PRESET_KEYS,
   'fit', 'bg',
   'customSize', 'outW', 'outH', 'texAmount', 'texBg', 'texFit',
   'originAmount', 'originX', 'originY', 'originFromImage', 'turbulence', 'flow', 'undulate', 'animate', 'originPoints',
   'pointStagger', 'pointRandom', 'paintBrush',
+  'auroraDensity', 'auroraHeight', 'auroraSpeed',
   'exportFps', 'exportSizeMode', 'exportPadBottom', 'matteOutput', 'matteInvert',
   'slotAFillMode', 'slotAColor', 'slotBFillMode', 'slotBColor', 'keepAOutsideB',
   'partEnable', 'partCount', 'partBurst', 'partSpeed', 'partCurl', 'partTrail',
@@ -4982,6 +5012,7 @@ function loadSession() {
     updateModeFolders();
     if (Array.isArray(state.originPoints) && state.originPoints.length) drawOriginPoints();
     if (state.mode === 37 && typeof syncPaintMode === 'function') syncPaintMode();
+    if (typeof syncSizeFields === 'function') { sizePresets._v = 'custom'; syncSizeFields(); }
     if (state.mode >= 10 && state.mode <= 14) advec.needsReset = true;
   } catch {}
 }
