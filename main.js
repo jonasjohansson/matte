@@ -72,7 +72,7 @@ struct Params {
   // -- 224..239 -- gravity lateral + curl + brush
   advGravLateral: f32, advCurlStr: f32, advCurlScale: f32, advBrushFollow: f32,
   // -- 240..255 -- seed + canvas aspect (w/h) used by uniform-circle iris
-  advSeedCount: u32, advSeedRadius: f32, canvasAspect: f32, _p5: f32,
+  advSeedCount: u32, advSeedRadius: f32, canvasAspect: f32, texAspect: f32,
   // -- 256..271 -- wet edge (mode 15): rect ingress
   weEdgeScale: f32, weEdgeWobble: f32, weDryRing: f32, weBleed: f32,
   // -- 272..287 -- wet edge: tendrils
@@ -118,6 +118,18 @@ struct Params {
 @group(0) @binding(5) var texT: texture_2d<f32>;
 @group(0) @binding(6) var texRegions: texture_2d<f32>;
 @group(0) @binding(7) var texTexture: texture_2d<f32>;
+
+fn texContainLuma(uv: vec2f) -> f32 {
+  // Contain-fit the texture inside the canvas (preserve the texture's aspect);
+  // the letterbox area returns 0.5 (neutral — no modulation / no tint).
+  let cAR = p.canvasAspect;
+  let tAR = p.texAspect;
+  var u = uv;
+  if (tAR > cAR) { let s = cAR / tAR; u.y = (uv.y - 0.5) / s + 0.5; }
+  else           { let s = tAR / cAR; u.x = (uv.x - 0.5) / s + 0.5; }
+  if (u.x < 0.0 || u.x > 1.0 || u.y < 0.0 || u.y > 1.0) { return 0.5; }
+  return luma(textureSampleLevel(texTexture, samp, u, 0.0).rgb);
+}
 
 @vertex fn vs(@builtin(vertex_index) idx: u32) -> VSOut {
   // 6-vertex fullscreen triangle pair, with UV in [0,1] (y up to match WebGL).
@@ -901,7 +913,7 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
   // luminance perturbs the reveal threshold, so the transition breaks up and
   // wicks along the texture instead of advancing as a clean front.
   if (p.texAmount > 0.0001) {
-    let texL = luma(textureSampleLevel(texTexture, samp, uv, 0.0).rgb);
+    let texL = texContainLuma(uv);
     mask = clamp(mask + (texL - 0.5) * p.texAmount, 0.0, 1.0);
   }
   mask = clamp(mask + p.maskShift, 0.0, 1.0);
@@ -1273,7 +1285,7 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
   // Texture overlay on the composite (image/preview look only — the matte path
   // returned above, keeping the matte clean). Paper/grunge multiplied in.
   if (p.texBg > 0.0001) {
-    let texL = luma(textureSampleLevel(texTexture, samp, uv, 0.0).rgb);
+    let texL = texContainLuma(uv);
     outc = mix(outc, outc * (0.4 + 1.2 * texL), p.texBg);
   }
   let rgb = clamp(outc, vec3f(0.0), vec3f(1.0));
@@ -1336,7 +1348,7 @@ struct Params {
   runDrip: f32, advVariant: u32, advVisc: f32, advRate: f32,
   advGravity: f32, advGravBias: f32, advGravAngle: f32, advGravStreak: f32,
   advGravLateral: f32, advCurlStr: f32, advCurlScale: f32, advBrushFollow: f32,
-  advSeedCount: u32, advSeedRadius: f32, canvasAspect: f32, _p5: f32,
+  advSeedCount: u32, advSeedRadius: f32, canvasAspect: f32, texAspect: f32,
   weEdgeScale: f32, weEdgeWobble: f32, weDryRing: f32, weBleed: f32,
   weTendrilCount: u32, weTendrilReach: f32, weTendrilWidth: f32, weTendrilStrength: f32,
   weDetailBias: f32, moldTendrilsPerSeed: u32, weReverse: u32, weBDetailBias: f32,
@@ -1564,7 +1576,7 @@ struct Params {
   runDrip: f32, advVariant: u32, advVisc: f32, advRate: f32,
   advGravity: f32, advGravBias: f32, advGravAngle: f32, advGravStreak: f32,
   advGravLateral: f32, advCurlStr: f32, advCurlScale: f32, advBrushFollow: f32,
-  advSeedCount: u32, advSeedRadius: f32, canvasAspect: f32, _p5: f32,
+  advSeedCount: u32, advSeedRadius: f32, canvasAspect: f32, texAspect: f32,
   weEdgeScale: f32, weEdgeWobble: f32, weDryRing: f32, weBleed: f32,
   weTendrilCount: u32, weTendrilReach: f32, weTendrilWidth: f32, weTendrilStrength: f32,
   weDetailBias: f32, moldTendrilsPerSeed: u32, weReverse: u32, weBDetailBias: f32,
@@ -2061,6 +2073,7 @@ async function uploadTexture(img) {
   bitmap.close();
   bindGroup = makeBindGroup();
   state.texImg = img;
+  state.texAspect = w / Math.max(1, h);  // for contain-fit in the shader
   if (state.texAmount < 0.001 && state.texBg < 0.001) state.texAmount = 0.4;  // make it visible on first load
   if (typeof pane !== 'undefined') pane.refresh();
 }
@@ -2093,7 +2106,7 @@ const state = {
   reverse: false,
   duration: 15.0,
   // texture input (grunge / watercolor paper) — modulates the reveal + bg tint
-  texImg: null, texAmount: 0.0, texBg: 0.0,
+  texImg: null, texAmount: 0.0, texBg: 0.0, texAspect: 1.0,
   // custom transition dimensions (independent of source footage size).
   // Default ON: trans is primarily a matte-video builder, so it boots to a
   // fixed canvas showing the B/W matte without requiring any footage.
@@ -2369,7 +2382,7 @@ function writeUniforms() {
   uboU32[60] = state.advecSeedCount;
   uboF32[61] = state.advecSeedRadius;
   uboF32[62] = ch > 0 ? cw / ch : 1.0;
-  uboF32[63] = 0;
+  uboF32[63] = state.texImg ? (state.texAspect || 1.0) : 1.0;  // texture aspect for contain-fit
   // -- 64..67 -- wet edge (mode 15): rect ingress
   uboF32[64] = state.weEdgeScale;
   uboF32[65] = state.weEdgeWobble;
@@ -3083,6 +3096,15 @@ const sizePresets = { _v: '1920x1080' };
 fPlay.addBinding(sizePresets, '_v', {
   label: 'size',
   options: {
+    // ELVERKET projection surfaces — matte-res (keeps each surface's exact
+    // aspect, stays under the GPU texture clamp; upscale to the real pixel size
+    // in AE / the media server). Full sizes: ALL 12000×6559, Pano 10879×4639,
+    // Floor 8160×2719, Long wall 8160×1920, Short wall 2719×1920.
+    'ELVERKET — ALL · 1.83:1':        '4000x2186',
+    'ELVERKET — Panorama · 2.35:1':   '4000x1706',
+    'ELVERKET — Floor · 3:1':         '4080x1360',
+    'ELVERKET — Long wall · 4.25:1':  '4080x960',
+    'ELVERKET — Short wall · 1.42:1': '2719x1920',
     '1920×1080 (16:9)': '1920x1080', '1080×1920 (9:16)': '1080x1920',
     '1080×1080 (1:1)': '1080x1080', '3840×2160 (4K)': '3840x2160',
     '2560×1440 (16:9)': '2560x1440', '1280×720 (16:9)': '1280x720',
@@ -3094,9 +3116,11 @@ fPlay.addBinding(sizePresets, '_v', {
   state.outW = w; state.outH = h; state.customSize = true;
   pane.refresh(); resizeCanvas();
 });
-fPlay.addBinding(state, 'outW', { min: 16, max: 8192, step: 2, label: 'width' })
+// Plain number fields (type a value) — mattes don't need huge res, and the
+// presets cover the common surfaces. Canvas is clamped to the GPU max if needed.
+fPlay.addBinding(state, 'outW', { step: 1, format: (v) => `${Math.round(v)}`, label: 'width' })
   .on('change', () => { sizePresets._v = 'custom'; resizeCanvas(); });
-fPlay.addBinding(state, 'outH', { min: 16, max: 8192, step: 2, label: 'height' })
+fPlay.addBinding(state, 'outH', { step: 1, format: (v) => `${Math.round(v)}`, label: 'height' })
   .on('change', () => { sizePresets._v = 'custom'; resizeCanvas(); });
 fPlay.addBinding(state, 'customSize', { label: 'lock to size (vs image)' }).on('change', () => resizeCanvas());
 
@@ -3152,23 +3176,24 @@ function updateTransportLabels() {
 }
 fPlay.addButton({ title: '● Record matte' }).on('click', () => startRecording());
 
-// ---- top-level tabs (Playback stays above; everything else goes in a tab) ----
+// ---- top-level tabs (Setup stays above; everything else goes in a tab) ----
 const tabs = pane.addTab({
   pages: [
     { title: 'Mode' },
-    { title: 'Frame' },
-    { title: 'Particles' },
+    { title: 'Look' },
     { title: 'Output' },
-    { title: 'Saved' },
-    { title: 'Segment' },
   ],
 });
-const tabMode     = tabs.pages[0];
-const tabFrame    = tabs.pages[1];
-const tabParticles = tabs.pages[2];
-const tabOutput   = tabs.pages[3];
-const tabSaved    = tabs.pages[4];
-const tabSegment  = tabs.pages[5];
+const tabMode    = tabs.pages[0];
+const tabFrame   = tabs.pages[1];  // "Look" — texture + style
+const tabOutput  = tabs.pages[2];
+// Particles / presets / segmentation are dropped from this matte-builder build.
+// Their UI-building code still runs but into a hidden folder so it never shows.
+const _hiddenTab = pane.addFolder({ title: '·', expanded: false });
+_hiddenTab.hidden = true;
+const tabParticles = _hiddenTab;
+const tabSaved     = _hiddenTab;
+const tabSegment   = _hiddenTab;
 
 // ----- Particles (GPU compute layer) -----
 const fPart = tabParticles.addFolder({ title: 'Particles', expanded: true });
@@ -3320,8 +3345,6 @@ const MODE_OPTIONS = {
   'Video mask (T slot)':                  28,
   'Film melt — ink burn from center':     29,
   'Light bloom — overexposure to reveal': 30,
-  'SAM — sequential region reveal':       31,
-  'Particles — particles drive it':       32,
 };
 const MODE_NAMES_FULL = Object.fromEntries(Object.entries(MODE_OPTIONS).map(([n, id]) => [id, n]));
 fWater.addBinding(state, 'mode', {
@@ -3620,7 +3643,7 @@ fTex.addBinding(state, 'texAmount', { min: 0, max: 1, step: 0.01, label: 'dissol
 fTex.addBinding(state, 'texBg', { min: 0, max: 1, step: 0.01, label: 'bg tint (image mode)' });
 fTex.addButton({ title: 'Clear texture' }).on('click', () => clearTexture());
 
-const fImg = tabFrame.addFolder({ title: 'Framing', expanded: true });
+const fImg = _hiddenTab.addFolder({ title: 'Framing', expanded: true });  // hidden in matte build
 fImg.addBinding(state, 'zoomA', { min: 0.5, max: 4, step: 0.01, label: 'A zoom' });
 fImg.addBinding(state, 'panAx', { min: -1, max: 1, step: 0.005, label: 'A pan x' });
 fImg.addBinding(state, 'panAy', { min: -1, max: 1, step: 0.005, label: 'A pan y' });
