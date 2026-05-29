@@ -1,6 +1,16 @@
-:root { color-scheme: dark; }
+:root {
+  color-scheme: dark;
+  /* design tokens (shared with Tweakpane theme below) */
+  --text: #eee;
+  --text-muted: rgba(238, 238, 238, 0.55);
+  --accent: #4a9eff;
+  --panel-bg: #0d0d0d;
+  --panel-border: rgba(238, 238, 238, 0.10);
+  --font-ui: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-size-sm: 11px;
+}
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { width: 100%; height: 100%; background: #0a0a0a; color: #ccc; font: 12px/1.5 -apple-system, system-ui, monospace; overflow: hidden; }
+html, body { width: 100%; height: 100%; background: #0a0a0a; color: var(--text-muted); font: 12px/1.5 var(--font-ui); overflow: hidden; }
 
 #stage {
   position: fixed; inset: 0 360px 0 0;
@@ -116,7 +126,33 @@ body:not(.minimized) #toggle-panel { right: 370px; }
 #gpu-error b { color: #fff; }
 #gpu-error a { color: #4af; text-decoration: none; }
 
-.tp-dfwv { width: 100% !important; font-family: -apple-system, system-ui, monospace; font-size: 10.5px; }
+/* ── Tweakpane theme (shared "trans" theme — dark / translucent / monospace) ──
+   Reusable across projects: set these --tp-* tokens on the pane container. */
+#tp-host {
+  --tp-base-font-family: var(--font-ui);
+  --tp-base-background-color: var(--panel-bg);
+  --tp-base-shadow-color: rgba(0, 0, 0, 0.4);
+  --tp-label-foreground-color: var(--text-muted);
+  --tp-container-foreground-color: var(--text);
+  --tp-container-background-color: rgba(238, 238, 238, 0.05);
+  --tp-container-background-color-hover: rgba(238, 238, 238, 0.1);
+  --tp-container-background-color-focus: rgba(238, 238, 238, 0.12);
+  --tp-container-background-color-active: rgba(238, 238, 238, 0.15);
+  --tp-button-foreground-color: var(--text);
+  --tp-button-background-color: rgba(238, 238, 238, 0.1);
+  --tp-button-background-color-hover: rgba(238, 238, 238, 0.16);
+  --tp-button-background-color-focus: rgba(238, 238, 238, 0.2);
+  --tp-button-background-color-active: var(--accent);
+  --tp-input-foreground-color: var(--text);
+  --tp-input-background-color: rgba(0, 0, 0, 0.3);
+  --tp-input-background-color-hover: rgba(0, 0, 0, 0.4);
+  --tp-input-background-color-focus: rgba(0, 0, 0, 0.45);
+  --tp-input-background-color-active: rgba(0, 0, 0, 0.5);
+  --tp-groove-foreground-color: rgba(238, 238, 238, 0.1);
+  --tp-monitor-foreground-color: var(--text-muted);
+  --tp-monitor-background-color: rgba(0, 0, 0, 0.3);
+}
+.tp-dfwv { width: 100% !important; font-size: var(--font-size-sm); }
 .tp-lblv { padding-top: 2px !important; padding-bottom: 2px !important; }
 
 /* Highlight the currently-selected rating cell in mode-folder rating grids. */
