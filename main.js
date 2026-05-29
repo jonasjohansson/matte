@@ -1940,8 +1940,11 @@ function writePartUBO(dt) {
   h[0] = state.t; h[1] = dt; h[2] = aspect; h[3] = state.seed * 0.123;
   h[4] = state.partBurst; h[5] = state.partSpeed; h[6] = state.partCurl; h[7] = state.partDrag;
   h[8] = state.partGravity; h[9] = Math.max(0.05, state.partLife); h[10] = state.partSize; h[11] = state.partTrail;
-  h[12] = state.partSpread; h[13] = state.partGlow; h[14] = state.partColorMix; h[15] = state.partFade;
-  h[16] = state.partCenterX; h[17] = state.partCenterY; h[18] = state.matteOutput ? 1 : 0; h[19] = 0;
+  const noImg = !state.imgA && !state.imgB;
+  // No source → particles use the flat glow colour (sampling the placeholder
+  // would make them black), and they render as white luma to match the matte.
+  h[12] = state.partSpread; h[13] = state.partGlow; h[14] = noImg ? 0 : state.partColorMix; h[15] = state.partFade;
+  h[16] = state.partCenterX; h[17] = state.partCenterY; h[18] = (state.matteOutput || noImg) ? 1 : 0; h[19] = 0;
   h[20] = gc[0]; h[21] = gc[1]; h[22] = gc[2]; h[23] = 0;
   device.queue.writeBuffer(partUBO, 0, h);
 }
@@ -2209,6 +2212,7 @@ function resizeCanvas() {
   const fit = Math.min(maxW / w, maxH / h, 1);
   canvas.style.width = (w * fit) + 'px';
   canvas.style.height = (h * fit) + 'px';
+  canvas.classList.remove('empty');  // sized → visible (images or custom size)
 }
 
 function hexToRgb(hex) {
@@ -2328,7 +2332,11 @@ function writeUniforms() {
   uboF32[103] = state.bloomImageBias;
   uboF32[104] = state.stageBands;
   uboF32[105] = state.stageOverlap;
-  uboU32[106] = state.matteOutput ? 1 : 0;
+  // Show the B/W matte when explicitly requested, or implicitly when there's no
+  // source image to blend — so the tool works as a pure transition/matte
+  // generator: set dimensions, see white↔black movement, no footage required.
+  const showMatte = state.matteOutput || (!state.imgA && !state.imgB);
+  uboU32[106] = showMatte ? 1 : 0;
   uboU32[107] = state.matteInvert ? 1 : 0;
   uboF32[108] = state.migrationStrength;
   uboU32[109] = state.migrationDir;
@@ -2447,7 +2455,9 @@ function render() {
 
 // Synchronous GPU draw — used by the rAF render loop and by the recorder.
 function renderFrame() {
-  if (!state.imgA && !state.imgB) return;
+  // With a custom canvas size the tool runs image-free (matte / particle
+  // generator), so only bail when there's nothing to render AND no fixed size.
+  if (!state.imgA && !state.imgB && !state.customSize) return;
   // Sync the T-slot video to state.t. Strategy: rather than seek per render
   // frame (expensive for codecs with sparse keyframes), match the video's
   // playbackRate to state.duration so it naturally plays in sync. Only re-seek
@@ -2894,7 +2904,9 @@ document.getElementById('clear').addEventListener('click', async () => {
       s.appendChild(ph);
     }
   });
-  canvas.classList.add('empty');
+  // Keep the canvas live as a matte generator when a custom size is set;
+  // otherwise hide it until an image is loaded.
+  if (state.customSize) resizeCanvas(); else canvas.classList.add('empty');
   await idbClearAll();
 });
 
