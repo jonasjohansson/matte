@@ -3350,7 +3350,7 @@ const MODE_NAMES_FULL = Object.fromEntries(Object.entries(MODE_OPTIONS).map(([n,
 fWater.addBinding(state, 'mode', {
   label: 'mode',
   options: MODE_OPTIONS,
-}).on('change', () => { updateModeFolders(); advec.needsReset = true; particles.needsReset = true; });
+}).on('change', () => { updateModeFolders(); advec.needsReset = true; particles.needsReset = true; restartPlayback(); });
 
 const fRim    = fWater.addFolder({ title: 'Pigment rim',    expanded: true });
 fRim.addBinding(state, 'rimWidth', { min: 0, max: 0.4, step: 0.005, label: 'rim width' });
