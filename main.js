@@ -109,6 +109,8 @@ struct Params {
   lightColor: vec3f, videoSaturate: f32,
   paperGrowth: f32, paperFollow: f32, paperPatches: f32, videoDisplaceAmount: f32,
   originAmount: f32, originX: f32, originY: f32, turbulence: f32,
+  originPts: array<vec4f, 8>,
+  originCount: u32, _oc0: u32, _oc1: u32, _oc2: u32,
 };
 
 @group(0) @binding(0) var<uniform> p: Params;
@@ -934,11 +936,24 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
   // from the edges. Origin defaults to centre, or is derived from image A's
   // bright focal region. The mode's own texture still breaks up the front.
   if (p.originAmount > 0.0001) {
-    var duv = uv - vec2f(p.originX, p.originY);
-    duv.x = duv.x * p.canvasAspect;
     let diag = sqrt(p.canvasAspect * p.canvasAspect + 1.0);
-    let d = clamp(length(duv) / (0.5 * diag), 0.0, 1.0);
-    mask = mix(mask, d, p.originAmount);
+    var d = 1.0;
+    if (p.originCount > 0u) {
+      // grow from the nearest placed emission point (multiple blooms)
+      for (var i = 0u; i < 16u; i = i + 1u) {
+        if (i >= p.originCount) { break; }
+        let v = p.originPts[i >> 1u];
+        let pt = select(v.zw, v.xy, (i & 1u) == 0u);
+        var duv = uv - pt;
+        duv.x = duv.x * p.canvasAspect;
+        d = min(d, length(duv) / (0.5 * diag));
+      }
+    } else {
+      var duv = uv - vec2f(p.originX, p.originY);
+      duv.x = duv.x * p.canvasAspect;
+      d = length(duv) / (0.5 * diag);
+    }
+    mask = mix(mask, clamp(d, 0.0, 1.0), p.originAmount);
   }
   // Turbulence: domain-warped multi-octave noise fractures the reveal front into
   // organic, ink-in-water tendrils instead of a smooth glossy edge. Higher =
@@ -1409,6 +1424,8 @@ struct Params {
   lightColor: vec3f, videoSaturate: f32,
   paperGrowth: f32, paperFollow: f32, paperPatches: f32, videoDisplaceAmount: f32,
   originAmount: f32, originX: f32, originY: f32, turbulence: f32,
+  originPts: array<vec4f, 8>,
+  originCount: u32, _oc0: u32, _oc1: u32, _oc2: u32,
 };
 
 @group(0) @binding(0) var<uniform> p: Params;
@@ -1638,6 +1655,8 @@ struct Params {
   lightColor: vec3f, videoSaturate: f32,
   paperGrowth: f32, paperFollow: f32, paperPatches: f32, videoDisplaceAmount: f32,
   originAmount: f32, originX: f32, originY: f32, turbulence: f32,
+  originPts: array<vec4f, 8>,
+  originCount: u32, _oc0: u32, _oc1: u32, _oc2: u32,
 };
 @group(0) @binding(0) var<uniform> p: Params;
 @group(0) @binding(1) var texA: texture_2d<f32>;
@@ -1753,7 +1772,7 @@ function makeDisplayBindGroup(finalState) {
 //   5  seed         13  scaleB.y                                          29 bloomCount     37 saltContrast
 //   6  validA       14  offsetB.x                                         30 bloomRim       38 saltBias
 //   7  validB       15  offsetB.y                                         31 bloomRate      39 saltImage
-const UBO_SIZE = 704;  // +16 for origin (originAmount, originX, originY, _o0)
+const UBO_SIZE = 848;  // origin (172-175) + originPts array (176-207) + originCount (208)
 const uniformBuffer = device.createBuffer({
   size: UBO_SIZE,
   usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
@@ -2175,6 +2194,7 @@ const state = {
   // origin: transitions grow from within (inside-out). Default centre; auto-set
   // from image A's bright focal region when an image is loaded.
   originAmount: 0.4, originX: 0.5, originY: 0.5, originFromImage: true,
+  originPoints: [], placePoints: false,  // click-placed emission points
   turbulence: 0.35,  // organic ink-in-water break-up of the reveal front
   // custom transition dimensions (independent of source footage size).
   // Default ON: trans is primarily a matte-video builder, so it boots to a
@@ -2559,6 +2579,14 @@ function writeUniforms() {
   uboF32[173] = state.originX;
   uboF32[174] = state.originY;
   uboF32[175] = state.turbulence;
+  // -- 176..207 -- origin points (packed 2 per vec4), 208 = count
+  const pts = state.originPoints || [];
+  const nPts = Math.min(16, pts.length);
+  for (let i = 0; i < nPts; i++) {
+    const o = 176 + (i >> 1) * 4 + (i & 1) * 2;
+    uboF32[o] = pts[i].x; uboF32[o + 1] = pts[i].y;
+  }
+  uboU32[208] = nPts;
   // -- 80..95 -- new painterly modes (16..21) + global paper grain
   uboF32[80] = state.strokeScale;
   uboF32[81] = state.strokeAniso;
@@ -3356,22 +3384,6 @@ function resetModeDefaults(modeId) {
   pane.refresh();
 }
 function addModeFooter(folder, modeId) {
-  // Single-cell star toggle — starred or not.
-  const starGrid = folder.addBlade({
-    view: 'buttongrid',
-    size: [1, 1],
-    cells: () => ({ title: isStarred(modeId) ? '★ starred' : '☆ star this mode' }),
-    label: '',
-  });
-  const paintStar = () => {
-    const btn = starGrid.element.querySelector('button');
-    if (!btn) return;
-    const on = isStarred(modeId);
-    btn.textContent = on ? '★ starred' : '☆ star this mode';
-    btn.classList.toggle('rating-active', on);
-  };
-  starGrid.on('click', () => { setStarred(modeId, !isStarred(modeId)); paintStar(); });
-  queueMicrotask(paintStar);
   // Randomize + Reset side-by-side.
   const actionGrid = folder.addBlade({
     view: 'buttongrid',
@@ -3386,7 +3398,7 @@ function addModeFooter(folder, modeId) {
 }
 
 // ----- Watercolor mode + per-mode controls -----
-const fWater = tabMode.addFolder({ title: 'Watercolor', expanded: true });
+const fWater = tabMode.addFolder({ title: 'Effect', expanded: true });
 const MODE_OPTIONS = {
   '— off (smooth)':                       0,
   'Painterly — pigment rim':              1,
@@ -3695,22 +3707,31 @@ function updateModeFolders() {
 updateModeFolders();
 
 const fDis = tabMode.addFolder({ title: 'Reveal', expanded: true });
-// — origin: grow from within (inside-out) — applies to every mode —
+// — core: where it starts and how organic it feels (every mode) —
 fDis.addBinding(state, 'originAmount', { min: 0, max: 1, step: 0.01, label: 'from within' });
-fDis.addBinding(state, 'originX', { min: 0, max: 1, step: 0.01, label: 'origin x' });
-fDis.addBinding(state, 'originY', { min: 0, max: 1, step: 0.01, label: 'origin y' });
-fDis.addBinding(state, 'originFromImage', { label: 'origin from image A' })
-  .on('change', () => { if (state.originFromImage && state.imgA) computeOriginFromImage(state.imgA); });
-// — global reveal shaping (every mode) —
 fDis.addBinding(state, 'turbulence', { min: 0, max: 1, step: 0.01, label: 'turbulence (ink)' });
 fDis.addBinding(state, 'spread',    { min: 0, max: 1, step: 0.01, label: 'edge softness' });
-fDis.addBinding(state, 'maskScale', { min: 0.3, max: 4, step: 0.05, label: 'mask scale' });
-fDis.addBinding(state, 'curve', { label: 'timing', options: { 'linear': 0, 'ease-in-out': 1, 'ease-in': 2, 'ease-out': 3 } });
-fDis.addBinding(state, 'seed', { min: 0, max: 999, step: 1 });
-fDis.addBinding(state, 'maskShift', { min: -0.5, max: 0.5, step: 0.005, label: 'mask shift' });
-// — only affects the default "off (smooth)" dissolve —
-fDis.addBinding(state, 'organic',   { min: 0, max: 1, step: 0.01, label: 'organic (smooth)' });
-fDis.addBinding(state, 'edges',     { min: -1, max: 1, step: 0.01, label: 'edges (smooth)' });
+// — start points: click on the canvas to set where the reveal emanates from —
+const btnPlace = fDis.addButton({ title: '✛ Place start points' });
+btnPlace.on('click', () => {
+  setPlacePoints(!state.placePoints);
+  btnPlace.title = state.placePoints ? '✓ Click canvas to add — done' : '✛ Place start points';
+});
+fDis.addButton({ title: 'Clear points' }).on('click', () => {
+  state.originPoints = []; drawOriginPoints(); restartPlayback();
+});
+fDis.addBinding(state, 'originFromImage', { label: 'else: from image A' })
+  .on('change', () => { if (state.originFromImage && state.imgA) computeOriginFromImage(state.imgA); });
+// — advanced shaping (collapsed) —
+const fAdv = fDis.addFolder({ title: 'Advanced', expanded: false });
+fAdv.addBinding(state, 'originX', { min: 0, max: 1, step: 0.01, label: 'origin x' });
+fAdv.addBinding(state, 'originY', { min: 0, max: 1, step: 0.01, label: 'origin y' });
+fAdv.addBinding(state, 'maskScale', { min: 0.3, max: 4, step: 0.05, label: 'mask scale' });
+fAdv.addBinding(state, 'curve', { label: 'timing', options: { 'linear': 0, 'ease-in-out': 1, 'ease-in': 2, 'ease-out': 3 } });
+fAdv.addBinding(state, 'seed', { min: 0, max: 999, step: 1 });
+fAdv.addBinding(state, 'maskShift', { min: -0.5, max: 0.5, step: 0.005, label: 'mask shift' });
+fAdv.addBinding(state, 'organic',   { min: 0, max: 1, step: 0.01, label: 'organic (smooth mode)' });
+fAdv.addBinding(state, 'edges',     { min: -1, max: 1, step: 0.01, label: 'edges (smooth mode)' });
 
 // ----- Canvas size (custom transition dimensions, independent of source) -----
 // (Canvas size moved to the top "Setup" block.)
@@ -4520,6 +4541,40 @@ function samDrawOverlay() {
   }
 }
 
+// ---- click-placed emission / start points (reuses the sam-overlay canvas) ----
+function drawOriginPoints() {
+  samSyncOverlay();
+  samOverlayCtx.clearRect(0, 0, samOverlay.width, samOverlay.height);
+  const dpr = window.devicePixelRatio || 1;
+  for (const pt of state.originPoints) {
+    const cx = pt.x * samOverlay.width;
+    const cy = pt.y * samOverlay.height;  // origin uv is y-down (matches shader + from-image)
+    samOverlayCtx.beginPath();
+    samOverlayCtx.arc(cx, cy, 7 * dpr, 0, Math.PI * 2);
+    samOverlayCtx.fillStyle = 'rgba(74,158,255,0.9)';
+    samOverlayCtx.fill();
+    samOverlayCtx.lineWidth = 2 * dpr; samOverlayCtx.strokeStyle = '#000'; samOverlayCtx.stroke();
+  }
+  samOverlay.classList.toggle('visible', state.placePoints || state.originPoints.length > 0);
+}
+function setPlacePoints(on) {
+  state.placePoints = on;
+  samOverlay.classList.toggle('interactive', on);
+  drawOriginPoints();
+}
+function onPlaceClick(e) {
+  if (!state.placePoints) return;
+  const r = canvas.getBoundingClientRect();
+  const x = (e.clientX - r.left) / r.width;
+  const y = (e.clientY - r.top) / r.height;  // y-down to match the shader origin
+  state.originPoints.push({ x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) });
+  drawOriginPoints();
+  restartPlayback();  // replay so the bloom from the new point is visible
+}
+canvas.addEventListener('click', onPlaceClick);
+samOverlay.addEventListener('click', onPlaceClick);
+window.addEventListener('resize', () => { if (state.originPoints.length || state.placePoints) drawOriginPoints(); });
+
 function samSetSegmentMode(on) {
   sam.segmentMode = on;
   samOverlay.classList.toggle('visible', on);
@@ -4702,7 +4757,7 @@ const PERSIST_KEYS = [
   ...PRESET_KEYS,
   'fit', 'bg',
   'customSize', 'outW', 'outH', 'texAmount', 'texBg', 'texFit',
-  'originAmount', 'originX', 'originY', 'originFromImage', 'turbulence',
+  'originAmount', 'originX', 'originY', 'originFromImage', 'turbulence', 'originPoints',
   'exportFps', 'exportSizeMode', 'exportPadBottom', 'matteOutput', 'matteInvert',
   'slotAFillMode', 'slotAColor', 'slotBFillMode', 'slotBColor', 'keepAOutsideB',
   'partEnable', 'partCount', 'partBurst', 'partSpeed', 'partCurl', 'partTrail',
@@ -4727,6 +4782,7 @@ function loadSession() {
     padPresets._v = match !== undefined ? match : 0;
     pane.refresh();
     updateModeFolders();
+    if (Array.isArray(state.originPoints) && state.originPoints.length) drawOriginPoints();
     if (state.mode >= 10 && state.mode <= 14) advec.needsReset = true;
   } catch {}
 }
