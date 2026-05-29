@@ -2027,8 +2027,10 @@ const state = {
   startTime: 0,
   reverse: false,
   duration: 15.0,
-  // custom transition dimensions (independent of source footage size)
-  customSize: false, outW: 1920, outH: 1080,
+  // custom transition dimensions (independent of source footage size).
+  // Default ON: trans is primarily a matte-video builder, so it boots to a
+  // fixed canvas showing the B/W matte without requiring any footage.
+  customSize: true, outW: 1920, outH: 1080,
   // particle layer (GPU compute overlay) — see particle module above
   partEnable: false,
   partCount: 120000,
@@ -2858,11 +2860,17 @@ async function seedLibraryWithDefaultsIfEmpty() {
   const [blobA, blobB, blobT] = await Promise.all([
     idbGet('imageA'), idbGet('imageB'), idbGet('videoT'),
   ]);
-  loadFromUrl(blobA ? URL.createObjectURL(blobA) : './defaults/lofoten_A.jpg', 'A');
-  loadFromUrl(blobB ? URL.createObjectURL(blobB) : './defaults/lofoten_B.jpg', 'B');
+  // Restore previously-used images if present, but DON'T force the Lerin
+  // defaults — trans boots as a matte builder (image-free). The defaults stay
+  // in the library to drag in when you want to preview over real footage.
+  if (blobA) loadFromUrl(URL.createObjectURL(blobA), 'A');
+  if (blobB) loadFromUrl(URL.createObjectURL(blobB), 'B');
   if (blobT) loadVideoToT(blobT);  // restores last-used transition video
   await seedLibraryWithDefaultsIfEmpty();
   renderLibrary();
+  resizeCanvas();          // size + reveal the matte canvas (works image-free)
+  state.playing = true;    // auto-loop so the matte previews live on load
+  state.startTime = performance.now();
 })();
 
 // per-slot drag-and-drop
@@ -3746,7 +3754,9 @@ function codecMaxDim(codecString) {
 
 async function startRecording(opts = {}) {
   if (recording) return;
-  if (!state.imgA || !state.imgB) return;
+  // Allow image-free recording: with a custom size the tool is a matte/particle
+  // generator, so we only need a sized canvas — not both source images.
+  if (!state.imgA && !state.imgB && !state.customSize) return;
 
   const fps = state.exportFps;
   const sizeMode = state.exportSizeMode;
@@ -3880,7 +3890,7 @@ async function startRecording(opts = {}) {
       `${offW}x${totalH}`,
     ];
     if (state.exportPadBottom > 0) tail.push(`pad=${fx(state.exportPadBottom)}`);
-    if (state.matteOutput) tail.push(state.matteInvert ? 'matte-inv' : 'matte');
+    if (state.matteOutput || (!state.imgA && !state.imgB)) tail.push(state.matteInvert ? 'matte-inv' : 'matte');
     base = `${base}__${tail.join('__')}`;
   }
   const filename = /\.mp4$/i.test(base) ? base : `${base}.mp4`;
