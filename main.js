@@ -227,8 +227,8 @@ fn paperMask(uv: vec2f) -> f32 {
   // head start, so the reveal ignites in organic pools across the surface
   // rather than sweeping as a single global threshold front.
   if (p.paperPatches > 0.001) {
-    let patch = fbm(uv * 2.3 + p.seed * 0.37 + 11.0);
-    m = clamp(m + (patch - 0.5) * p.paperPatches * 1.2, 0.0, 1.0);
+    let patchN = fbm(uv * 2.3 + p.seed * 0.37 + 11.0);
+    m = clamp(m + (patchN - 0.5) * p.paperPatches * 1.2, 0.0, 1.0);
   }
   return m;
 }
@@ -1751,6 +1751,231 @@ function makeBindGroup(stateView) {
 }
 let bindGroup = makeBindGroup();
 
+// ============================================================================
+// Particle layer (GPU compute sim + additive instanced draw)
+// ----------------------------------------------------------------------------
+// A large particle buffer is simulated each frame in a compute shader and drawn
+// additively on top of the transition. Particles are seeded across image A,
+// inherit its colour, and are born in an expanding front (staggered by radius
+// from a centre) so the burst grows organically rather than all at once. One
+// shared engine covers two reference looks via `partBurst`: low burst + high
+// curl = a glowing, drifting reveal-rim; high burst + trail = a radial
+// streak-burst. The sim is driven by transition time `t` (not wall-clock) so it
+// stays deterministic for recording.
+// Particle defaults live in the `state` object (declared further below); the
+// pipelines/buffers here read state only at render time.
+// ============================================================================
+const PART_STRIDE_F32 = 8;  // spawn.xy, pos.xy, vel.xy, age, seed
+const particles = { buffer: null, count: 0, lastT: 0, needsReset: true };
+
+const PART_STRUCTS = /* wgsl */`
+struct P { spawn: vec2f, pos: vec2f, vel: vec2f, age: f32, seedf: f32 };
+struct PP {
+  tA: vec4f,        // t, dt, aspect, seed
+  f0: vec4f,        // burst, speed, curl, drag
+  f1: vec4f,        // gravity, life, size, trail
+  f2: vec4f,        // spread, glow, colorMix, fade
+  center: vec4f,    // cx, cy, matteFlag, _
+  glowColor: vec4f, // rgb, _
+};
+fn ph21(p: vec2f) -> f32 {
+  var p3 = fract(vec3f(p.x, p.y, p.x) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+fn pnoise(p: vec2f) -> f32 {
+  let i = floor(p); let f = fract(p);
+  let u = f * f * (3.0 - 2.0 * f);
+  let a = ph21(i); let b = ph21(i + vec2f(1.0, 0.0));
+  let c = ph21(i + vec2f(0.0, 1.0)); let d = ph21(i + vec2f(1.0, 1.0));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+fn pfbm(p: vec2f) -> f32 { return pnoise(p) * 0.6 + pnoise(p * 2.03) * 0.3; }
+fn pcurl(p: vec2f) -> vec2f {
+  let e = 0.01;
+  let ny = pfbm(p + vec2f(0.0, e)) - pfbm(p - vec2f(0.0, e));
+  let nx = pfbm(p + vec2f(e, 0.0)) - pfbm(p - vec2f(e, 0.0));
+  return vec2f(ny, -nx) / (2.0 * e);
+}
+`;
+
+const PART_COMPUTE = PART_STRUCTS + /* wgsl */`
+@group(0) @binding(0) var<storage, read_write> parts: array<P>;
+@group(0) @binding(1) var<uniform> pp: PP;
+@compute @workgroup_size(64)
+fn cs(@builtin(global_invocation_id) gid: vec3u) {
+  let i = gid.x;
+  if (i >= arrayLength(&parts)) { return; }
+  var pt = parts[i];
+  let t = pp.tA.x; let dt = pp.tA.y;
+  let burst = pp.f0.x; let speed = pp.f0.y; let curlF = pp.f0.z; let drag = pp.f0.w;
+  let gravity = pp.f1.x; let life = pp.f1.y;
+  let center = pp.center.xy;
+  let prevAge = pt.age;
+  pt.age = pt.age + dt;
+  if (prevAge < 0.0 && pt.age >= 0.0) {
+    let dir = normalize(pt.spawn - center + vec2f(1e-4, 1e-4));
+    pt.pos = pt.spawn;
+    pt.vel = dir * speed * (0.3 + burst);
+  }
+  if (pt.age >= 0.0 && pt.age < life) {
+    let dir = normalize(pt.pos - center + vec2f(1e-4, 1e-4));
+    var acc = dir * speed * burst;
+    acc += pcurl(pt.pos * 3.0 + pt.seedf * 10.0 + t) * curlF;
+    acc.y += gravity;
+    pt.vel = pt.vel + acc * dt;
+    pt.vel = pt.vel * (1.0 - clamp(drag * dt, 0.0, 1.0));
+    pt.pos = pt.pos + pt.vel * dt;
+  }
+  parts[i] = pt;
+}
+`;
+
+const PART_DRAW = PART_STRUCTS + /* wgsl */`
+@group(0) @binding(0) var<storage, read> parts: array<P>;
+@group(0) @binding(1) var<uniform> pp: PP;
+@group(0) @binding(2) var texA: texture_2d<f32>;
+@group(0) @binding(3) var samp: sampler;
+struct VSOut {
+  @builtin(position) pos: vec4f,
+  @location(0) local: vec2f,
+  @location(1) color: vec3f,
+  @location(2) alpha: f32,
+};
+@vertex
+fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VSOut {
+  var out: VSOut;
+  let pt = parts[ii];
+  let life = pp.f1.y; let size = pp.f1.z; let trail = pp.f1.w; let aspect = pp.tA.z;
+  if (pt.age < 0.0 || pt.age >= life) {
+    out.pos = vec4f(2.0, 2.0, 0.0, 1.0); out.local = vec2f(0.0);
+    out.color = vec3f(0.0); out.alpha = 0.0; return out;
+  }
+  var corners = array<vec2f, 6>(
+    vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(-1.0, 1.0),
+    vec2f(-1.0, 1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0));
+  let c = corners[vi];
+  let p = vec2f(pt.pos.x * 2.0 - 1.0, 1.0 - pt.pos.y * 2.0);
+  let sp = length(pt.vel);
+  let dirv = select(vec2f(1.0, 0.0), normalize(pt.vel), sp > 1e-5);
+  let perp = vec2f(-dirv.y, dirv.x);
+  let along = dirv * (size * (1.0 + trail * sp * 8.0));
+  let across = perp * size;
+  var offset = c.x * across + c.y * along;
+  offset.x = offset.x / aspect;
+  out.pos = vec4f(p + offset, 0.0, 1.0);
+  out.local = c;
+  let src = textureSampleLevel(texA, samp, pt.spawn, 0.0).rgb;
+  out.color = mix(pp.glowColor.rgb, src, pp.f2.z);
+  let lifeT = pt.age / life;
+  let aLife = pow(1.0 - lifeT, mix(0.5, 3.0, pp.f2.w));
+  let aBirth = smoothstep(0.0, 0.05 * life, pt.age);
+  out.alpha = aLife * aBirth;
+  return out;
+}
+@fragment
+fn fs(in: VSOut) -> @location(0) vec4f {
+  let d = length(in.local);
+  let falloff = pow(clamp(1.0 - d, 0.0, 1.0), 2.0);
+  let a = falloff * in.alpha * pp.f2.y;
+  var col = in.color;
+  if (pp.center.z > 0.5) { col = vec3f(1.0); }  // matte: white luma
+  return vec4f(col * a, a);
+}
+`;
+
+const partComputePipeline = device.createComputePipeline({
+  layout: 'auto',
+  compute: { module: device.createShaderModule({ code: PART_COMPUTE }), entryPoint: 'cs' },
+});
+const partDrawPipeline = device.createRenderPipeline({
+  layout: 'auto',
+  vertex: { module: device.createShaderModule({ code: PART_DRAW }), entryPoint: 'vs' },
+  fragment: {
+    module: device.createShaderModule({ code: PART_DRAW }), entryPoint: 'fs',
+    targets: [{
+      format: presentationFormat,
+      blend: {
+        color: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
+        alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
+      },
+    }],
+  },
+  primitive: { topology: 'triangle-list' },
+});
+const partUBO = device.createBuffer({ size: 96, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+const partUBOHost = new Float32Array(24);
+
+function ensureParticles() {
+  const N = Math.max(1, state.partCount | 0);
+  if (!particles.buffer || particles.count !== N) {
+    particles.buffer?.destroy?.();
+    particles.buffer = device.createBuffer({
+      size: N * PART_STRIDE_F32 * 4,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    particles.count = N;
+    particles.needsReset = true;
+  }
+  if (particles.needsReset) { initParticleData(); particles.needsReset = false; particles.lastT = 0; }
+}
+function initParticleData() {
+  const N = particles.count;
+  const data = new Float32Array(N * PART_STRIDE_F32);
+  const cx = state.partCenterX, cy = state.partCenterY, spread = state.partSpread;
+  for (let i = 0; i < N; i++) {
+    const sx = Math.random(), sy = Math.random();
+    const r = Math.min(1, Math.hypot(sx - cx, sy - cy) / 0.7071);
+    const birth = Math.min(0.95, Math.max(0, r * spread + Math.random() * (1 - spread) * 0.6));
+    const o = i * PART_STRIDE_F32;
+    data[o] = sx; data[o + 1] = sy; data[o + 2] = sx; data[o + 3] = sy;
+    data[o + 4] = 0; data[o + 5] = 0; data[o + 6] = -birth; data[o + 7] = Math.random();
+  }
+  device.queue.writeBuffer(particles.buffer, 0, data);
+}
+function writePartUBO(dt) {
+  const aspect = canvas.width / Math.max(1, canvas.height);
+  const gc = hexToRgb(state.partGlowColor);
+  const h = partUBOHost;
+  h[0] = state.t; h[1] = dt; h[2] = aspect; h[3] = state.seed * 0.123;
+  h[4] = state.partBurst; h[5] = state.partSpeed; h[6] = state.partCurl; h[7] = state.partDrag;
+  h[8] = state.partGravity; h[9] = Math.max(0.05, state.partLife); h[10] = state.partSize; h[11] = state.partTrail;
+  h[12] = state.partSpread; h[13] = state.partGlow; h[14] = state.partColorMix; h[15] = state.partFade;
+  h[16] = state.partCenterX; h[17] = state.partCenterY; h[18] = state.matteOutput ? 1 : 0; h[19] = 0;
+  h[20] = gc[0]; h[21] = gc[1]; h[22] = gc[2]; h[23] = 0;
+  device.queue.writeBuffer(partUBO, 0, h);
+}
+function simAndDrawParticles(enc, canvasView) {
+  ensureParticles();
+  let dt = state.t - particles.lastT;
+  if (dt < 0) { particles.needsReset = true; ensureParticles(); dt = 0; }
+  particles.lastT = state.t;
+  writePartUBO(dt);
+  const cbg = device.createBindGroup({
+    layout: partComputePipeline.getBindGroupLayout(0),
+    entries: [{ binding: 0, resource: { buffer: particles.buffer } }, { binding: 1, resource: { buffer: partUBO } }],
+  });
+  const cpass = enc.beginComputePass();
+  cpass.setPipeline(partComputePipeline);
+  cpass.setBindGroup(0, cbg);
+  cpass.dispatchWorkgroups(Math.ceil(particles.count / 64));
+  cpass.end();
+  const dbg = device.createBindGroup({
+    layout: partDrawPipeline.getBindGroupLayout(0),
+    entries: [
+      { binding: 0, resource: { buffer: particles.buffer } },
+      { binding: 1, resource: { buffer: partUBO } },
+      { binding: 2, resource: texA.createView() },
+      { binding: 3, resource: sampler },
+    ],
+  });
+  const dpass = enc.beginRenderPass({ colorAttachments: [{ view: canvasView, loadOp: 'load', storeOp: 'store' }] });
+  dpass.setPipeline(partDrawPipeline);
+  dpass.setBindGroup(0, dbg);
+  dpass.draw(6, particles.count);
+  dpass.end();
+}
+
 async function uploadImageToSlot(img, slot) {
   // premultiplyAlpha:'none' keeps the PNG's straight (un-premultiplied) alpha in
   // the texture. The shader blends straight RGB and premultiplies once at output
@@ -1799,6 +2024,25 @@ const state = {
   startTime: 0,
   reverse: false,
   duration: 15.0,
+  // custom transition dimensions (independent of source footage size)
+  customSize: false, outW: 1920, outH: 1080,
+  // particle layer (GPU compute overlay) — see particle module above
+  partEnable: false,
+  partCount: 120000,
+  partBurst: 0.5,     // 0 = glowing curl drift, 1 = hard radial burst
+  partSpeed: 1.6,     // overall velocity scale
+  partCurl: 0.12,     // curl-noise force (organic drift)
+  partDrag: 1.2,      // velocity damping per t
+  partGravity: 0.0,   // constant downward (+) / upward (-) accel
+  partLife: 0.7,      // lifespan in t-units
+  partSize: 0.006,    // sprite radius (clip units)
+  partTrail: 0.0,     // streak elongation along velocity (motion blur)
+  partSpread: 0.6,    // how strongly birth time follows radius (front growth)
+  partGlow: 0.9,      // additive intensity
+  partColorMix: 1.0,  // 0 = flat glow colour, 1 = sampled from source A
+  partFade: 0.5,      // life-fade curve (higher = fades sooner)
+  partCenterX: 0.5, partCenterY: 0.5,
+  partGlowColor: '#bcd4ff',
   organic: 0.65,
   edges: 0.25,
   spread: 0.55,
@@ -1934,20 +2178,28 @@ function composedFit(slot, cw, ch) {
 }
 
 function resizeCanvas() {
-  if (!state.imgA && !state.imgB) return;
-  // Size to whichever slot is actually rendering an image. When A is solid /
-  // transparent the canvas snaps to B's dimensions so the recorder exports at
-  // B's exact size (and vice versa).
-  const aReal = state.slotAFillMode === 'image' && state.imgA;
-  const bReal = state.slotBFillMode === 'image' && state.imgB;
-  const ref = aReal ? state.imgA : (bReal ? state.imgB : (state.imgA || state.imgB));
+  if (!state.customSize && !state.imgA && !state.imgB) return;
   const minimized = document.body.classList.contains('minimized');
   const sidePanel = minimized ? 0 : 360;
   const padding = minimized ? 0 : 32;
   const maxW = window.innerWidth - sidePanel - padding;
   const maxH = window.innerHeight - padding;
-  const ia = ref.naturalWidth / ref.naturalHeight;
-  let w = ref.naturalWidth, h = ref.naturalHeight;
+  let w, h;
+  if (state.customSize) {
+    // Custom transition dimensions — independent of source footage size. The
+    // image fit (composedFit) adapts A/B into this canvas (letterbox / fill per
+    // fit mode), so the transition canvas is whatever size you ask for.
+    w = Math.max(2, Math.round(state.outW));
+    h = Math.max(2, Math.round(state.outH));
+  } else {
+    // Size to whichever slot is actually rendering an image. When A is solid /
+    // transparent the canvas snaps to B's dimensions so the recorder exports at
+    // B's exact size (and vice versa).
+    const aReal = state.slotAFillMode === 'image' && state.imgA;
+    const bReal = state.slotBFillMode === 'image' && state.imgB;
+    const ref = aReal ? state.imgA : (bReal ? state.imgB : (state.imgA || state.imgB));
+    w = ref.naturalWidth; h = ref.naturalHeight;
+  }
   const longer = Math.max(w, h);
   if (longer > GPU_MAX_TEX) {
     const scale = GPU_MAX_TEX / longer;
@@ -2259,9 +2511,10 @@ function renderFrame() {
   }
 
   const displayBG = isAdvec ? makeDisplayBindGroup(finalState) : bindGroup;
+  const canvasView = ctx.getCurrentTexture().createView();
   const pass = enc.beginRenderPass({
     colorAttachments: [{
-      view: ctx.getCurrentTexture().createView(),
+      view: canvasView,
       clearValue: { r: 0, g: 0, b: 0, a: 1 },
       loadOp: 'clear', storeOp: 'store',
     }],
@@ -2270,6 +2523,10 @@ function renderFrame() {
   pass.setBindGroup(0, displayBG);
   pass.draw(6);
   pass.end();
+
+  // Particle overlay: simulate then additively draw on top of the transition.
+  if (state.partEnable) simAndDrawParticles(enc, canvasView);
+
   device.queue.submit([enc.finish()]);
 }
 
@@ -2776,16 +3033,42 @@ const tabs = pane.addTab({
   pages: [
     { title: 'Mode' },
     { title: 'Frame' },
+    { title: 'Particles' },
     { title: 'Output' },
     { title: 'Saved' },
     { title: 'Segment' },
   ],
 });
-const tabMode    = tabs.pages[0];
-const tabFrame   = tabs.pages[1];
-const tabOutput  = tabs.pages[2];
-const tabSaved   = tabs.pages[3];
-const tabSegment = tabs.pages[4];
+const tabMode     = tabs.pages[0];
+const tabFrame    = tabs.pages[1];
+const tabParticles = tabs.pages[2];
+const tabOutput   = tabs.pages[3];
+const tabSaved    = tabs.pages[4];
+const tabSegment  = tabs.pages[5];
+
+// ----- Particles (GPU compute layer) -----
+const fPart = tabParticles.addFolder({ title: 'Particles', expanded: true });
+fPart.addBinding(state, 'partEnable', { label: 'enable' });
+fPart.addBinding(state, 'partCount', { min: 1000, max: 600000, step: 1000, label: 'count' })
+  .on('change', () => { particles.needsReset = true; });
+fPart.addBinding(state, 'partBurst',  { min: 0, max: 1, step: 0.01, label: 'burst ↔ glow' });
+fPart.addBinding(state, 'partSpeed',  { min: 0, max: 6, step: 0.01, label: 'speed' });
+fPart.addBinding(state, 'partCurl',   { min: 0, max: 1, step: 0.01, label: 'curl drift' });
+fPart.addBinding(state, 'partTrail',  { min: 0, max: 1, step: 0.01, label: 'streak / trail' });
+fPart.addBinding(state, 'partDrag',   { min: 0, max: 4, step: 0.01, label: 'drag' });
+fPart.addBinding(state, 'partGravity',{ min: -2, max: 2, step: 0.01, label: 'gravity' });
+fPart.addBinding(state, 'partLife',   { min: 0.05, max: 1.5, step: 0.01, label: 'life' });
+fPart.addBinding(state, 'partFade',   { min: 0, max: 1, step: 0.01, label: 'fade curve' });
+fPart.addBinding(state, 'partSize',   { min: 0.001, max: 0.04, step: 0.001, label: 'size' });
+fPart.addBinding(state, 'partGlow',   { min: 0, max: 3, step: 0.01, label: 'glow' });
+fPart.addBinding(state, 'partColorMix', { min: 0, max: 1, step: 0.01, label: 'source colour' });
+fPart.addBinding(state, 'partGlowColor', { view: 'color', label: 'glow colour' });
+fPart.addBinding(state, 'partSpread', { min: 0, max: 1, step: 0.01, label: 'front spread' })
+  .on('change', () => { particles.needsReset = true; });
+fPart.addBinding(state, 'partCenterX', { min: 0, max: 1, step: 0.01, label: 'centre x' })
+  .on('change', () => { particles.needsReset = true; });
+fPart.addBinding(state, 'partCenterY', { min: 0, max: 1, step: 0.01, label: 'centre y' })
+  .on('change', () => { particles.needsReset = true; });
 
 // Per-mode default values — used by the "Reset defaults" button in each
 // mode folder to restore that mode's params without touching anything else.
@@ -3197,6 +3480,29 @@ fDis.addBinding(state, 'curve', { options: { 'linear': 0, 'ease-in-out': 1, 'eas
 fDis.addBinding(state, 'seed', { min: 0, max: 999, step: 1 });
 fDis.addBinding(state, 'maskShift', { min: -0.5, max: 0.5, step: 0.005, label: 'mask shift' });
 
+// ----- Canvas size (custom transition dimensions, independent of source) -----
+const fSize = tabFrame.addFolder({ title: 'Canvas size', expanded: true });
+fSize.addBinding(state, 'customSize', { label: 'custom size' }).on('change', () => resizeCanvas());
+const sizePresets = { _v: '1920x1080' };
+fSize.addBinding(sizePresets, '_v', {
+  label: 'preset',
+  options: {
+    '1920×1080 (16:9)': '1920x1080', '1080×1920 (9:16)': '1080x1920',
+    '1080×1080 (1:1)': '1080x1080', '3840×2160 (4K)': '3840x2160',
+    '2560×1440 (16:9)': '2560x1440', '1280×720 (16:9)': '1280x720',
+    'custom': 'custom',
+  },
+}).on('change', (e) => {
+  if (e.value === 'custom') return;
+  const [w, h] = e.value.split('x').map(Number);
+  state.outW = w; state.outH = h; state.customSize = true;
+  pane.refresh(); resizeCanvas();
+});
+fSize.addBinding(state, 'outW', { min: 16, max: 8192, step: 2, label: 'width' })
+  .on('change', () => { sizePresets._v = 'custom'; if (state.customSize) resizeCanvas(); });
+fSize.addBinding(state, 'outH', { min: 16, max: 8192, step: 2, label: 'height' })
+  .on('change', () => { sizePresets._v = 'custom'; if (state.customSize) resizeCanvas(); });
+
 const fImg = tabFrame.addFolder({ title: 'Framing', expanded: true });
 fImg.addBinding(state, 'zoomA', { min: 0.5, max: 4, step: 0.01, label: 'A zoom' });
 fImg.addBinding(state, 'panAx', { min: -1, max: 1, step: 0.005, label: 'A pan x' });
@@ -3495,6 +3801,7 @@ async function startRecording(opts = {}) {
   const prevT = state.t;
   state.playing = false;
   if (state.mode >= 10 && state.mode <= 14) advec.needsReset = true;
+  if (state.partEnable) particles.needsReset = true;  // restart particle sim for a clean recording
 
   btnRecord.title = scale < 1
     ? `Scaled to ${offW}×${totalH}. Recording…`
@@ -4167,8 +4474,12 @@ const SESSION_LS_KEY = 'trans:session';
 const PERSIST_KEYS = [
   ...PRESET_KEYS,
   'fit', 'bg',
+  'customSize', 'outW', 'outH',
   'exportFps', 'exportSizeMode', 'exportPadBottom', 'matteOutput', 'matteInvert',
   'slotAFillMode', 'slotAColor', 'slotBFillMode', 'slotBColor', 'keepAOutsideB',
+  'partEnable', 'partCount', 'partBurst', 'partSpeed', 'partCurl', 'partTrail',
+  'partDrag', 'partGravity', 'partLife', 'partFade', 'partSize', 'partGlow',
+  'partColorMix', 'partGlowColor', 'partSpread', 'partCenterX', 'partCenterY',
 ];
 function saveSession() {
   try {
