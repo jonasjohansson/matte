@@ -203,22 +203,25 @@ fn luma(c: vec3f) -> f32 { return dot(c, vec3f(0.299, 0.587, 0.114)); }
 fn ambBokeh(uv: vec2f) -> f32 {
   let ph = p.t * 6.2831853;
   var auv = uv; auv.x = auv.x * p.canvasAspect;
-  let dd = p.driftAmount * vec2f(cos(p.driftAngle * 6.2831853), sin(p.driftAngle * 6.2831853));
-  var v = fbm(uv * 2.2 + dd * ph * 0.2 + vec2f(0.0, -ph * 0.02)) * 0.3;  // defocused light field
+  let dir = vec2f(cos(p.driftAngle * 6.2831853), sin(p.driftAngle * 6.2831853)) * p.driftAmount;
+  // gentle, loop-seamless defocused light field (periodic sway, never jumps)
+  var v = fbm(uv * 2.2 + dir * sin(ph) * 0.12) * 0.3;
   for (var i = 0u; i < 22u; i = i + 1u) {
     let fi = f32(i) + 1.0;
-    let sp = 0.4 + 1.2 * hash21(vec2f(fi, 2.2));
-    let wob = 0.06 * vec2f(sin(ph * sp + fi), cos(ph * sp * 0.9 + fi * 1.7));
-    // net drift in the chosen direction, wrapped so dots re-enter (wind)
-    var c = fract(vec2f(hash21(vec2f(fi, 3.7)), hash21(vec2f(fi, 9.1))) + wob + dd * ph * 0.35);
+    let phase = hash21(vec2f(fi, 6.6)) * 6.2831853;
+    let kw = 1.0 + floor(hash21(vec2f(fi, 2.2)) * 2.0);   // INTEGER cycles -> seamless loop, no skip
+    // soft elliptical float + a gentle sway along the wind direction (all periodic)
+    let wob = 0.045 * vec2f(sin(ph * kw + phase), cos(ph * kw + phase * 1.3)) + dir * sin(ph + phase) * 0.07;
+    var c = vec2f(hash21(vec2f(fi, 3.7)), hash21(vec2f(fi, 9.1))) + wob;
     c.x = c.x * p.canvasAspect;
     let d = length(auv - c);
     let r = mix(0.03, 0.22, hash21(vec2f(fi, 5.5)));        // size / focus variation
     let soft = mix(0.55, 0.05, hash21(vec2f(fi, 8.8)));     // edge softness
     let disc = smoothstep(r, r * soft, d);
     let rim = exp(-pow((d - r) / (r * 0.3 + 0.004), 2.0)) * 0.5;  // defocused bokeh rim
-    let bright = 0.3 + 0.7 * (0.5 + 0.5 * sin(ph * sp + fi * 2.3));
-    v = v + (disc + rim) * bright * mix(0.35, 1.0, hash21(vec2f(fi, 1.1)));
+    let kb = 1.0 + floor(hash21(vec2f(fi, 7.7)) * 2.0);    // integer cycles -> seamless
+    let bright = 0.5 + 0.5 * (0.5 + 0.5 * sin(ph * kb + phase * 2.0));  // soft twinkle, never blinks off
+    v = v + (disc + rim) * bright * mix(0.4, 1.0, hash21(vec2f(fi, 1.1)));
   }
   return clamp(v, 0.0, 1.0);
 }
@@ -292,10 +295,15 @@ fn ambGodrays(uv: vec2f) -> f32 {
   var d = uv - sun; d.x = d.x * p.canvasAspect;
   let ang = atan2(d.x, d.y);                  // 0 = straight down from the sun
   let dist = length(d);
-  let drift = ph * (0.04 + p.driftAmount * 0.12);
-  let beams = pow(0.5 + 0.5 * sin(ang * 20.0 + fbm(vec2f(ang * 7.0 + drift, ph * 0.08)) * 5.0), 1.7);
-  let gaps  = smoothstep(0.32, 0.8, fbm(vec2f(ang * 4.0 + drift, dist * 2.2 + 1.0)));
-  let fade  = exp(-dist * 1.05);              // brighter near the sun, fading down
+  let drift = ph * (0.03 + p.driftAmount * 0.1);
+  // varied-width beams: organic 1D noise along the angle (not uniform stripes), so
+  // some shafts are wide and some thin
+  let beams = pow(clamp(fbm(vec2f(ang * 7.0 + drift, ph * 0.05)) * 1.5, 0.0, 1.0), 1.8);
+  // coarse cloud gaps the light leaks through
+  let gaps  = smoothstep(0.34, 0.82, fbm(vec2f(ang * 3.0 + drift, dist * 2.0 + 1.0)));
+  // dappled foliage / tree-canopy breakup (finer, scrolling)
+  let foliage = smoothstep(0.35, 0.78, fbm(uv * 9.0 + vec2f(drift, ph * 0.04)));
+  let fade  = exp(-dist * 1.0) * mix(0.55, 1.0, foliage);   // brighter near the sun, fading down
   return clamp((beams * gaps + 0.12) * fade * 2.3, 0.0, 1.0);
 }
 
