@@ -110,7 +110,7 @@ struct Params {
   paperGrowth: f32, paperFollow: f32, paperPatches: f32, videoDisplaceAmount: f32,
   originAmount: f32, originX: f32, originY: f32, turbulence: f32,
   originPts: array<vec4f, 8>,
-  originCount: u32, flow: f32, _oc1: u32, _oc2: u32,
+  originCount: u32, flow: f32, undulate: f32, _oc2: u32,
 };
 
 @group(0) @binding(0) var<uniform> p: Params;
@@ -1020,13 +1020,24 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
   // finer, more chaotic detail.
   if (p.turbulence > 0.0001) {
     let sc = mix(3.0, 10.0, p.turbulence);
+    // Aspect-correct so the ink cells stay isotropic (don't stretch) at any
+    // canvas aspect ratio — e.g. the wide ELVERKET surfaces.
+    let tuv = vec2f(uv.x * p.canvasAspect, uv.y);
     // flow: drift the turbulent field over time so the ink churns and rises as
     // the transition plays, instead of a static front sweeping a fixed texture.
     let dr = p.t * p.flow * 1.6;
-    let w = vec2f(fbm(uv * sc + vec2f(dr, 0.0) + p.seed * 0.11),
-                  fbm(uv * sc + vec2f(4.7, 2.3 - dr) + p.seed * 0.11)) - vec2f(0.5, 0.5);
-    let n = fbm(uv * sc * 1.8 + w * 2.5 + vec2f(0.0, -dr) + p.seed * 0.31);
+    let w = vec2f(fbm(tuv * sc + vec2f(dr, 0.0) + p.seed * 0.11),
+                  fbm(tuv * sc + vec2f(4.7, 2.3 - dr) + p.seed * 0.11)) - vec2f(0.5, 0.5);
+    let n = fbm(tuv * sc * 1.8 + w * 2.5 + vec2f(0.0, -dr) + p.seed * 0.31);
     mask = clamp(mask + (n - 0.5) * p.turbulence * 0.9, 0.0, 1.0);
+  }
+  // Undulate: a slow, large-scale animated wave on the reveal front so any mode
+  // breathes / dances over the loop (auroras in the sky), not just a one-way wipe.
+  if (p.undulate > 0.0001) {
+    let fp = p.t * 6.2831853;
+    let u2 = vec2f(uv.x * p.canvasAspect, uv.y);
+    let wave = fbm(u2 * 1.4 + vec2f(sin(fp) * 0.4, cos(fp * 0.8) * 0.4) + p.seed * 0.2);
+    mask = clamp(mask + (wave - 0.5) * p.undulate, 0.0, 1.0);
   }
   // Spread the mask across the full [0,1] timeline so the reveal keeps arriving
   // as organic shapes right up to t=1, instead of the bulk crossing by ~0.7 and
@@ -1497,7 +1508,7 @@ struct Params {
   paperGrowth: f32, paperFollow: f32, paperPatches: f32, videoDisplaceAmount: f32,
   originAmount: f32, originX: f32, originY: f32, turbulence: f32,
   originPts: array<vec4f, 8>,
-  originCount: u32, flow: f32, _oc1: u32, _oc2: u32,
+  originCount: u32, flow: f32, undulate: f32, _oc2: u32,
 };
 
 @group(0) @binding(0) var<uniform> p: Params;
@@ -1728,7 +1739,7 @@ struct Params {
   paperGrowth: f32, paperFollow: f32, paperPatches: f32, videoDisplaceAmount: f32,
   originAmount: f32, originX: f32, originY: f32, turbulence: f32,
   originPts: array<vec4f, 8>,
-  originCount: u32, flow: f32, _oc1: u32, _oc2: u32,
+  originCount: u32, flow: f32, undulate: f32, _oc2: u32,
 };
 @group(0) @binding(0) var<uniform> p: Params;
 @group(0) @binding(1) var texA: texture_2d<f32>;
@@ -2271,6 +2282,7 @@ const state = {
   paintBrush: 0.12,                      // paint-mode brush radius (fraction of width)
   turbulence: 0.35,  // organic ink-in-water break-up of the reveal front
   flow: 0.3,         // animate the turbulence over time (churning/rising)
+  undulate: 0.0,     // slow large-scale wave/dance of the reveal (aurora-like)
   // custom transition dimensions (independent of source footage size).
   // Default ON: trans is primarily a matte-video builder, so it boots to a
   // fixed canvas showing the B/W matte without requiring any footage.
@@ -2668,6 +2680,7 @@ function writeUniforms() {
   }
   uboU32[208] = nPts;
   uboF32[209] = state.flow;  // turbulence time-drift (animated ink)
+  uboF32[210] = state.undulate;  // slow large-scale dance of the reveal front
   // -- 80..95 -- new painterly modes (16..21) + global paper grain
   uboF32[80] = state.strokeScale;
   uboF32[81] = state.strokeAniso;
@@ -3805,6 +3818,7 @@ const fDis = tabMode.addFolder({ title: 'Reveal', expanded: true });
 fDis.addBinding(state, 'originAmount', { min: 0, max: 1, step: 0.01, label: 'from within' });
 fDis.addBinding(state, 'turbulence', { min: 0, max: 1, step: 0.01, label: 'turbulence (ink)' });
 fDis.addBinding(state, 'flow', { min: 0, max: 1, step: 0.01, label: 'flow (animate)' });
+fDis.addBinding(state, 'undulate', { min: 0, max: 1, step: 0.01, label: 'undulate (dance)' });
 fDis.addBinding(state, 'spread',    { min: 0, max: 1, step: 0.01, label: 'edge softness' });
 // — start points: click on the canvas to set where the reveal emanates from —
 const btnPlace = fDis.addButton({ title: '✛ Place start points' });
@@ -4915,13 +4929,13 @@ fSamHelp.addBinding(samHelp, 'altClick',   { readonly: true, label: 'alt-click' 
 const SESSION_LS_KEY = 'trans:session';
 // Bump when default values change so stale saved sessions don't mask new
 // defaults (e.g. matte-first, cover texture fit, turbulence, origin).
-const SESSION_VERSION = 5;
+const SESSION_VERSION = 6;
 const PERSIST_KEYS = [
   ...PRESET_KEYS,
   'fit', 'bg',
   'customSize', 'outW', 'outH', 'texAmount', 'texBg', 'texFit',
-  'originAmount', 'originX', 'originY', 'originFromImage', 'turbulence', 'flow', 'originPoints',
-  'pointStagger', 'pointRandom',
+  'originAmount', 'originX', 'originY', 'originFromImage', 'turbulence', 'flow', 'undulate', 'originPoints',
+  'pointStagger', 'pointRandom', 'paintBrush',
   'exportFps', 'exportSizeMode', 'exportPadBottom', 'matteOutput', 'matteInvert',
   'slotAFillMode', 'slotAColor', 'slotBFillMode', 'slotBColor', 'keepAOutsideB',
   'partEnable', 'partCount', 'partBurst', 'partSpeed', 'partCurl', 'partTrail',
