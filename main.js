@@ -174,43 +174,6 @@ fn hash21(q: vec2f) -> f32 {
   x += dot(x, x + 45.32);
   return fract(x.x * x.y);
 }
-// ---- ambient/lingering matte generators (loop over t, never fade to white) ----
-fn ambBokeh(uv: vec2f) -> f32 {
-  let ph = p.t * 6.2831853;
-  var v = 0.0;
-  for (var i = 0u; i < 16u; i = i + 1u) {
-    let fi = f32(i) + 1.0;
-    let sp = 0.5 + 1.5 * hash21(vec2f(fi, 2.2));
-    let drift = 0.07 * vec2f(sin(ph * sp + fi), cos(ph * sp * 0.8 + fi * 1.7));
-    var duv = uv - (vec2f(hash21(vec2f(fi, 3.7)), hash21(vec2f(fi, 9.1))) + drift);
-    duv.x = duv.x * p.canvasAspect;
-    let r = mix(0.05, 0.16, hash21(vec2f(fi, 5.5)));
-    let dot = smoothstep(r, r * 0.15, length(duv));
-    v = v + dot * (0.45 + 0.55 * sin(ph * sp + fi * 2.3));
-  }
-  return clamp(v, 0.0, 1.0);
-}
-fn ambRipples(uv: vec2f) -> f32 {
-  let ph = p.t * 6.2831853;
-  var v = 0.0;
-  for (var i = 0u; i < 4u; i = i + 1u) {
-    let fi = f32(i) + 1.0;
-    var duv = uv - vec2f(hash21(vec2f(fi, 1.3)), hash21(vec2f(fi, 4.8)));
-    duv.x = duv.x * p.canvasAspect;
-    let d = length(duv);
-    let freq = 18.0 + 10.0 * hash21(vec2f(fi, 6.0));
-    v = v + (0.5 + 0.5 * sin(d * freq - ph * (1.0 + fi * 0.3))) * exp(-d * 2.0);
-  }
-  return clamp(v / 1.5, 0.0, 1.0);
-}
-fn ambGlare(uv: vec2f) -> f32 {
-  let ph = p.t * 6.2831853;
-  var duv = uv - vec2f(0.5, 0.5);
-  duv.x = duv.x * p.canvasAspect;
-  let d = length(duv);
-  let rays = 0.5 + 0.5 * sin(atan2(duv.y, duv.x) * 8.0 + ph);
-  return clamp(exp(-d * 3.5) + exp(-d * 1.5) * rays * 0.6, 0.0, 1.0);
-}
 fn vnoise(q: vec2f) -> f32 {
   let i = floor(q);
   let f = fract(q);
@@ -233,6 +196,61 @@ fn fbm(q: vec2f) -> f32 {
   return v;
 }
 fn luma(c: vec3f) -> f32 { return dot(c, vec3f(0.299, 0.587, 0.114)); }
+
+// ---- ambient/lingering matte generators (loop over t; organic, never white) ----
+fn ambBokeh(uv: vec2f) -> f32 {
+  let ph = p.t * 6.2831853;
+  var auv = uv; auv.x = auv.x * p.canvasAspect;
+  var v = fbm(uv * 2.2 + vec2f(ph * 0.05, -ph * 0.04)) * 0.3;  // defocused light field
+  for (var i = 0u; i < 22u; i = i + 1u) {
+    let fi = f32(i) + 1.0;
+    let sp = 0.4 + 1.2 * hash21(vec2f(fi, 2.2));
+    let wob = 0.06 * vec2f(sin(ph * sp + fi), cos(ph * sp * 0.9 + fi * 1.7));
+    var c = vec2f(hash21(vec2f(fi, 3.7)), hash21(vec2f(fi, 9.1))) + wob;
+    c.x = c.x * p.canvasAspect;
+    let d = length(auv - c);
+    let r = mix(0.03, 0.22, hash21(vec2f(fi, 5.5)));        // size / focus variation
+    let soft = mix(0.55, 0.05, hash21(vec2f(fi, 8.8)));     // edge softness
+    let disc = smoothstep(r, r * soft, d);
+    let rim = exp(-pow((d - r) / (r * 0.3 + 0.004), 2.0)) * 0.5;  // defocused bokeh rim
+    let bright = 0.3 + 0.7 * (0.5 + 0.5 * sin(ph * sp + fi * 2.3));
+    v = v + (disc + rim) * bright * mix(0.35, 1.0, hash21(vec2f(fi, 1.1)));
+  }
+  return clamp(v, 0.0, 1.0);
+}
+fn ambStreaks(uv: vec2f) -> f32 {
+  let ph = p.t * 6.2831853;
+  let sc = vec2f(uv.x * 6.0 + sin(ph) * 0.25 + ph * 0.06, uv.y * 1.0);
+  var s = fbm(sc) + 0.55 * fbm(sc * vec2f(2.2, 1.0) + vec2f(ph * 0.04, 0.0));
+  s = pow(clamp((s - 0.45) * 1.9, 0.0, 1.0), 1.5);             // sharpen into streaks
+  let smear = (fbm(sc + vec2f(0.0, 0.05)) + fbm(sc - vec2f(0.0, 0.05))) * 0.12;
+  return clamp(s + smear, 0.0, 1.0);
+}
+fn ambRipples(uv: vec2f) -> f32 {
+  let ph = p.t * 6.2831853;
+  var auv = uv; auv.x = auv.x * p.canvasAspect;
+  let w = vec2f(fbm(auv * 3.0 + ph * 0.1), fbm(auv * 3.0 + 5.0 - ph * 0.08)) - vec2f(0.5, 0.5);
+  var v = 0.0;
+  for (var i = 0u; i < 3u; i = i + 1u) {
+    let fi = f32(i) + 1.0;
+    let c = vec2f(hash21(vec2f(fi, 1.3)), hash21(vec2f(fi, 4.8)));
+    let d = length(auv + w * 0.18 - c);
+    v = v + (0.5 + 0.5 * sin(d * (16.0 + 8.0 * fi) - ph * (1.0 + fi * 0.3)));
+  }
+  return clamp(pow(clamp(v / 3.0, 0.0, 1.0), 2.0), 0.0, 1.0);   // caustic sharpen
+}
+fn ambGlare(uv: vec2f) -> f32 {
+  let ph = p.t * 6.2831853;
+  let sun = vec2f(0.62 + 0.04 * sin(ph * 0.5), 0.4 + 0.03 * cos(ph * 0.4));
+  var duv = uv - sun; duv.x = duv.x * p.canvasAspect;
+  let d = length(duv);
+  let ang = atan2(duv.y, duv.x);
+  let rays = 0.5 + 0.5 * sin(ang * 7.0 + ph) * (fbm(vec2f(ang * 2.0, ph * 0.3) + 3.0) + 0.4);
+  let core = exp(-d * 4.0);
+  let halo = exp(-d * 1.3) * (0.4 + 0.6 * rays);
+  let foliage = smoothstep(0.3, 0.72, fbm(uv * 5.0 + vec2f(ph * 0.1, -ph * 0.15)));
+  return clamp((core + halo) * mix(0.45, 1.0, foliage), 0.0, 1.0);
+}
 
 fn sampleFit(tex: texture_2d<f32>, uv: vec2f, scale: vec2f, offset: vec2f, valid: u32, color: vec3f) -> vec4f {
   // valid encoding: 0 = no image (bg fallback), 1 = image, 2 = solid color, 3 = transparent.
@@ -1358,6 +1376,7 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
   if (p.mode == 33u) { effMixT = ambBokeh(uv); }
   else if (p.mode == 34u) { effMixT = ambRipples(uv); }
   else if (p.mode == 35u) { effMixT = ambGlare(uv); }
+  else if (p.mode == 36u) { effMixT = ambStreaks(uv); }
   // Per-slot alpha comes straight from sampleFit: a PNG's own alpha channel for
   // image slots (valid==1u), 0 for 'transparent' fill mode (valid==3u), and 1 for
   // bg/solid (valid 0u/2u). Final alpha mixes the same way as RGB; output is
@@ -3015,18 +3034,29 @@ async function renderLibrary() {
     _libThumbUrls.set(entry.id, url);
     const tile = document.createElement('div');
     tile.className = 'library-thumb' + (entry.id === idA ? ' in-A' : '') + (entry.id === idB ? ' in-B' : '');
-    tile.title = `${entry.name}\nclick = A · shift-click = B · right-click to delete`;
+    tile.title = `${entry.name}\nclick = A · shift-click = B`;
     tile.dataset.libId = entry.id;
     const img = document.createElement('img');
     img.src = url;
     tile.appendChild(img);
+    const del = document.createElement('span');
+    del.className = 'lib-del'; del.textContent = '×'; del.title = 'Remove';
+    tile.appendChild(del);
     libGridEl.appendChild(tile);
   }
 }
-libGridEl.addEventListener('click', e => {
+libGridEl.addEventListener('click', async e => {
   const tile = e.target.closest('.library-thumb');
   if (!tile) return;
   const id = parseInt(tile.dataset.libId, 10);
+  // × button removes the image (no confirm — easy remove)
+  if (e.target.classList.contains('lib-del')) {
+    await libDelete(id);
+    if (state._libIdA === id) state._libIdA = null;
+    if (state._libIdB === id) state._libIdB = null;
+    renderLibrary();
+    return;
+  }
   const entry = _libCache.find(x => x.id === id);
   if (!entry) return;
   const slot = e.shiftKey ? 'B' : 'A';
@@ -3488,6 +3518,7 @@ const MODE_OPTIONS = {
   'Ambient — bokeh (looping)':            33,
   'Ambient — water ripples (looping)':    34,
   'Ambient — sun glare (looping)':        35,
+  'Ambient — light streaks (looping)':    36,
 };
 const MODE_NAMES_FULL = Object.fromEntries(Object.entries(MODE_OPTIONS).map(([n, id]) => [id, n]));
 fWater.addBinding(state, 'mode', {
