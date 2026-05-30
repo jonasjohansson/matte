@@ -205,30 +205,36 @@ fn luma(c: vec3f) -> f32 { return dot(c, vec3f(0.299, 0.587, 0.114)); }
 fn ambBokeh(uv: vec2f) -> f32 {
   let ph = p.t * 6.2831853;
   var auv = uv; auv.x = auv.x * p.canvasAspect;
-  let dir = vec2f(cos(p.driftAngle * 6.2831853), sin(p.driftAngle * 6.2831853)) * p.driftAmount;
+  let dir = vec2f(cos(p.driftAngle * 6.2831853), sin(p.driftAngle * 6.2831853));
+  let dd = dir * p.driftAmount;
   let count = u32(mix(6.0, 40.0, p.ambCount));
   let szMul = mix(0.45, 1.8, p.ambSize);
-  let spd = 1.0 + floor(p.ambSpeed * 3.0);   // integer -> seamless loop
-  // gentle, loop-seamless defocused light field (periodic sway, never jumps)
-  var v = fbm(uv * 2.2 + dir * sin(ph) * 0.12) * 0.3;
+  let travel = (0.05 + p.ambSpeed * 0.4) * p.t;          // slow net drift over the loop
+  // soft defocused light field underneath, drifting slowly
+  var v = fbm(uv * 2.2 + dd * travel * 0.6) * 0.3;
   for (var i = 0u; i < 40u; i = i + 1u) {
     if (i >= count) { break; }
     let fi = f32(i) + 1.0;
     let phase = hash21(vec2f(fi, 6.6)) * 6.2831853;
-    let kw = spd + floor(hash21(vec2f(fi, 2.2)) * 2.0);   // INTEGER cycles -> seamless loop, no skip
-    let wob = 0.045 * vec2f(sin(ph * kw + phase), cos(ph * kw + phase * 1.3)) + dir * sin(ph + phase) * 0.07;
-    var c = vec2f(hash21(vec2f(fi, 3.7)), hash21(vec2f(fi, 9.1))) + wob;
+    // tiny slow breathing wobble (1 cycle) + net directional drift, wrapped
+    let wob = 0.02 * vec2f(sin(ph + phase), cos(ph + phase * 1.3));
+    var c = fract(vec2f(hash21(vec2f(fi, 3.7)), hash21(vec2f(fi, 9.1))) + wob + dd * travel);
+    // fade near the frame edges so the wrap is invisible -> smooth directional flow
+    let efade = smoothstep(0.0, 0.1, c.x) * smoothstep(1.0, 0.9, c.x)
+              * smoothstep(0.0, 0.1, c.y) * smoothstep(1.0, 0.9, c.y);
     c.x = c.x * p.canvasAspect;
     let d = length(auv - c);
     let r = mix(0.03, 0.22, hash21(vec2f(fi, 5.5))) * szMul;       // size / focus variation
     let soft = mix(0.6, 0.04, hash21(vec2f(fi, 8.8)) * (0.4 + 0.6 * p.ambSoft));  // edge softness
     let disc = smoothstep(r, r * soft, d);
     let rim = exp(-pow((d - r) / (r * 0.3 + 0.004), 2.0)) * 0.5;  // defocused bokeh rim
-    let kb = spd + floor(hash21(vec2f(fi, 7.7)) * 2.0);    // integer cycles -> seamless
-    let bright = 0.5 + 0.5 * (0.5 + 0.5 * sin(ph * kb + phase * 2.0));  // soft twinkle, never blinks off
-    v = v + (disc + rim) * bright * mix(0.4, 1.0, hash21(vec2f(fi, 1.1)));
+    let bright = 0.55 + 0.45 * (0.5 + 0.5 * sin(ph + phase * 2.0));  // slow twinkle, never off
+    v = v + (disc + rim) * bright * efade * mix(0.4, 1.0, hash21(vec2f(fi, 1.1)));
   }
-  return clamp(v, 0.0, 1.0);
+  // foliage: slow dark leaf shapes drifting across, so the glare reads as seen
+  // THROUGH trees (dappled occlusion)
+  let foliage = mix(1.0, smoothstep(0.28, 0.72, fbm(uv * 4.0 + dd * travel * 0.8 + 2.0)), 0.5);
+  return clamp(v * foliage, 0.0, 1.0);
 }
 fn ambStreaks(uv: vec2f) -> f32 {
   let ph = p.t * 6.2831853;
@@ -2363,7 +2369,7 @@ const state = {
   auroraDensity: 0.5, auroraHeight: 0.5, auroraSpeed: 0.4, auroraDark: 0.3, auroraWave: 0.5,  // aurora settings
   driftAngle: 0.25, driftAmount: 0.3,  // wind direction + strength for ambient drift
   gdIntensity: 0.5, gdBeams: 0.5, gdCloud: 0.5, gdPulse: 0.4,  // godray settings
-  ambCount: 0.5, ambSize: 0.5, ambSoft: 0.5, ambSpeed: 0.4,  // shared bokeh/ripples/glare/streaks
+  ambCount: 0.5, ambSize: 0.5, ambSoft: 0.5, ambSpeed: 0.25,  // shared bokeh/ripples/glare/streaks
   // custom transition dimensions (independent of source footage size).
   // Default ON: trans is primarily a matte-video builder, so it boots to a
   // fixed canvas showing the B/W matte without requiring any footage.
@@ -5061,7 +5067,7 @@ fSamHelp.addBinding(samHelp, 'altClick',   { readonly: true, label: 'alt-click' 
 const SESSION_LS_KEY = 'trans:session';
 // Bump when default values change so stale saved sessions don't mask new
 // defaults (e.g. matte-first, cover texture fit, turbulence, origin).
-const SESSION_VERSION = 13;
+const SESSION_VERSION = 14;
 const PERSIST_KEYS = [
   ...PRESET_KEYS,
   'fit', 'bg',
