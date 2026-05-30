@@ -5487,6 +5487,29 @@ window.__engine = {
   get playing() { return state.playing; },
   get loop() { return state.loop; },
   get recording() { return typeof recording !== 'undefined' ? recording : false; },
+  // ── per-mode reset / randomize ──
+  resetMode(m) {
+    if (typeof MODE_DEFAULTS !== 'undefined' && MODE_DEFAULTS[m]) {
+      for (const k in MODE_DEFAULTS[m]) state[k] = MODE_DEFAULTS[m][k];
+    }
+    const AMB = { ambCount: 0.5, ambSize: 0.5, ambSoft: 0.5, ambSpeed: 0.25, ambDetail: 0.5,
+                  driftAngle: 0.25, driftAmount: 0.3, sunX: 0.5, sunY: 0.3, streakMove: 0.25 };
+    if (m >= 33) { for (const k in AMB) state[k] = AMB[k]; }
+    if (m === 38) { state.auroraDensity = 0.5; state.auroraHeight = 0.5; state.auroraSpeed = 0.5; state.auroraWave = 0.5; state.auroraDark = 0.5; }
+    if (m === 39) { state.gdIntensity = 0.5; state.gdBeams = 0.5; state.gdCloud = 0.5; state.gdPulse = 0.4; }
+    try { pane.refresh(); } catch (e) {}
+    if (m >= 10 && m <= 14) advec.needsReset = true;
+    restartPlayback(); saveSession();
+  },
+  randomizeMode(m) {
+    // reset to defaults then jitter each numeric amb/mode key a little — folder-free
+    this.resetMode(m);
+    const jit = (k, lo, hi) => { state[k] = lo + Math.random() * (hi - lo); };
+    if (m >= 33) { jit('ambCount',0,1); jit('ambSize',0,1); jit('ambSoft',0,1); jit('ambSpeed',0,1); jit('ambDetail',0,1); jit('driftAngle',0,1); }
+    else if (typeof randomizeMode === 'function') { try { randomizeMode(m, null); } catch (e) {} }
+    try { pane.refresh(); } catch (e) {}
+    restartPlayback(); saveSession();
+  },
   // ── sources / texture ──
   loadFile, clearTexture,
   loadTexture(file) { if (file) loadTextureFile(file); },
