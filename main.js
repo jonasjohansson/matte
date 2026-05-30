@@ -9,6 +9,8 @@ import { Pane } from 'tweakpane';
 import * as EssentialsPlugin from '@tweakpane/plugin-essentials';
 import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
 import { SHADER, SIM_SHADER, INIT_SHADER } from './shader.js';
+import { IDB_NAME, IDB_STORE, IDB_LIB_STORE, idbOpen, idbGet, idbPut, idbClearAll, libList, libAdd, libDelete, makeThumb } from './idb.js';
+import { fitInfo, hexToRgb } from './util.js';
 
 const canvas = document.getElementById('canvas');
 
@@ -718,27 +720,7 @@ const state = {
 // ============================================================================
 // Sizing
 // ============================================================================
-function fitInfo(img, cw, ch, mode) {
-  if (!img) return { sx: 1, sy: 1, ox: 0, oy: 0 };
-  const ia = img.naturalWidth / img.naturalHeight;
-  const ca = cw / ch;
-  if (mode === 'stretch') return { sx: 1, sy: 1, ox: 0, oy: 0 };
-  if (mode === 'cover') {
-    // True cover: scale image so the smaller-relative axis matches the canvas,
-    // the larger axis extends past the canvas and gets cropped. Aspect preserved.
-    if (ia > ca) {
-      // Image wider than canvas → match canvas height, image overhangs left/right.
-      const sx = ia / ca;
-      return { sx, sy: 1, ox: (1 - sx) * 0.5, oy: 0 };
-    }
-    // Image more square / taller than canvas → match canvas width, overhangs top/bottom.
-    const sy = ca / ia;
-    return { sx: 1, sy, ox: 0, oy: (1 - sy) * 0.5 };
-  }
-  // contain
-  if (ia > ca) { const sy = ca / ia; return { sx: 1, sy, ox: 0, oy: (1 - sy) * 0.5 }; }
-  const sx = ia / ca; return { sx, sy: 1, ox: (1 - sx) * 0.5, oy: 0 };
-}
+// moved to util.js (fitInfo)
 function composedFit(slot, cw, ch) {
   const img = slot === 'A' ? state.imgA : state.imgB;
   const z = slot === 'A' ? state.zoomA : state.zoomB;
@@ -801,12 +783,7 @@ function resizeCanvas() {
   canvas.classList.remove('empty');  // sized → visible (images or custom size)
 }
 
-function hexToRgb(hex) {
-  const m = hex.match(/^#([0-9a-f]{6})$/i);
-  if (!m) return [0, 0, 0];
-  const n = parseInt(m[1], 16);
-  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
-}
+// moved to util.js (hexToRgb)
 
 function writeUniforms() {
   const cw = canvas.width, ch = canvas.height;
@@ -1212,106 +1189,7 @@ filepicker.addEventListener('change', e => {
 
 // IndexedDB: 'images' tracks the last A/B (key 'imageA'/'imageB'); 'library'
 // is the persistent gallery of every image the user has ever loaded.
-const IDB_NAME = 'transition-tool-v3';
-const IDB_STORE = 'images';
-const IDB_LIB_STORE = 'library';
-function idbOpen() {
-  return new Promise((resolve, reject) => {
-    const r = indexedDB.open(IDB_NAME, 1);
-    r.onupgradeneeded = () => {
-      const db = r.result;
-      if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
-      if (!db.objectStoreNames.contains(IDB_LIB_STORE)) {
-        const store = db.createObjectStore(IDB_LIB_STORE, { keyPath: 'id', autoIncrement: true });
-        store.createIndex('addedAt', 'addedAt');
-      }
-    };
-    r.onsuccess = () => resolve(r.result);
-    r.onerror = () => reject(r.error);
-  });
-}
-async function idbGet(key) {
-  try {
-    const db = await idbOpen();
-    return await new Promise((resolve, reject) => {
-      const req = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(key);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-  } catch { return null; }
-}
-async function idbPut(key, value) {
-  try {
-    const db = await idbOpen();
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction(IDB_STORE, 'readwrite');
-      tx.objectStore(IDB_STORE).put(value, key);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  } catch {}
-}
-async function idbClearAll() {
-  try {
-    const db = await idbOpen();
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction(IDB_STORE, 'readwrite');
-      tx.objectStore(IDB_STORE).clear();
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  } catch {}
-}
-
-// ---- library store (persistent gallery of all uploaded images) ----
-async function libList() {
-  try {
-    const db = await idbOpen();
-    return await new Promise((resolve, reject) => {
-      const tx  = db.transaction(IDB_LIB_STORE, 'readonly');
-      const req = tx.objectStore(IDB_LIB_STORE).getAll();
-      req.onsuccess = () => resolve((req.result || []).sort((a, b) => b.addedAt - a.addedAt));
-      req.onerror = () => reject(req.error);
-    });
-  } catch { return []; }
-}
-async function libAdd(entry) {
-  try {
-    const db = await idbOpen();
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction(IDB_LIB_STORE, 'readwrite');
-      const req = tx.objectStore(IDB_LIB_STORE).add(entry);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-  } catch { return null; }
-}
-async function libDelete(id) {
-  try {
-    const db = await idbOpen();
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction(IDB_LIB_STORE, 'readwrite');
-      tx.objectStore(IDB_LIB_STORE).delete(id);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  } catch {}
-}
-// Generate a small JPEG thumbnail (~256px wide) from any image blob/file.
-async function makeThumb(blob, maxW = 256) {
-  try {
-    const bmp = await createImageBitmap(blob);
-    const w = Math.min(maxW, bmp.width);
-    const h = Math.round(w * bmp.height / bmp.width);
-    const c = (typeof OffscreenCanvas !== 'undefined')
-      ? new OffscreenCanvas(w, h)
-      : Object.assign(document.createElement('canvas'), { width: w, height: h });
-    c.getContext('2d').drawImage(bmp, 0, 0, w, h);
-    bmp.close?.();
-    if (c.convertToBlob) return await c.convertToBlob({ type: 'image/jpeg', quality: 0.78 });
-    return await new Promise(r => c.toBlob(r, 'image/jpeg', 0.78));
-  } catch { return null; }
-}
+// moved to idb.js
 
 function loadFile(file, slot) {
   // Videos always go to the T slot — they drive the transition mask, never
