@@ -141,3 +141,6 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 .mgroup-archive:hover{opacity:1}
 .mgroup-archive h4{color:#6a6a6a}
 .mgroup-archive h4::after{content:" (deprecated)";opacity:.7;font-size:8px}
+
+.barchk{ display:inline-flex; align-items:center; gap:3px; margin-left:5px; color:var(--ui-mut); font-size:9px; text-transform:uppercase; letter-spacing:.06em; cursor:pointer; }
+.barchk input{ margin:0; }
