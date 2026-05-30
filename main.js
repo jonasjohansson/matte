@@ -4308,6 +4308,27 @@ function codecMaxDim(codecString) {
   return 3840;
 }
 
+const recBar = document.createElement('div');
+recBar.id = 'rec-progress';
+recBar.innerHTML = '<div class="rec-fill"></div><div class="rec-label"></div>';
+document.body.appendChild(recBar);
+const _recFill = recBar.querySelector('.rec-fill');
+const _recLabel = recBar.querySelector('.rec-label');
+let _recHideTimer = null;
+function showRecordProgress(on) {
+  if (on && _recHideTimer) { clearTimeout(_recHideTimer); _recHideTimer = null; }
+  recBar.classList.toggle('show', on);
+}
+function setRecordProgress(frac, text, kind) {
+  _recFill.style.width = Math.round(Math.max(0, Math.min(1, frac)) * 100) + '%';
+  _recFill.style.background = kind === 'error' ? '#e44' : kind === 'done' ? '#2ec27a' : 'var(--accent)';
+  _recLabel.textContent = text;
+}
+function finishRecordProgress(text, kind, ms) {
+  setRecordProgress(1, text, kind);
+  _recHideTimer = setTimeout(() => showRecordProgress(false), ms || 2500);
+}
+
 async function startRecording(opts = {}) {
   if (recording) return;
   // Matte-first: record whatever the (always-sized) canvas shows — image-free
@@ -4330,6 +4351,8 @@ async function startRecording(opts = {}) {
   recording = true;
   const originalTitle = btnRecord.title;
   btnRecord.title = 'Preparing…';
+  showRecordProgress(true);
+  setRecordProgress(0, 'Preparing encoder…');
 
   // Probe encoder support at the requested size; scale down if needed and re-probe.
   let scale = 1;
@@ -4349,6 +4372,7 @@ async function startRecording(opts = {}) {
   if (!pick) {
     btnRecord.title = 'FAILED — no usable video encoder';
     setTimeout(() => { btnRecord.title = originalTitle; }, 4000);
+    finishRecordProgress('No usable video encoder', 'error', 4000);
     recording = false;
     return;
   }
@@ -4419,11 +4443,13 @@ async function startRecording(opts = {}) {
     vf.close();
 
     btnRecord.title = `frame ${i + 1} / ${totalFrames}`;
+    setRecordProgress((i + 1) / totalFrames, `Recording ${Math.round((i + 1) / totalFrames * 100)}% · frame ${i + 1} / ${totalFrames}`);
     // Back-pressure: if the encoder queue is getting long, let it drain.
     if (encoder.encodeQueueSize > 16) {
       await new Promise(r => setTimeout(r, 0));
     }
   }
+  setRecordProgress(1, 'Encoding & muxing…');
   await encoder.flush();
   muxer.finalize();
 
@@ -4436,6 +4462,8 @@ async function startRecording(opts = {}) {
   if (blob.size < 1024) {
     btnRecord.title = 'FAILED — empty output';
     setTimeout(() => { btnRecord.title = originalTitle; }, 4000);
+    finishRecordProgress('Empty output — nothing captured', 'error', 4000);
+    recording = false;
     return;
   }
 
@@ -4467,6 +4495,7 @@ async function startRecording(opts = {}) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
+  finishRecordProgress(`Done ✓ · ${(blob.size / 1024 / 1024).toFixed(1)} MB${where}`, 'done', 3500);
   btnRecord.title = `saved (${(blob.size / 1024 / 1024).toFixed(1)} MB)${where}`;
   setTimeout(() => { btnRecord.title = originalTitle; }, 2500);
 }
