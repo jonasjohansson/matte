@@ -400,7 +400,11 @@
         paramsEl.appendChild(sec);
       }
       paramsEl.appendChild(section('Advanced',['originX','originY','maskScale','curve','seed','maskShift','organic','edges'],!REL.advanced(m)));
-      paramsEl.appendChild(section('Vignette (global)',['vignAmount','vignShape','vignFeather','vignTexture','vignAnimate'],false));
+      { const vs=section('Vignette (global)',['vignAmount','vignShape','vignFeather','vignTexture','vignAnimate'],false);
+        const vb=document.createElement('div'); vb.className='ptsbar';
+        const vr=document.createElement('button'); vr.className='btn sm'; vr.textContent='\u21ba reset vignette';
+        vr.onclick=()=>{ if(E.resetVignette)E.resetVignette(); buildParams(m); };
+        vb.appendChild(vr); vs.appendChild(vb); paramsEl.appendChild(vs); }
     }
     function selectMode(id){
       left.querySelectorAll('.chip').forEach(c=>c.classList.toggle('sel',+c.dataset.mode===id));

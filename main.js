@@ -5549,6 +5549,7 @@ window.__engine = {
     if (m >= 10 && m <= 14) advec.needsReset = true;
     restartPlayback(); saveSession();
   },
+  resetVignette() { state.vignAmount = 0; state.vignShape = 0.5; state.vignFeather = 0.5; state.vignTexture = 0; state.vignAnimate = 0; try { pane.refresh(); } catch (e) {} restartPlayback(); saveSession(); },
   setMatte(on) { state.matteOutput = !!on; if (typeof pane!=='undefined') try{pane.refresh();}catch(e){} saveSession(); },
   get matteOutput() { return state.matteOutput; },
   setUseSources(on) { state.useSources = !!on; resizeCanvas(); saveSession(); },
@@ -5558,7 +5559,9 @@ window.__engine = {
     this.resetMode(m);
     const jit = (k, lo, hi) => { state[k] = lo + Math.random() * (hi - lo); };
     if (m >= 33) { jit('ambCount',0,1); jit('ambSize',0,1); jit('ambSoft',0,1); jit('ambSpeed',0,1); jit('ambDetail',0,1); jit('driftAngle',0,1); }
-    else if (typeof randomizeMode === 'function') { try { randomizeMode(m, null); } catch (e) {} }
+    if (m === 38) { jit('auroraDensity',0,1); jit('auroraHeight',0,1); jit('auroraSpeed',0,1); jit('auroraWave',0,1); jit('auroraDark',0,1); }
+    if (m === 39) { jit('gdIntensity',0,1); jit('gdBeams',0,1); jit('gdCloud',0,1); jit('gdPulse',0,1); }
+    if (m < 33 && typeof randomizeMode === 'function') { try { randomizeMode(m, null); } catch (e) {} }
     try { pane.refresh(); } catch (e) {}
     restartPlayback(); saveSession();
   },

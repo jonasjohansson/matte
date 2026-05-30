@@ -88,12 +88,12 @@ body:not(.minimized) #toggle-panel { right: 370px; }
 }
 .library-title { color: #999; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
 #library-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, 56px); gap: 4px;
+  display: grid; grid-template-columns: 1fr; gap: 5px;
   overflow-y: auto; padding-bottom: 4px;
   min-height: 24px;
 }
 .library-thumb {
-  position: relative; width: 56px; height: 42px;
+  position: relative; width: 100%; height: auto; aspect-ratio: 4 / 3;
   border: 1px solid #222; border-radius: 2px; overflow: hidden;
   cursor: pointer; background: #111;
   transition: border-color 0.1s, transform 0.1s;
