@@ -114,7 +114,7 @@ struct Params {
   auroraHeight: f32, auroraSpeed: f32, auroraDark: f32, auroraWave: f32,
   driftAngle: f32, driftAmount: f32, gdIntensity: f32, gdBeams: f32,
   gdCloud: f32, gdPulse: f32, ambCount: f32, ambSize: f32,
-  ambSoft: f32, ambSpeed: f32, _amb0: f32, _amb1: f32,
+  ambSoft: f32, ambSpeed: f32, ambDetail: f32, _amb1: f32,
 };
 
 @group(0) @binding(0) var<uniform> p: Params;
@@ -250,7 +250,12 @@ fn ambStreaks(uv: vec2f) -> f32 {
   var s = fbm(sc) + 0.55 * fbm(sc * vec2f(2.2, 1.0) + vec2f(0.0, drift));
   s = pow(clamp((s - 0.45) * 1.9, 0.0, 1.0), mix(2.6, 0.9, p.ambSoft));  // sharpen->soften
   let smear = (fbm(sc + vec2f(0.0, 0.05)) + fbm(sc - vec2f(0.0, 0.05))) * 0.12;
-  return clamp(s + smear, 0.0, 1.0);
+  var m = s + smear;
+  if (p.ambDetail > 0.001) {                                  // fine striations within the streaks
+    let fineSc = vec2f(across * mix(14.0, 40.0, p.ambDetail), along * mix(2.0, 1.0, p.ambSize) + drift * 1.7);
+    m = m * (1.0 + (fbm(fineSc) - 0.5) * p.ambDetail * 0.7);
+  }
+  return clamp(m, 0.0, 1.0);
 }
 fn ambRipples(uv: vec2f) -> f32 {
   let ph = p.t * 6.2831853 * (0.3 + p.ambSpeed * 0.9);   // slower base speed
@@ -267,9 +272,16 @@ fn ambRipples(uv: vec2f) -> f32 {
     c.x = c.x * p.canvasAspect;
     let d = length(auv + w * 0.14 - c);
     let freq = mix(26.0, 9.0, p.ambSize) + fi * 3.0;
-    v = v + 0.5 + 0.5 * sin(d * freq - ph * (1.0 + fi * 0.2)) * exp(-d * 1.7);  // outward, decaying
+    let ring = sin(d * freq - ph * (1.0 + fi * 0.2)) * exp(-d * 1.7);           // outward, decaying
+    let fine = sin(d * freq * 2.7 - ph * (1.6 + fi * 0.2)) * exp(-d * 2.2);     // finer concentric rings
+    v = v + 0.5 + 0.5 * (ring + fine * p.ambDetail * 0.5);
   }
-  return clamp(pow(clamp(v / f32(nsrc), 0.0, 1.0), mix(2.6, 1.1, p.ambSoft)), 0.0, 1.0);  // caustic sharp->soft
+  var m = pow(clamp(v / f32(nsrc), 0.0, 1.0), mix(2.6, 1.1, p.ambSoft));        // caustic sharp->soft
+  if (p.ambDetail > 0.001) {                                                    // water-surface micro detail (keeps blacks)
+    let g = fbm(auv * mix(14.0, 42.0, p.ambDetail) + ph * 0.2) - 0.5;
+    m = m * (1.0 + g * p.ambDetail * 0.8);
+  }
+  return clamp(m, 0.0, 1.0);
 }
 fn ambAurora(uv: vec2f) -> f32 {
   let ph = p.t * 6.2831853 * (0.4 + p.auroraSpeed * 1.4);
@@ -1598,7 +1610,7 @@ struct Params {
   auroraHeight: f32, auroraSpeed: f32, auroraDark: f32, auroraWave: f32,
   driftAngle: f32, driftAmount: f32, gdIntensity: f32, gdBeams: f32,
   gdCloud: f32, gdPulse: f32, ambCount: f32, ambSize: f32,
-  ambSoft: f32, ambSpeed: f32, _amb0: f32, _amb1: f32,
+  ambSoft: f32, ambSpeed: f32, ambDetail: f32, _amb1: f32,
 };
 
 @group(0) @binding(0) var<uniform> p: Params;
@@ -1833,7 +1845,7 @@ struct Params {
   auroraHeight: f32, auroraSpeed: f32, auroraDark: f32, auroraWave: f32,
   driftAngle: f32, driftAmount: f32, gdIntensity: f32, gdBeams: f32,
   gdCloud: f32, gdPulse: f32, ambCount: f32, ambSize: f32,
-  ambSoft: f32, ambSpeed: f32, _amb0: f32, _amb1: f32,
+  ambSoft: f32, ambSpeed: f32, ambDetail: f32, _amb1: f32,
 };
 @group(0) @binding(0) var<uniform> p: Params;
 @group(0) @binding(1) var texA: texture_2d<f32>;
@@ -2381,7 +2393,7 @@ const state = {
   auroraDensity: 0.5, auroraHeight: 0.5, auroraSpeed: 0.4, auroraDark: 0.3, auroraWave: 0.5,  // aurora settings
   driftAngle: 0.25, driftAmount: 0.3,  // wind direction + strength for ambient drift
   gdIntensity: 0.5, gdBeams: 0.5, gdCloud: 0.5, gdPulse: 0.4,  // godray settings
-  ambCount: 0.5, ambSize: 0.5, ambSoft: 0.5, ambSpeed: 0.25,  // shared bokeh/ripples/glare/streaks
+  ambCount: 0.5, ambSize: 0.5, ambSoft: 0.5, ambSpeed: 0.25, ambDetail: 0.5,  // shared bokeh/ripples/glare/streaks
   // custom transition dimensions (independent of source footage size).
   // Default ON: trans is primarily a matte-video builder, so it boots to a
   // fixed canvas showing the B/W matte without requiring any footage.
@@ -2798,6 +2810,7 @@ function writeUniforms() {
   uboF32[223] = state.ambSize;
   uboF32[224] = state.ambSoft;
   uboF32[225] = state.ambSpeed;
+  uboF32[226] = state.ambDetail;
   // -- 80..95 -- new painterly modes (16..21) + global paper grain
   uboF32[80] = state.strokeScale;
   uboF32[81] = state.strokeAniso;
@@ -3909,6 +3922,7 @@ fAmbient.addBinding(state, 'ambCount', { min: 0, max: 1, step: 0.01, label: 'cou
 fAmbient.addBinding(state, 'ambSize',  { min: 0, max: 1, step: 0.01, label: 'size / scale' });
 fAmbient.addBinding(state, 'ambSoft',  { min: 0, max: 1, step: 0.01, label: 'softness' });
 fAmbient.addBinding(state, 'ambSpeed', { min: 0, max: 1, step: 0.01, label: 'speed' });
+fAmbient.addBinding(state, 'ambDetail', { min: 0, max: 1, step: 0.01, label: 'detail / fidelity' });
 
 // direction / source — used by bokeh, streaks, sun glare, godrays
 const fDir = fWater.addFolder({ title: 'Direction / source', expanded: true });
@@ -5096,7 +5110,7 @@ fSamHelp.addBinding(samHelp, 'altClick',   { readonly: true, label: 'alt-click' 
 const SESSION_LS_KEY = 'trans:session';
 // Bump when default values change so stale saved sessions don't mask new
 // defaults (e.g. matte-first, cover texture fit, turbulence, origin).
-const SESSION_VERSION = 15;
+const SESSION_VERSION = 16;
 const PERSIST_KEYS = [
   ...PRESET_KEYS,
   'fit', 'bg',
@@ -5105,7 +5119,7 @@ const PERSIST_KEYS = [
   'pointStagger', 'pointRandom', 'paintBrush',
   'auroraDensity', 'auroraHeight', 'auroraSpeed', 'auroraDark', 'auroraWave', 'driftAngle', 'driftAmount',
   'gdIntensity', 'gdBeams', 'gdCloud', 'gdPulse',
-  'ambCount', 'ambSize', 'ambSoft', 'ambSpeed',
+  'ambCount', 'ambSize', 'ambSoft', 'ambSpeed', 'ambDetail',
   'exportFps', 'exportSizeMode', 'exportPadBottom', 'matteOutput', 'matteInvert',
   'slotAFillMode', 'slotAColor', 'slotBFillMode', 'slotBColor', 'keepAOutsideB',
   'partEnable', 'partCount', 'partBurst', 'partSpeed', 'partCurl', 'partTrail',
