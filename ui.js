@@ -202,8 +202,15 @@
     // host once at init — keeps all of main.js's existing listeners intact.
     const srcHost=document.createElement('div'); srcHost.id='src-host';
     srcHost.innerHTML='<div class="pop-title">SOURCE IMAGES</div>';
+    // "use sources" toggle: when off, render the pure matte even with A/B loaded.
+    const useRow=document.createElement('label'); useRow.className='use-src';
+    useRow.innerHTML='<input type="checkbox" id="ui-usesrc"> use sources (A→B)';
+    srcHost.appendChild(useRow);
     ['slot-bar','library-section'].forEach(id=>{ const el=document.getElementById(id); if(el) srcHost.appendChild(el); });
-    bar.querySelector('#ui-sources').onclick=()=>openPop('sources', bar.querySelector('#ui-sources'), (host)=>{ host.appendChild(srcHost); });
+    const useCb=useRow.querySelector('#ui-usesrc');
+    useCb.checked=E.useSources;
+    useCb.onchange=()=>{ E.setUseSources(useCb.checked); };
+    bar.querySelector('#ui-sources').onclick=()=>{ useCb.checked=E.useSources; openPop('sources', bar.querySelector('#ui-sources'), (host)=>{ host.appendChild(srcHost); }); };
 
     // PRESETS
     bar.querySelector('#ui-presets').onclick=()=>openPop('presets', bar.querySelector('#ui-presets'), (host)=>{

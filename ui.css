@@ -131,3 +131,7 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 /* progress scrubber in the bottom bar */
 #ui-scrub{ width:140px; accent-color:var(--ui-accent); height:3px; }
 #scrub-grp .val{ width:34px; color:var(--ui-mut); font-size:10px; }
+
+/* use-sources toggle in the sources popover */
+.use-src{ display:flex; align-items:center; gap:6px; margin:2px 0 8px; cursor:pointer; font-size:11px; color:var(--ui-text); }
+.use-src input{ accent-color:var(--ui-accent); }

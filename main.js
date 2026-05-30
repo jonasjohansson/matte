@@ -2640,7 +2640,7 @@ const state = {
   customSize: true, outW: 1920, outH: 1080, previewScale: '1440',  // on-screen preview longer-edge cap (px) or 'full'; recording always full-res
   // output mode — matte-first (B/W luma for AE) by default; bound in Setup,
   // so these must exist before the pane is built.
-  matteOutput: true, matteInvert: false,
+  matteOutput: true, matteInvert: false, useSources: true,
   // particle layer (GPU compute overlay) — see particle module above
   partEnable: false,
   partCount: 120000,
@@ -2865,8 +2865,9 @@ function writeUniforms() {
   // migrate…) — animation relative to each mode, from one global lever.
   uboF32[5]  = state.seed + (state.animate || 0) * state.t * 8.0;
   // valid encoding: 0=no image (bg), 1=image, 2=solid color, 3=transparent.
-  uboU32[6]  = state.slotAFillMode === 'solid' ? 2 : state.slotAFillMode === 'transparent' ? 3 : (state.imgA ? 1 : 0);
-  uboU32[7]  = state.slotBFillMode === 'solid' ? 2 : state.slotBFillMode === 'transparent' ? 3 : (state.imgB ? 1 : 0);
+  const _useSrc = state.useSources !== false;
+  uboU32[6]  = !_useSrc ? 0 : (state.slotAFillMode === 'solid' ? 2 : state.slotAFillMode === 'transparent' ? 3 : (state.imgA ? 1 : 0));
+  uboU32[7]  = !_useSrc ? 0 : (state.slotBFillMode === 'solid' ? 2 : state.slotBFillMode === 'transparent' ? 3 : (state.imgB ? 1 : 0));
   // -- 8..15 --
   uboF32[8]  = fA.sx; uboF32[9]  = fA.sy;
   uboF32[10] = fA.ox; uboF32[11] = fA.oy;
@@ -2964,7 +2965,7 @@ function writeUniforms() {
   // Show the B/W matte when explicitly requested, or implicitly when there's no
   // source image to blend — so the tool works as a pure transition/matte
   // generator: set dimensions, see white↔black movement, no footage required.
-  const showMatte = state.matteOutput || (!state.imgA && !state.imgB);
+  const showMatte = state.matteOutput || (state.useSources === false) || (!state.imgA && !state.imgB);
   uboU32[106] = showMatte ? 1 : 0;
   uboU32[107] = state.matteInvert ? 1 : 0;
   uboF32[108] = state.migrationStrength;
@@ -5438,7 +5439,7 @@ const SESSION_VERSION = 20;
 const PERSIST_KEYS = [
   ...PRESET_KEYS,
   'fit', 'bg',
-  'customSize', 'outW', 'outH', 'previewScale', 'texAmount', 'texBg', 'texFit',
+  'customSize', 'outW', 'outH', 'previewScale', 'useSources', 'texAmount', 'texBg', 'texFit',
   'originAmount', 'originX', 'originY', 'originFromImage', 'turbulence', 'flow', 'undulate', 'animate', 'originPoints',
   'pointStagger', 'pointRandom', 'paintBrush',
   'auroraDensity', 'auroraHeight', 'auroraSpeed', 'auroraDark', 'auroraWave', 'driftAngle', 'driftAmount',
@@ -5524,6 +5525,8 @@ window.__engine = {
   },
   setMatte(on) { state.matteOutput = !!on; if (typeof pane!=='undefined') try{pane.refresh();}catch(e){} saveSession(); },
   get matteOutput() { return state.matteOutput; },
+  setUseSources(on) { state.useSources = !!on; resizeCanvas(); saveSession(); },
+  get useSources() { return state.useSources !== false; },
   randomizeMode(m) {
     // reset to defaults then jitter each numeric amb/mode key a little — folder-free
     this.resetMode(m);
