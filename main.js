@@ -116,7 +116,7 @@ struct Params {
   gdCloud: f32, gdPulse: f32, ambCount: f32, ambSize: f32,
   ambSoft: f32, ambSpeed: f32, ambDetail: f32, sunX: f32,
   sunY: f32, streakMove: f32, vignAmount: f32, vignFeather: f32,
-  vignAnimate: f32, _v0: f32, _v1: f32, _v2: f32,
+  vignAnimate: f32, vignTexture: f32, _v1: f32, _v2: f32,
 };
 
 @group(0) @binding(0) var<uniform> p: Params;
@@ -1698,10 +1698,23 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
     // ellipse. q is per-axis distance to each edge (0 center .. 1 at the edge);
     // the 4-norm darkens all four edges proportionally with soft rounded corners.
     let q = abs(uv - vec2f(0.5, 0.5)) * 2.0;
-    let vd = pow(pow(q.x, 4.0) + pow(q.y, 4.0), 0.25) / 1.18921;  // 0 center .. ~1 corner
+    var vd = pow(pow(q.x, 4.0) + pow(q.y, 4.0), 0.25) / 1.18921;  // 0 center .. ~1 corner
     let anim = 1.0 - p.vignAnimate * 0.3 * (0.5 - 0.5 * cos(p.t * 6.2831853));
+    // smart edge texture: a drifting fbm "dark cloud" field that makes the edge
+    // ragged + organically mottled, so the vignette eats into the effect with a
+    // dark textured border instead of a flat darkening. Seamless circular drift.
+    var bite = 1.0;
+    if (p.vignTexture > 0.001) {
+      var tuv = uv; tuv.x = tuv.x * p.canvasAspect;
+      let drift = vec2f(sin(p.t * 6.2831853), cos(p.t * 6.2831853)) * 0.10;
+      let w = vec2f(fbm(tuv * 2.2 + drift), fbm(tuv * 2.2 + 5.0 - drift)) - vec2f(0.5, 0.5);
+      let nz = fbm(tuv * 3.4 + w * 1.3 + drift);
+      vd = vd + (nz - 0.5) * p.vignTexture * 0.5;          // ragged organic boundary
+      bite = 0.3 + 0.7 * nz;                                // dark mottling within the band
+    }
     let inner = clamp((1.0 - p.vignFeather) * anim, 0.0, 0.999);
-    vign = 1.0 - smoothstep(inner, anim, vd) * p.vignAmount;
+    let band = smoothstep(inner, anim, vd);                 // 0 inside .. 1 at the edge
+    vign = clamp(1.0 - band * p.vignAmount * mix(1.0, bite, p.vignTexture), 0.0, 1.0);
   }
   if (p.matteOutput == 1u) {
     var mv = clamp(effMixT, 0.0, 1.0);
@@ -1812,7 +1825,7 @@ struct Params {
   gdCloud: f32, gdPulse: f32, ambCount: f32, ambSize: f32,
   ambSoft: f32, ambSpeed: f32, ambDetail: f32, sunX: f32,
   sunY: f32, streakMove: f32, vignAmount: f32, vignFeather: f32,
-  vignAnimate: f32, _v0: f32, _v1: f32, _v2: f32,
+  vignAnimate: f32, vignTexture: f32, _v1: f32, _v2: f32,
 };
 
 @group(0) @binding(0) var<uniform> p: Params;
@@ -2049,7 +2062,7 @@ struct Params {
   gdCloud: f32, gdPulse: f32, ambCount: f32, ambSize: f32,
   ambSoft: f32, ambSpeed: f32, ambDetail: f32, sunX: f32,
   sunY: f32, streakMove: f32, vignAmount: f32, vignFeather: f32,
-  vignAnimate: f32, _v0: f32, _v1: f32, _v2: f32,
+  vignAnimate: f32, vignTexture: f32, _v1: f32, _v2: f32,
 };
 @group(0) @binding(0) var<uniform> p: Params;
 @group(0) @binding(1) var texA: texture_2d<f32>;
@@ -2597,7 +2610,7 @@ const state = {
   auroraDensity: 0.5, auroraHeight: 0.5, auroraSpeed: 0.4, auroraDark: 0.3, auroraWave: 0.5,  // aurora settings
   driftAngle: 0.25, driftAmount: 0.3,  // wind direction + strength for ambient drift
   gdIntensity: 0.5, gdBeams: 0.5, gdCloud: 0.5, gdPulse: 0.4,  // godray settings
-  ambCount: 0.5, ambSize: 0.5, ambSoft: 0.5, ambSpeed: 0.25, ambDetail: 0.5, sunX: 0.5, sunY: 0.3, streakMove: 0.25, vignAmount: 0.0, vignFeather: 0.5, vignAnimate: 0.0,  // shared bokeh/ripples/glare/streaks
+  ambCount: 0.5, ambSize: 0.5, ambSoft: 0.5, ambSpeed: 0.25, ambDetail: 0.5, sunX: 0.5, sunY: 0.3, streakMove: 0.25, vignAmount: 0.0, vignFeather: 0.5, vignAnimate: 0.0, vignTexture: 0.0,  // shared bokeh/ripples/glare/streaks
   // custom transition dimensions (independent of source footage size).
   // Default ON: trans is primarily a matte-video builder, so it boots to a
   // fixed canvas showing the B/W matte without requiring any footage.
@@ -3036,6 +3049,7 @@ function writeUniforms() {
   uboF32[230] = state.vignAmount;
   uboF32[231] = state.vignFeather;
   uboF32[232] = state.vignAnimate;
+  uboF32[233] = state.vignTexture;
   // -- 80..95 -- new painterly modes (16..21) + global paper grain
   uboF32[80] = state.strokeScale;
   uboF32[81] = state.strokeAniso;
@@ -5403,7 +5417,7 @@ const PERSIST_KEYS = [
   'pointStagger', 'pointRandom', 'paintBrush',
   'auroraDensity', 'auroraHeight', 'auroraSpeed', 'auroraDark', 'auroraWave', 'driftAngle', 'driftAmount',
   'gdIntensity', 'gdBeams', 'gdCloud', 'gdPulse',
-  'ambCount', 'ambSize', 'ambSoft', 'ambSpeed', 'ambDetail', 'sunX', 'sunY', 'streakMove', 'vignAmount', 'vignFeather', 'vignAnimate',
+  'ambCount', 'ambSize', 'ambSoft', 'ambSpeed', 'ambDetail', 'sunX', 'sunY', 'streakMove', 'vignAmount', 'vignFeather', 'vignAnimate', 'vignTexture',
   'exportFps', 'exportSizeMode', 'exportPadBottom', 'matteOutput', 'matteInvert',
   'slotAFillMode', 'slotAColor', 'slotBFillMode', 'slotBColor', 'keepAOutsideB',
   'partEnable', 'partCount', 'partBurst', 'partSpeed', 'partCurl', 'partTrail',
