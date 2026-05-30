@@ -116,7 +116,7 @@ struct Params {
   gdCloud: f32, gdPulse: f32, ambCount: f32, ambSize: f32,
   ambSoft: f32, ambSpeed: f32, ambDetail: f32, sunX: f32,
   sunY: f32, streakMove: f32, vignAmount: f32, vignFeather: f32,
-  vignAnimate: f32, vignTexture: f32, vignShape: f32, _v2: f32,
+  vignAnimate: f32, vignTexture: f32, vignShape: f32, ambRole: f32,
 };
 
 @group(0) @binding(0) var<uniform> p: Params;
@@ -1664,20 +1664,36 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
     }
   }
   // Ambient/lingering modes output a looping field directly (not a 0->1 reveal).
-  if (p.mode == 33u) { effMixT = ambBokeh(uv); }
-  else if (p.mode == 34u) { effMixT = ambRipples(uv); }
-  else if (p.mode == 35u) { effMixT = ambGlare(uv); }
-  else if (p.mode == 36u) { effMixT = ambStreaks(uv); }
-  else if (p.mode == 38u) { effMixT = ambAurora(uv); }
-  else if (p.mode == 39u) { effMixT = ambGodrays(uv); }
-  else if (p.mode == 40u) { effMixT = ambClouds(uv); }
-  else if (p.mode == 41u) { effMixT = ambCaustics(uv); }
-  else if (p.mode == 42u) { effMixT = ambEmbers(uv); }
-  else if (p.mode == 43u) { effMixT = ambMist(uv); }
-  else if (p.mode == 44u) { effMixT = ambRain(uv); }
-  else if (p.mode == 45u) { effMixT = ambSnow(uv); }
-  else if (p.mode == 46u) { effMixT = ambMarble(uv); }
-  else if (p.mode == 47u) { effMixT = ambBlooms(uv); }
+  var ambF = -1.0;
+  if (p.mode == 33u) { ambF = ambBokeh(uv); }
+  else if (p.mode == 34u) { ambF = ambRipples(uv); }
+  else if (p.mode == 35u) { ambF = ambGlare(uv); }
+  else if (p.mode == 36u) { ambF = ambStreaks(uv); }
+  else if (p.mode == 38u) { ambF = ambAurora(uv); }
+  else if (p.mode == 39u) { ambF = ambGodrays(uv); }
+  else if (p.mode == 40u) { ambF = ambClouds(uv); }
+  else if (p.mode == 41u) { ambF = ambCaustics(uv); }
+  else if (p.mode == 42u) { ambF = ambEmbers(uv); }
+  else if (p.mode == 43u) { ambF = ambMist(uv); }
+  else if (p.mode == 44u) { ambF = ambRain(uv); }
+  else if (p.mode == 45u) { ambF = ambSnow(uv); }
+  else if (p.mode == 46u) { ambF = ambMarble(uv); }
+  else if (p.mode == 47u) { ambF = ambBlooms(uv); }
+  if (ambF >= 0.0) {
+    // ambRole 0 = dissolve A->B using the field (threshold sweeps high->low over t,
+    // so bright parts of the pattern flip to B first); needs both images.
+    // ambRole 1 (or image-free) = standalone looping field (the ambient matte).
+    let bothImg = (p.validA == 1u && p.validB == 1u);
+    if (p.ambRole < 0.5 && bothImg) {
+      let sft = mix(0.05, 0.4, p.ambSoft);
+      let edge = mix(1.0 + sft, -sft, p.t);
+      let m = smoothstep(edge, edge + sft, ambF);
+      effMixT = m;
+      outc = mix(cA.rgb, cB.rgb, m);
+    } else {
+      effMixT = ambF;
+    }
+  }
   // Per-slot alpha comes straight from sampleFit: a PNG's own alpha channel for
   // image slots (valid==1u), 0 for 'transparent' fill mode (valid==3u), and 1 for
   // bg/solid (valid 0u/2u). Final alpha mixes the same way as RGB; output is
@@ -1829,7 +1845,7 @@ struct Params {
   gdCloud: f32, gdPulse: f32, ambCount: f32, ambSize: f32,
   ambSoft: f32, ambSpeed: f32, ambDetail: f32, sunX: f32,
   sunY: f32, streakMove: f32, vignAmount: f32, vignFeather: f32,
-  vignAnimate: f32, vignTexture: f32, vignShape: f32, _v2: f32,
+  vignAnimate: f32, vignTexture: f32, vignShape: f32, ambRole: f32,
 };
 
 @group(0) @binding(0) var<uniform> p: Params;
@@ -2066,7 +2082,7 @@ struct Params {
   gdCloud: f32, gdPulse: f32, ambCount: f32, ambSize: f32,
   ambSoft: f32, ambSpeed: f32, ambDetail: f32, sunX: f32,
   sunY: f32, streakMove: f32, vignAmount: f32, vignFeather: f32,
-  vignAnimate: f32, vignTexture: f32, vignShape: f32, _v2: f32,
+  vignAnimate: f32, vignTexture: f32, vignShape: f32, ambRole: f32,
 };
 @group(0) @binding(0) var<uniform> p: Params;
 @group(0) @binding(1) var texA: texture_2d<f32>;
@@ -2614,7 +2630,7 @@ const state = {
   auroraDensity: 0.5, auroraHeight: 0.5, auroraSpeed: 0.4, auroraDark: 0.3, auroraWave: 0.5,  // aurora settings
   driftAngle: 0.25, driftAmount: 0.3,  // wind direction + strength for ambient drift
   gdIntensity: 0.5, gdBeams: 0.5, gdCloud: 0.5, gdPulse: 0.4,  // godray settings
-  ambCount: 0.5, ambSize: 0.5, ambSoft: 0.5, ambSpeed: 0.25, ambDetail: 0.5, sunX: 0.5, sunY: 0.3, streakMove: 0.25, vignAmount: 0.0, vignFeather: 0.5, vignAnimate: 0.0, vignTexture: 0.0, vignShape: 0.5,  // shared bokeh/ripples/glare/streaks
+  ambCount: 0.5, ambSize: 0.5, ambSoft: 0.5, ambSpeed: 0.25, ambDetail: 0.5, sunX: 0.5, sunY: 0.3, streakMove: 0.25, vignAmount: 0.0, vignFeather: 0.5, vignAnimate: 0.0, vignTexture: 0.0, vignShape: 0.5, ambRole: 0,  // shared bokeh/ripples/glare/streaks
   // custom transition dimensions (independent of source footage size).
   // Default ON: trans is primarily a matte-video builder, so it boots to a
   // fixed canvas showing the B/W matte without requiring any footage.
@@ -3055,6 +3071,7 @@ function writeUniforms() {
   uboF32[232] = state.vignAnimate;
   uboF32[233] = state.vignTexture;
   uboF32[234] = state.vignShape;
+  uboF32[235] = state.ambRole;
   // -- 80..95 -- new painterly modes (16..21) + global paper grain
   uboF32[80] = state.strokeScale;
   uboF32[81] = state.strokeAniso;
@@ -5422,7 +5439,7 @@ const PERSIST_KEYS = [
   'pointStagger', 'pointRandom', 'paintBrush',
   'auroraDensity', 'auroraHeight', 'auroraSpeed', 'auroraDark', 'auroraWave', 'driftAngle', 'driftAmount',
   'gdIntensity', 'gdBeams', 'gdCloud', 'gdPulse',
-  'ambCount', 'ambSize', 'ambSoft', 'ambSpeed', 'ambDetail', 'sunX', 'sunY', 'streakMove', 'vignAmount', 'vignFeather', 'vignAnimate', 'vignTexture', 'vignShape',
+  'ambCount', 'ambSize', 'ambSoft', 'ambSpeed', 'ambDetail', 'sunX', 'sunY', 'streakMove', 'vignAmount', 'vignFeather', 'vignAnimate', 'vignTexture', 'vignShape', 'ambRole',
   'exportFps', 'exportSizeMode', 'exportPadBottom', 'matteOutput', 'matteInvert',
   'slotAFillMode', 'slotAColor', 'slotBFillMode', 'slotBColor', 'keepAOutsideB',
   'partEnable', 'partCount', 'partBurst', 'partSpeed', 'partCurl', 'partTrail',

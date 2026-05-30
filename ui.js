@@ -27,6 +27,7 @@
     // ambient
     ambCount:['count / density',0,1,.01], ambSize:['size / scale',0,1,.01], ambSoft:['softness',0,1,.01],
     ambSpeed:['speed',0,1,.01], ambDetail:['detail / fidelity',0,1,.01],
+    ambRole:{t:'select',label:'role (with A+B)',opts:{'dissolve A\u2192B':0,'standalone field':1}},
     // vignette
     vignAmount:['amount',0,1,.01], vignFeather:['feather',0,1,.01], vignAnimate:['animate (pulse)',0,1,.01], vignTexture:['edge texture',0,1,.01], vignShape:['shape (ellipse↔rect)',0,1,.01],
     // mode-specific
@@ -336,6 +337,8 @@
         rnd.onclick=()=>{ E.randomizeMode(m); buildParams(m); };
         fb.appendChild(rs); fb.appendChild(rnd); paramsEl.appendChild(fb);
       }
+      const _amb = (m>=33 && m<=47 && m!==37);
+      if(_amb) paramsEl.appendChild(section('Ambient role',['ambRole'],false));
       if(MK[m]) paramsEl.appendChild(section('this mode',MK[m],false));
       paramsEl.appendChild(section('Reveal',['originAmount','spread'],!REL.reveal(m)));
       paramsEl.appendChild(section('Movement',['turbulence','flow','undulate','animate'],!REL.movement(m)));
