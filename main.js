@@ -238,27 +238,36 @@ fn ambBokeh(uv: vec2f) -> f32 {
 }
 fn ambStreaks(uv: vec2f) -> f32 {
   let ph = p.t * 6.2831853;
-  let dd = p.driftAmount * vec2f(cos(p.driftAngle * 6.2831853), sin(p.driftAngle * 6.2831853));
-  let sc = vec2f(uv.x * mix(3.5, 11.0, p.ambCount) + ph * (0.08 + p.ambSpeed * 0.3),
-                 uv.y * mix(1.5, 0.7, p.ambSize)) + dd * ph * 3.0;  // density/length/drift
-  var s = fbm(sc) + 0.55 * fbm(sc * vec2f(2.2, 1.0) + vec2f(ph * 0.1, 0.0));
+  // driftAngle sets the streak orientation/direction: 0 = left<->right, 0.25 = up<->down
+  let a = p.driftAngle * 6.2831853;
+  let dir = vec2f(cos(a), sin(a));
+  let perp = vec2f(-dir.y, dir.x);
+  var pp = uv; pp.x = pp.x * p.canvasAspect;
+  let across = dot(pp, perp);
+  let along  = dot(pp, dir);
+  let drift = ph * (0.04 + p.ambSpeed * 0.22);   // gentle drift along the streaks (slow)
+  let sc = vec2f(across * mix(3.5, 11.0, p.ambCount), along * mix(1.4, 0.7, p.ambSize) + drift);
+  var s = fbm(sc) + 0.55 * fbm(sc * vec2f(2.2, 1.0) + vec2f(0.0, drift));
   s = pow(clamp((s - 0.45) * 1.9, 0.0, 1.0), mix(2.6, 0.9, p.ambSoft));  // sharpen->soften
   let smear = (fbm(sc + vec2f(0.0, 0.05)) + fbm(sc - vec2f(0.0, 0.05))) * 0.12;
   return clamp(s + smear, 0.0, 1.0);
 }
 fn ambRipples(uv: vec2f) -> f32 {
-  let ph = p.t * 6.2831853;
+  let ph = p.t * 6.2831853 * (0.3 + p.ambSpeed * 0.9);   // slower base speed
   var auv = uv; auv.x = auv.x * p.canvasAspect;
-  let w = vec2f(fbm(auv * 3.0 + ph * 0.1), fbm(auv * 3.0 + 5.0 - ph * 0.08)) - vec2f(0.5, 0.5);
-  let nsrc = u32(mix(2.0, 6.0, p.ambCount));
+  let w = vec2f(fbm(auv * 3.0 + ph * 0.06), fbm(auv * 3.0 + 5.0 - ph * 0.05)) - vec2f(0.5, 0.5);
+  let useClicked = p.originCount > 0u;
+  let nsrc = select(u32(mix(1.0, 6.0, p.ambCount)), min(6u, p.originCount), useClicked);
   var v = 0.0;
   for (var i = 0u; i < 6u; i = i + 1u) {
     if (i >= nsrc) { break; }
     let fi = f32(i) + 1.0;
-    let c = vec2f(hash21(vec2f(fi, 1.3)), hash21(vec2f(fi, 4.8)));
-    let d = length(auv + w * 0.18 - c);
-    let freq = mix(28.0, 9.0, p.ambSize) + fi * 4.0;     // bigger size -> longer wavelength
-    v = v + (0.5 + 0.5 * sin(d * freq - ph * (1.0 + fi * 0.3) * (0.5 + p.ambSpeed)));
+    var c = vec2f(hash21(vec2f(fi, 1.3)), hash21(vec2f(fi, 4.8)));
+    if (useClicked) { c = p.originPts[i].xy; }    // placed start point as ripple source
+    c.x = c.x * p.canvasAspect;
+    let d = length(auv + w * 0.14 - c);
+    let freq = mix(26.0, 9.0, p.ambSize) + fi * 3.0;
+    v = v + 0.5 + 0.5 * sin(d * freq - ph * (1.0 + fi * 0.2)) * exp(-d * 1.7);  // outward, decaying
   }
   return clamp(pow(clamp(v / f32(nsrc), 0.0, 1.0), mix(2.6, 1.1, p.ambSoft)), 0.0, 1.0);  // caustic sharp->soft
 }
@@ -293,7 +302,9 @@ fn ambAurora(uv: vec2f) -> f32 {
 }
 fn ambGlare(uv: vec2f) -> f32 {
   let ph = p.t * 6.2831853;
-  let sun = vec2f(0.62 + 0.04 * sin(ph * 0.5), 0.4 + 0.03 * cos(ph * 0.4));
+  var sun = vec2f(0.62, 0.4);
+  if (p.originCount > 0u) { sun = p.originPts[0].xy; }   // placed point sets the sun source
+  sun = sun + vec2f(0.04 * sin(ph * 0.5), 0.03 * cos(ph * 0.4));
   var duv = uv - sun; duv.x = duv.x * p.canvasAspect;
   let d = length(duv);
   let ang = atan2(duv.y, duv.x);
@@ -307,7 +318,8 @@ fn ambGlare(uv: vec2f) -> f32 {
 fn ambGodrays(uv: vec2f) -> f32 {
   // light shafts fanning down from a high sun, broken by drifting cloud gaps
   let ph = p.t * 6.2831853;
-  let sun = vec2f(0.5 + (p.driftAngle - 0.5) * 0.9, -0.12);   // steer the sun sideways
+  var sun = vec2f(0.5 + (p.driftAngle - 0.5) * 0.9, -0.12);   // driftAngle steers the sun sideways
+  if (p.originCount > 0u) { sun = p.originPts[0].xy; }        // or place the source with a point
   var d = uv - sun; d.x = d.x * p.canvasAspect;
   let ang = atan2(d.x, d.y);                  // 0 = straight down from the sun
   let dist = length(d);
@@ -3636,7 +3648,6 @@ const MODE_OPTIONS = {
   'Strong watercolor — pigment migration':26,
   'Burn — paper scorch from edges':       27,
   'Video mask (T slot)':                  28,
-  'Film melt — ink burn from center':     29,
   'Light bloom — overexposure to reveal': 30,
   'Texture — reveal by luminance':        32,
   'Ambient — bokeh (looping)':            33,
@@ -3899,6 +3910,11 @@ fAmbient.addBinding(state, 'ambSize',  { min: 0, max: 1, step: 0.01, label: 'siz
 fAmbient.addBinding(state, 'ambSoft',  { min: 0, max: 1, step: 0.01, label: 'softness' });
 fAmbient.addBinding(state, 'ambSpeed', { min: 0, max: 1, step: 0.01, label: 'speed' });
 
+// direction / source — used by bokeh, streaks, sun glare, godrays
+const fDir = fWater.addFolder({ title: 'Direction / source', expanded: true });
+fDir.addBinding(state, 'driftAngle', { min: 0, max: 1, step: 0.01, label: 'direction' });
+fDir.addBinding(state, 'driftAmount', { min: 0, max: 1, step: 0.01, label: 'amount' });
+
 const fGodray = fWater.addFolder({ title: 'Godrays', expanded: true });
 fGodray.addBinding(state, 'gdIntensity', { min: 0, max: 1, step: 0.01, label: 'intensity' });
 fGodray.addBinding(state, 'gdBeams',     { min: 0, max: 1, step: 0.01, label: 'beam count / thinness' });
@@ -3906,6 +3922,20 @@ fGodray.addBinding(state, 'gdCloud',     { min: 0, max: 1, step: 0.01, label: 'b
 fGodray.addBinding(state, 'gdPulse',     { min: 0, max: 1, step: 0.01, label: 'pulse (in & out)' });
 
 function updateModeFolders() {
+  const m = state.mode;
+  const ambient = m >= 33 && m <= 39 && m !== 37;   // ambient generators (33-36,38,39)
+  // Reveal core / movement / advanced only apply to transition modes
+  bFromWithin.hidden = ambient;
+  bEdgeSoft.hidden = ambient;
+  fMove.hidden = ambient;
+  fAdv.hidden = ambient;
+  // Start points / paint: transition modes, Paint (37), and the ambient source
+  // modes that use a placed point (ripples 34, glare 35, godrays 39)
+  fPts.hidden = !(m <= 32 || m === 34 || m === 35 || m === 37 || m === 39);
+  // direction / source: bokeh, streaks, glare, godrays
+  fDir.hidden = !(m === 33 || m === 35 || m === 36 || m === 39);
+  // hide the whole Reveal folder for ambient modes that use none of its controls
+  fDis.hidden = (m === 33 || m === 36 || m === 38);
   fAurora.hidden = state.mode !== 38;
   fGodray.hidden = state.mode !== 39;
   fAmbient.hidden = !(state.mode >= 33 && state.mode <= 36);  // bokeh/ripples/glare/streaks
@@ -3944,17 +3974,15 @@ updateModeFolders();
 
 const fDis = tabMode.addFolder({ title: 'Reveal', expanded: true });
 // — core: where it starts and how soft the edge is —
-fDis.addBinding(state, 'originAmount', { min: 0, max: 1, step: 0.01, label: 'from within' });
-fDis.addBinding(state, 'spread',    { min: 0, max: 1, step: 0.01, label: 'edge softness' });
+const bFromWithin = fDis.addBinding(state, 'originAmount', { min: 0, max: 1, step: 0.01, label: 'from within' });
+const bEdgeSoft = fDis.addBinding(state, 'spread',    { min: 0, max: 1, step: 0.01, label: 'edge softness' });
 
-// — movement (collapsed) — animation that works on every mode —
+// — movement (collapsed) — animation for transition modes —
 const fMove = fDis.addFolder({ title: 'Movement', expanded: false });
 fMove.addBinding(state, 'turbulence', { min: 0, max: 1, step: 0.01, label: 'turbulence (ink)' });
 fMove.addBinding(state, 'flow', { min: 0, max: 1, step: 0.01, label: 'flow' });
 fMove.addBinding(state, 'undulate', { min: 0, max: 1, step: 0.01, label: 'undulate (dance)' });
 fMove.addBinding(state, 'animate', { min: 0, max: 1, step: 0.01, label: 'animate (per-mode)' });
-fMove.addBinding(state, 'driftAngle', { min: 0, max: 1, step: 0.01, label: 'drift direction (ambient)' });
-fMove.addBinding(state, 'driftAmount', { min: 0, max: 1, step: 0.01, label: 'drift amount (ambient)' });
 
 // — start points & paint (collapsed) — where the reveal emanates from —
 const fPts = fDis.addFolder({ title: 'Start points / paint', expanded: false });
@@ -4010,7 +4038,7 @@ fImg.addBinding(state, 'panBy', { min: -1, max: 1, step: 0.005, label: 'B pan y'
 
 // ----- Export / Record -----
 state.exportFps = 25;
-state.exportSizeMode = '1920';
+state.exportSizeMode = 'src';   // record at the canvas resolution (sharp at 4k/6k)
 // (matteOutput / matteInvert now live in the state literal — bound in Setup.)
 state.exportPadBottom = 0;  // 0 = no padding; 1 = add full-height black below; 1.416 ≈ Elverket floor ratio
 
@@ -5067,7 +5095,7 @@ fSamHelp.addBinding(samHelp, 'altClick',   { readonly: true, label: 'alt-click' 
 const SESSION_LS_KEY = 'trans:session';
 // Bump when default values change so stale saved sessions don't mask new
 // defaults (e.g. matte-first, cover texture fit, turbulence, origin).
-const SESSION_VERSION = 14;
+const SESSION_VERSION = 15;
 const PERSIST_KEYS = [
   ...PRESET_KEYS,
   'fit', 'bg',
