@@ -234,7 +234,13 @@ fn ambBokeh(uv: vec2f) -> f32 {
   // foliage: slow dark leaf shapes drifting across, so the glare reads as seen
   // THROUGH trees (dappled occlusion)
   let foliage = mix(1.0, smoothstep(0.28, 0.72, fbm(uv * 4.0 + dd * travel * 0.8 + 2.0)), 0.5);
-  return clamp(v * foliage, 0.0, 1.0);
+  var m = v * foliage;
+  if (p.ambDetail > 0.001) {                                  // fine sparkle on lit bokeh + finer leaf breakup
+    let spark = fbm(auv * mix(16.0, 46.0, p.ambDetail) + ph * 0.15) - 0.5;
+    let leaf  = smoothstep(0.35, 0.65, fbm(uv * mix(9.0, 22.0, p.ambDetail) + 7.0));
+    m = m * (1.0 + spark * p.ambDetail * 0.9) * mix(1.0, leaf, p.ambDetail * 0.35);
+  }
+  return clamp(m, 0.0, 1.0);
 }
 fn ambStreaks(uv: vec2f) -> f32 {
   let ph = p.t * 6.2831853;
@@ -321,9 +327,11 @@ fn ambGlare(uv: vec2f) -> f32 {
   let d = length(duv);
   let ang = atan2(duv.y, duv.x);
   let nrays = mix(4.0, 16.0, p.ambCount);          // ray count
-  let rays = 0.5 + 0.5 * sin(ang * nrays + ph * (0.5 + p.ambSpeed)) * (fbm(vec2f(ang * 2.0, ph * 0.3) + 3.0) + 0.4);
+  let rays0 = 0.5 + 0.5 * sin(ang * nrays + ph * (0.5 + p.ambSpeed)) * (fbm(vec2f(ang * 2.0, ph * 0.3) + 3.0) + 0.4);
+  let rays = rays0 + 0.5 * sin(ang * nrays * 3.0 + ph) * p.ambDetail * 0.4;   // finer ray striations
   let core = exp(-d * mix(6.0, 2.0, p.ambSize));   // bigger size -> wider core
-  let halo = exp(-d * mix(2.0, 0.7, p.ambSize)) * (0.4 + 0.6 * mix(rays, 1.0, p.ambSoft));  // soft -> less rayed
+  let dust = (fbm(duv * mix(110.0, 290.0, p.ambDetail) + ph * 0.25) - 0.5) * p.ambDetail * 0.7;  // atmospheric shimmer
+  let halo = exp(-d * mix(2.0, 0.7, p.ambSize)) * (0.4 + 0.6 * mix(rays, 1.0, p.ambSoft)) * (1.0 + dust);  // soft -> less rayed
   let foliage = smoothstep(0.3, 0.72, fbm(uv * 5.0 + vec2f(ph * 0.1, -ph * 0.15)));
   return clamp((core + halo) * mix(0.45, 1.0, foliage), 0.0, 1.0);
 }
