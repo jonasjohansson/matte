@@ -154,7 +154,7 @@
     // ── right rail: modes gallery + params ──
     const right=document.createElement('div'); right.id='ui-right';
     right.innerHTML=`<div class="modehead"></div><div id="params"></div>`;
-    right.insertBefore(left, right.firstChild);
+    document.body.appendChild(left);
     document.body.appendChild(right);
     const headEl=right.querySelector('.modehead'), paramsEl=right.querySelector('#params');
 

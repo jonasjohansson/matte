@@ -7,7 +7,7 @@
   --ui-text:#f0f0f0; --ui-mut:rgba(240,240,240,.5); --ui-accent:#f0f0f0;
   --ui-accent-soft:rgba(240,240,240,.16); --ui-rec:#ff5b5b;
   --ui-font:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
-  --left:208px; --right:300px; --bottom:0px;
+  --left:200px; --modes:150px; --right:250px; --bottom:0px;
 }
 
 /* hide scrollbars everywhere (still scrollable) */
@@ -19,17 +19,18 @@
 #toggle-panel{ display:none !important; }
 
 /* canvas occupies the centre, bounded by the three control zones */
-#stage{ inset:0 var(--right) var(--bottom) var(--left) !important; padding:8px !important; transition:inset .16s ease; }
+#stage{ inset:0 calc(var(--modes) + var(--right)) var(--bottom) var(--left) !important; padding:8px !important; transition:inset .16s ease; }
 body.no-left  #stage{ left:0 !important; }
 body.no-right #stage{ right:0 !important; }
 
-/* ── modes gallery: top of the right rail (2-col thumbnails) ── */
-#ui-modes{ margin:-12px -12px 11px -12px; padding:10px 12px; max-height:42vh; overflow-y:auto;
-  border-bottom:1px solid var(--ui-line); background:#0d0d0d; font:11px/1.35 var(--ui-font); color:var(--ui-text); }
-#ui-modes .mgroup{ display:flex; flex-wrap:wrap; gap:5px; }
-#ui-modes .mgroup h4{ flex:0 0 100%; }
-#ui-modes .chip{ flex:0 0 calc(50% - 3px); width:auto; margin:0; }
+/* ── modes column: own rail, just left of the settings rail ── */
+#ui-modes{ position:fixed; top:0; bottom:0; right:var(--right); width:var(--modes); z-index:300;
+  overflow-y:auto; padding:10px 8px 16px; background:var(--ui-bg); border-left:1px solid var(--ui-line);
+  font:11px/1.35 var(--ui-font); color:var(--ui-text); }
+#ui-modes .mgroup{ margin-bottom:11px; }
+#ui-modes .chip{ width:100%; margin:0 0 4px; }
 body.no-left #ui-controls{ display:none; }
+body.no-right #ui-modes{ display:none; }
 .mgroup{ margin-bottom:11px; }
 .mgroup h4{ color:var(--ui-mut); font-size:9px; text-transform:uppercase; letter-spacing:.09em; margin:0 0 5px 1px; font-weight:600; }
 .chip{
@@ -149,3 +150,9 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 .barchk input{ margin:0; }
 
 select.mini{ background:#1a1a1a; color:var(--ui-fg,#f0f0f0); border:1px solid #333; font-size:9px; padding:2px 4px; border-radius:3px; font-family:inherit; }
+
+/* left-rail: action buttons fill the width */
+#ui-controls .btn{ flex:1 1 auto; min-width:0; text-align:center; white-space:nowrap; }
+#ui-controls #recwrap{ flex:1 1 100%; display:flex; }
+#ui-controls #recwrap .btn{ flex:1; }
+#ui-controls .barchk{ margin-left:0; }
