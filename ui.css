@@ -144,3 +144,5 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 
 .barchk{ display:inline-flex; align-items:center; gap:3px; margin-left:5px; color:var(--ui-mut); font-size:9px; text-transform:uppercase; letter-spacing:.06em; cursor:pointer; }
 .barchk input{ margin:0; }
+
+select.mini{ background:#1a1a1a; color:var(--ui-fg,#f0f0f0); border:1px solid #333; font-size:9px; padding:2px 4px; border-radius:3px; font-family:inherit; }
