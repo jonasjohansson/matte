@@ -14,8 +14,29 @@ import { fitInfo, hexToRgb } from './util.js';
 import { codecMaxDim, pickEncoderConfig } from './recorder.js';
 import { HAS_FS_ACCESS, getOutputDir, setOutputDir, getOutputDirHandleWithPermission, saveBlobToOutputFolder } from './output.js';
 import { state } from './state.js';
-import { canvas, adapter, device, ctx, presentationFormat, GPU_MAX_TEX } from './core.js';
 
+const canvas = document.getElementById('canvas');
+
+if (!navigator.gpu) {
+  document.getElementById('gpu-error').classList.add('show');
+  throw new Error('WebGPU not available');
+}
+
+const adapter = await navigator.gpu.requestAdapter();
+if (!adapter) {
+  document.getElementById('gpu-error').classList.add('show');
+  throw new Error('No GPU adapter');
+}
+const device = await adapter.requestDevice();
+device.addEventListener('uncapturederror', e => {
+  console.error('[WebGPU uncaptured]', e.error?.message || e.error);
+});
+const ctx = canvas.getContext('webgpu');
+const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
+ctx.configure({ device, format: presentationFormat, alphaMode: 'premultiplied' });
+
+const GPU_MAX_TEX = device.limits.maxTextureDimension2D;
+console.log('[trans] device limits.maxTextureDimension2D =', GPU_MAX_TEX);
 
 // ============================================================================
 // Shader (WGSL)
