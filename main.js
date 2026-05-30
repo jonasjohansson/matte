@@ -1536,7 +1536,13 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
     let localGlow   = spreadCurve * bloomEnv * 1.6;
     let universal   = flashEnv * 1.2;
     let totalBloom  = (localGlow + universal) * p.lightIntensity;
-    outc = clamp(outc + p.lightColor * totalBloom, vec3f(0.0), vec3f(1.0));
+    // the overexposed white burns through to B: where the bloom is brightest, B
+    // emerges out of the glare (gated by mixT so it reveals on the way in),
+    // instead of A blowing to flat white then a separate crossfade.
+    let bloomReveal = smoothstep(0.3, 1.0, totalBloom) * smoothstep(0.0, 0.5, mixT);
+    let mBloom = max(mixT, bloomReveal);
+    outc = mix(cA.rgb, cB.rgb, mBloom);
+    outc = clamp(outc + p.lightColor * totalBloom * (1.0 - bloomReveal * 0.6), vec3f(0.0), vec3f(1.0));
   }
 
   // ---- film melt (mode 29): dark ink lines on cell boundaries + hot glow at front ----
