@@ -3446,7 +3446,7 @@ const fPlay = pane.addFolder({ title: 'Setup', expanded: true });
 // — dimensions (independent of any footage) —
 const sizePresets = { _v: '1920x1080' };
 fPlay.addBinding(sizePresets, '_v', {
-  label: 'size',
+  label: 'output size',
   options: {
     // ELVERKET projection surfaces — matte-res (keeps each surface's exact
     // aspect, stays under the GPU texture clamp; upscale to the real pixel size
@@ -3475,6 +3475,14 @@ const bOutH = fPlay.addBinding(state, 'outH', { step: 1, format: (v) => `${Math.
   .on('change', () => { sizePresets._v = 'custom'; resizeCanvas(); });
 function syncSizeFields() { const custom = sizePresets._v === 'custom'; bOutW.hidden = !custom; bOutH.hidden = !custom; }
 syncSizeFields();
+
+// — display size: how large/sharp the on-screen preview renders. The recording
+// always uses the full OUTPUT size above regardless of this — drop it to keep
+// big outputs (4k/6k) smooth to scrub.
+fPlay.addBinding(state, 'previewScale', {
+  label: 'display',
+  options: { 'Full (= output)': 'full', 'Half': '0.5', 'Quarter': '0.25' },
+}).on('change', () => resizeCanvas());
 
 // — B/W matte output (always). Invert flips black<->white direction. —
 fPlay.addBinding(state, 'matteInvert', { label: 'invert (B↔W)' });
@@ -4164,10 +4172,6 @@ fExp.addBinding(state, 'exportSizeMode', {
     '2560 wide': '2560', '1920 wide': '1920', '1280 wide': '1280', '960 wide': '960',
   },
 });
-fExp.addBinding(state, 'previewScale', {
-  label: 'preview quality',
-  options: { 'Full (slower at 4k+)': 'full', 'Half': '0.5', 'Quarter': '0.25' },
-}).on('change', () => resizeCanvas());
 // Preset dropdown that writes into state.exportPadBottom on change. Slider
 // stays available for fine-tuning.
 const padPresets = { _v: state.exportPadBottom };
@@ -5136,7 +5140,7 @@ fSamHelp.addBinding(samHelp, 'altClick',   { readonly: true, label: 'alt-click' 
 const SESSION_LS_KEY = 'trans:session';
 // Bump when default values change so stale saved sessions don't mask new
 // defaults (e.g. matte-first, cover texture fit, turbulence, origin).
-const SESSION_VERSION = 17;
+const SESSION_VERSION = 18;
 const PERSIST_KEYS = [
   ...PRESET_KEYS,
   'fit', 'bg',
