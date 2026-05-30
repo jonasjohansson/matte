@@ -1521,7 +1521,11 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
   // ---- global vignette: darken toward the edges; optional slow pulse ----
   var vign = 1.0;
   if (p.vignAmount > 0.001) {
-    let vd = distance(uv, vec2f(0.5, 0.5)) / 0.7071;          // 0 center .. 1 corner
+    // rectangular (squircle) falloff: follows the canvas edges instead of an
+    // ellipse. q is per-axis distance to each edge (0 center .. 1 at the edge);
+    // the 4-norm darkens all four edges proportionally with soft rounded corners.
+    let q = abs(uv - vec2f(0.5, 0.5)) * 2.0;
+    let vd = pow(pow(q.x, 4.0) + pow(q.y, 4.0), 0.25) / 1.18921;  // 0 center .. ~1 corner
     let anim = 1.0 - p.vignAnimate * 0.3 * (0.5 - 0.5 * cos(p.t * 6.2831853));
     let inner = clamp((1.0 - p.vignFeather) * anim, 0.0, 0.999);
     vign = 1.0 - smoothstep(inner, anim, vd) * p.vignAmount;
