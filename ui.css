@@ -1,13 +1,18 @@
 /* ── trans custom UI · three-zone (modes | canvas | params + bottom bar) ──────
-   The WebGPU engine is untouched; Tweakpane stays alive off-screen as the
-   side-effect registry. This layer drives state via window.__engine. ── */
+   Monochrome palette (record red is the only colour). The WebGPU engine is
+   untouched; Tweakpane stays alive off-screen as the side-effect registry. ── */
 
 :root{
-  --ui-bg:#0d0d0d; --ui-bg2:#161616; --ui-line:rgba(255,255,255,.08);
-  --ui-text:#eee; --ui-mut:rgba(238,238,238,.5); --ui-accent:#4a9eff;
+  --ui-bg:#0c0c0c; --ui-bg2:#171717; --ui-line:rgba(255,255,255,.10);
+  --ui-text:#f0f0f0; --ui-mut:rgba(240,240,240,.5); --ui-accent:#f0f0f0;
+  --ui-accent-soft:rgba(240,240,240,.16); --ui-rec:#ff5b5b;
   --ui-font:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
   --left:150px; --right:232px; --bottom:46px;
 }
+
+/* hide scrollbars everywhere (still scrollable) */
+*{ scrollbar-width:none; -ms-overflow-style:none; }
+*::-webkit-scrollbar{ width:0; height:0; display:none; }
 
 /* hide the old Tweakpane panel but keep it functional off-screen */
 #side{ left:-9999px !important; pointer-events:none; }
@@ -31,23 +36,23 @@ body.no-left #ui-left{ display:none; }
   position:relative; display:block; width:100%; margin-bottom:4px; height:62px;
   border:1px solid var(--ui-line); border-radius:4px; overflow:hidden;
   cursor:pointer; font:inherit; color:var(--ui-text); transition:.1s;
-  background:var(--ui-bg2) center/cover no-repeat;
+  background:var(--ui-bg2) center/cover no-repeat; filter:grayscale(1);
 }
-.chip:hover{ border-color:#555; }
+.chip:hover{ border-color:rgba(240,240,240,.4); }
 .chip .nm{
   position:absolute; left:0; right:0; bottom:0; padding:3px 6px 4px;
   font-size:10px; line-height:1.15; letter-spacing:.01em;
   background:linear-gradient(transparent, rgba(0,0,0,.82) 55%); color:#fff;
 }
 .chip.sel{ border-color:var(--ui-accent); box-shadow:0 0 0 1px var(--ui-accent) inset; }
-.chip.sel .nm{ background:linear-gradient(transparent, rgba(74,158,255,.9) 55%); color:#000; font-weight:600; }
+.chip.sel .nm{ background:linear-gradient(transparent, rgba(255,255,255,.92) 55%); color:#000; font-weight:600; }
 
-/* hover-zoom preview — big enough to read the effect without widening the rail */
+/* hover-zoom preview */
 #thumbzoom{ position:fixed; z-index:400; display:none; pointer-events:none;
   border:1px solid var(--ui-accent); border-radius:6px; overflow:hidden;
   box-shadow:0 8px 30px rgba(0,0,0,.6); background:#000; }
 #thumbzoom.on{ display:block; }
-#thumbzoom img{ display:block; width:320px; height:200px; object-fit:cover; }
+#thumbzoom img{ display:block; width:320px; height:200px; object-fit:cover; filter:grayscale(1); }
 #thumbzoom .zl{ position:absolute; left:0; right:0; bottom:0; padding:5px 9px; font:12px var(--ui-font);
   color:#fff; background:linear-gradient(transparent, rgba(0,0,0,.85)); }
 
@@ -71,13 +76,12 @@ body.no-right #ui-right{ display:none; }
 .row .lab{ flex:1; min-width:0; color:var(--ui-mut); font-size:10.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .row input[type=range]{ width:96px; flex-shrink:0; accent-color:var(--ui-accent); height:3px; }
 .row .val{ width:38px; flex-shrink:0; text-align:right; font-size:10px; color:var(--ui-text); font-variant-numeric:tabular-nums; }
-.row.wide{ flex-direction:column; align-items:stretch; gap:3px; }
-.row.wide .lab{ flex:none; }
 .row.check label{ display:flex; align-items:center; gap:6px; cursor:pointer; color:var(--ui-text); font-size:10.5px; }
+.row.check input{ accent-color:var(--ui-accent); }
 .row select{ flex:1; min-width:0; }
 .row input[type=color]{ width:34px; height:20px; padding:0; border:1px solid var(--ui-line); background:none; border-radius:3px; cursor:pointer; }
 
-/* ── bottom bar: output / transport / record ── */
+/* ── bottom bar ── */
 #ui-bottom{
   position:fixed; left:0; right:0; bottom:0; height:var(--bottom); z-index:310;
   display:flex; align-items:center; gap:9px; padding:0 12px;
@@ -92,10 +96,11 @@ body.no-right #ui-right{ display:none; }
   background:var(--ui-bg2); color:var(--ui-text); border:1px solid var(--ui-line);
   border-radius:5px; padding:6px 11px; cursor:pointer; font:inherit; font-size:12px;
 }
-.btn:hover{ background:#222; border-color:#3a3a3a; }
+.btn:hover{ background:#242424; border-color:rgba(240,240,240,.35); }
 .btn.on{ background:var(--ui-accent); color:#000; border-color:var(--ui-accent); }
-.btn.rec{ color:#ff6b6b; } .btn.rec.busy{ background:#3a1414; color:#ff9b9b; }
 .btn.ghost{ padding:6px 8px; color:var(--ui-mut); }
+.btn.rec{ color:var(--ui-rec); }
+.btn.rec.busy{ background:#3a1414; color:#ff9b9b; border-color:#5a2222; }
 
 select,input[type=number]{
   background:#000; color:var(--ui-text); border:1px solid var(--ui-line);
@@ -104,5 +109,5 @@ select,input[type=number]{
 input[type=number]{ width:62px; }
 select:focus,input:focus{ border-color:var(--ui-accent); }
 #recwrap{ position:relative; display:inline-flex; }
-#recbar{ position:absolute; left:0; bottom:-3px; height:3px; width:0%; background:var(--ui-accent); border-radius:2px; transition:width .1s linear; }
-#recbar.done{ background:#2ec27a; } #recbar.err{ background:#e44; }
+#recbar{ position:absolute; left:0; bottom:-3px; height:3px; width:0%; background:var(--ui-rec); border-radius:2px; transition:width .1s linear; }
+#recbar.done{ background:var(--ui-accent); }
