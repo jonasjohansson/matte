@@ -146,7 +146,6 @@
         c.innerHTML=`<span class="nm">${name}</span>`;
         c.style.backgroundImage=`url(${url})`;
         c.onclick=()=>{E.setMode(id);selectMode(id);};
-        c.onmouseenter=()=>showZoom(url,name,c); c.onmouseleave=hideZoom;
         g.appendChild(c);
       });
       left.appendChild(g);
@@ -340,7 +339,16 @@
         fb.appendChild(rs); fb.appendChild(rnd); paramsEl.appendChild(fb);
       }
       const _amb = (m>=33 && m<=47 && m!==37);
-      if(_amb) paramsEl.appendChild(section('Ambient role',['ambRole'],false));
+      if(_amb){
+        const rs=section('Ambient role',[],false);
+        const rbar=document.createElement('div'); rbar.className='ptsbar';
+        const mkR=(label,val)=>{ const b=document.createElement('button'); b.className='btn sm'; b.textContent=label;
+          b.classList.toggle('on',(E.state.ambRole||0)==val);
+          b.onclick=()=>{ E.state.ambRole=val; E.save(); if(E.restartPlayback)E.restartPlayback(); buildParams(m); };
+          return b; };
+        rbar.appendChild(mkR('dissolve A\u2192B',0)); rbar.appendChild(mkR('standalone',1));
+        rs.appendChild(rbar); paramsEl.appendChild(rs);
+      }
       if(MK[m]) paramsEl.appendChild(section('this mode',MK[m],false));
       paramsEl.appendChild(section('Reveal',['originAmount','spread'],!REL.reveal(m)));
       paramsEl.appendChild(section('Movement',['turbulence','flow','undulate','animate'],!REL.movement(m)));
