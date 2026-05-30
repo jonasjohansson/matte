@@ -1677,7 +1677,7 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
   else if (p.mode == 44u) { effMixT = ambRain(uv); }
   else if (p.mode == 45u) { effMixT = ambSnow(uv); }
   else if (p.mode == 46u) { effMixT = ambMarble(uv); }
-  else if (p.mode == 40u) { effMixT = ambBlooms(uv); }
+  else if (p.mode == 47u) { effMixT = ambBlooms(uv); }
   // Per-slot alpha comes straight from sampleFit: a PNG's own alpha channel for
   // image slots (valid==1u), 0 for 'transparent' fill mode (valid==3u), and 1 for
   // bg/solid (valid 0u/2u). Final alpha mixes the same way as RGB; output is
