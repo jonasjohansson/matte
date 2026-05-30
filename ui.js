@@ -79,7 +79,7 @@
     ['Advection',[[10,'adv wet'],[11,'adv gravity'],[12,'adv curl'],[13,'adv brush'],[14,'adv seed'],[21,'density grav']]],
     ['Painterly',[[16,'stroke-follow'],[19,'painterly flow'],[20,'color dabs'],[22,'mold tendrils']]],
     ['Light & burn',[[27,'paper scorch'],[30,'light bloom']]],
-    ['Ambient (loop)',[[33,'bokeh'],[34,'water ripples'],[35,'sun glare'],[36,'light streaks'],[38,'aurora'],[39,'godrays'],[40,'organic blooms']]],
+    ['Ambient (loop)',[[33,'bokeh'],[34,'water ripples'],[35,'sun glare'],[36,'light streaks'],[38,'aurora'],[39,'godrays'],[40,'clouds']]],
     ['Special',[[28,'video mask'],[32,'texture-source'],[31,'particles'],[37,'paint']]],
   ];
   const MODE_NAME = {}; MODES.forEach(g=>g[1].forEach(([id,n])=>MODE_NAME[id]=n));
@@ -259,7 +259,28 @@
       paramsEl.appendChild(section('Reveal',['originAmount','spread'],!REL.reveal(m)));
       paramsEl.appendChild(section('Movement',['turbulence','flow','undulate','animate'],!REL.movement(m)));
       paramsEl.appendChild(section('Direction / source',['driftAngle','driftAmount','sunX','sunY','streakMove'],!REL.dir(m)));
-      paramsEl.appendChild(section('Start points / paint',['originFromImage','pointStagger','pointRandom','paintBrush'],!REL.points(m)));
+      {
+        const ptsRelevant = (m<=32 && m!==31) || m===34;   // transition modes + ripples
+        const isPaint = (m===37);
+        const sec = section('Start points / paint',
+          isPaint ? ['paintBrush'] : ['originFromImage','pointStagger','pointRandom'],
+          !(ptsRelevant || isPaint));
+        if (ptsRelevant || isPaint) {
+          const pb=document.createElement('div'); pb.className='ptsbar';
+          if (isPaint) {
+            pb.innerHTML='<span class="hint">drag on the canvas to paint the reveal</span>';
+          } else {
+            const place=document.createElement('button'); place.className='btn sm';
+            const sync=()=>{ const on=E.state.placePoints; place.textContent=on?'✓ click canvas — done':'✛ place points'; place.classList.toggle('on',on); };
+            place.onclick=()=>{ E.setPlacePoints(!E.state.placePoints); sync(); };
+            const clr=document.createElement('button'); clr.className='btn sm'; clr.textContent='clear';
+            clr.onclick=()=>{ E.clearPoints(); };
+            pb.appendChild(place); pb.appendChild(clr); sync();
+          }
+          sec.appendChild(pb);
+        }
+        paramsEl.appendChild(sec);
+      }
       paramsEl.appendChild(section('Advanced',['originX','originY','maskScale','curve','seed','maskShift','organic','edges'],!REL.advanced(m)));
       paramsEl.appendChild(section('Vignette (global)',['vignAmount','vignFeather','vignAnimate'],false));
     }
