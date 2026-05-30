@@ -5260,4 +5260,35 @@ loadSession();
 pane.on('change', () => saveSession());
 
 window.__tool = { state, pane, device, adapter, uploadTexture, loadTextureFile, clearTexture, loadFromUrl, computeOutputDims, previewScaleFactor };
+
+// ── Engine API for the custom UI (ui.js). Tweakpane stays alive underneath as
+// the side-effect registry; the custom UI drives state + calls these so handler
+// wiring can't silently break. ──────────────────────────────────────────────
+window.__engine = {
+  state,
+  // apply a state change with the right side-effect
+  setSize(w, h) {
+    state.outW = Math.max(2, Math.round(w)); state.outH = Math.max(2, Math.round(h));
+    state.customSize = true; resizeCanvas(); saveSession();
+  },
+  setPreview(scale) { state.previewScale = scale; resizeCanvas(); saveSession(); },
+  setMode(m) {
+    state.mode = m; updateModeFolders();
+    advec.needsReset = true; particles.needsReset = true;
+    if (typeof syncPaintMode === 'function') syncPaintMode();
+    restartPlayback(); saveSession();
+  },
+  scrub(t) {
+    state.t = Math.min(1, Math.max(0, t)); state.playing = false;
+    if (typeof updateTransportLabels === 'function') updateTransportLabels();
+  },
+  togglePlay, restartPlayback, toggleLoop, startRecording,
+  resize: resizeCanvas, save: saveSession,
+  setPlacePoints, drawOriginPoints,
+  clearPoints() { state.originPoints = []; drawOriginPoints(); restartPlayback(); },
+  setFill(slot, mode) { state[slot === 'A' ? 'slotAFillMode' : 'slotBFillMode'] = mode; resizeCanvas(); },
+  get playing() { return state.playing; },
+  get loop() { return state.loop; },
+  get recording() { return typeof recording !== 'undefined' ? recording : false; },
+};
 console.log('[trans] WebGPU ready, format:', presentationFormat);
