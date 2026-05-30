@@ -79,7 +79,7 @@
     ['Advection',[[10,'adv wet'],[11,'adv gravity'],[12,'adv curl'],[13,'adv brush'],[14,'adv seed'],[21,'density grav']]],
     ['Painterly',[[16,'stroke-follow'],[19,'painterly flow'],[20,'color dabs'],[22,'mold tendrils']]],
     ['Light & burn',[[27,'paper scorch'],[30,'light bloom']]],
-    ['Ambient (loop)',[[33,'bokeh'],[34,'water ripples'],[35,'sun glare'],[36,'light streaks'],[38,'aurora'],[39,'godrays']]],
+    ['Ambient (loop)',[[33,'bokeh'],[34,'water ripples'],[35,'sun glare'],[36,'light streaks'],[38,'aurora'],[39,'godrays'],[40,'organic blooms']]],
     ['Special',[[28,'video mask'],[32,'texture-source'],[31,'particles'],[37,'paint']]],
   ];
   const MODE_NAME = {}; MODES.forEach(g=>g[1].forEach(([id,n])=>MODE_NAME[id]=n));
@@ -108,10 +108,11 @@
     35:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'], 36:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],
     38:['auroraDensity','auroraHeight','auroraSpeed','auroraWave','auroraDark'],
     39:['gdIntensity','gdBeams','gdCloud','gdPulse'],
+    40:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],
   };
 
   // relevance of the global groups per mode
-  const isAmb = m => [33,34,35,36,38,39].includes(m);
+  const isAmb = m => [33,34,35,36,38,39,40].includes(m);
   const isTrans = m => m<=32 && m!==31;            // reveal/movement/advanced apply
   const REL = {
     reveal: m=>isTrans(m), movement: m=>isTrans(m), advanced: m=>isTrans(m),

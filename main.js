@@ -271,6 +271,27 @@ fn ambStreaks(uv: vec2f) -> f32 {
   }
   return clamp(m, 0.0, 1.0);
 }
+fn ambBlooms(uv: vec2f) -> f32 {
+  // Ambient organic blooms: soft domain-warped fbm patches that bloom open and
+  // breathe, looping seamlessly over t (circular drift so t=0 == t=1). Stays
+  // organic and never quite reaches full white — a lingering ambient matte.
+  let ph = p.t * 6.2831853;
+  var auv = uv; auv.x = auv.x * p.canvasAspect;
+  let sc = mix(1.4, 4.5, p.ambSize);                  // bloom scale (size)
+  let amp = 0.12 + p.ambSpeed * 0.5;
+  let drift = vec2f(sin(ph), cos(ph)) * amp;          // seamless looping drift
+  let warp = mix(0.6, 2.2, p.ambCount);               // density / turbulence of blooms
+  let q = vec2f(fbm(auv * sc + drift + p.seed * 0.11),
+                fbm(auv * sc + vec2f(5.2, 1.3) - drift + p.seed * 0.11)) - vec2f(0.5, 0.5);
+  var v = fbm(auv * sc + q * warp + p.seed * 0.07);
+  // soft bloom shaping: patches open / breathe; ambSoft widens the wet falloff
+  v = smoothstep(mix(0.55, 0.30, p.ambSoft), mix(0.78, 0.92, p.ambSoft), v);
+  if (p.ambDetail > 0.001) {                          // fine granulation inside the blooms
+    let g = fbm(auv * mix(8.0, 26.0, p.ambDetail) + ph * 0.1) - 0.5;
+    v = v * (1.0 + g * p.ambDetail * 0.7);
+  }
+  return clamp(v * 0.92, 0.0, 1.0);
+}
 fn ambRipples(uv: vec2f) -> f32 {
   let ph = p.t * 6.2831853 * (0.3 + p.ambSpeed * 0.9);   // slower base speed
   var auv = uv; auv.x = auv.x * p.canvasAspect;
@@ -360,6 +381,23 @@ fn ambGodrays(uv: vec2f) -> f32 {
   // pulse: the light grows in and out / more & less intense over the loop
   let pulse = mix(1.0, 0.35 + 0.65 * (0.5 + 0.5 * sin(ph + fbm(vec2f(ph * 0.2, 3.0)) * 3.0)), p.gdPulse);
   return clamp((beams * gaps + 0.1) * fade * 2.3 * mix(0.4, 1.6, p.gdIntensity) * pulse, 0.0, 1.0);
+}
+fn ambClouds(uv: vec2f) -> f32 {
+  // drifting volumetric clouds: domain-warped fbm blown along a wind direction.
+  // reuses ambient params: count=coverage, size=scale, soft=edge, speed=wind, detail=wisps.
+  let ph = p.t * 6.2831853;
+  var auv = uv; auv.x = auv.x * p.canvasAspect;
+  let a = p.driftAngle * 6.2831853;
+  let dir = vec2f(cos(a), sin(a));
+  let drift = dir * ph * (0.04 + p.ambSpeed * 0.5);          // wind travel
+  let sc = mix(1.3, 5.0, p.ambSize);                         // cloud scale
+  let w = vec2f(fbm(auv * sc * 0.5 + drift * 0.7 + 11.0),
+                fbm(auv * sc * 0.5 - drift * 0.6 + 23.0)) - vec2f(0.5);
+  var c = fbm(auv * sc + w * 0.8 + drift);                   // billowing base
+  c = c + (fbm(auv * sc * 2.3 + w + drift * 1.7) - 0.5) * mix(0.12, 0.55, p.ambDetail);  // wisps
+  let cov = mix(0.64, 0.16, p.ambCount);                     // low=sparse, high=overcast
+  let soft = mix(0.05, 0.45, p.ambSoft);
+  return clamp(smoothstep(cov, cov + soft, c), 0.0, 1.0);
 }
 
 fn sampleFit(tex: texture_2d<f32>, uv: vec2f, scale: vec2f, offset: vec2f, valid: u32, color: vec3f) -> vec4f {
@@ -1505,6 +1543,8 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
   else if (p.mode == 36u) { effMixT = ambStreaks(uv); }
   else if (p.mode == 38u) { effMixT = ambAurora(uv); }
   else if (p.mode == 39u) { effMixT = ambGodrays(uv); }
+  else if (p.mode == 40u) { effMixT = ambClouds(uv); }
+  else if (p.mode == 40u) { effMixT = ambBlooms(uv); }
   // Per-slot alpha comes straight from sampleFit: a PNG's own alpha channel for
   // image slots (valid==1u), 0 for 'transparent' fill mode (valid==3u), and 1 for
   // bg/solid (valid 0u/2u). Final alpha mixes the same way as RGB; output is
@@ -3801,6 +3841,7 @@ const MODE_OPTIONS = {
   'Paint — paint the movement':           37,
   'Ambient — aurora / borealis (looping)':38,
   'Ambient — godrays through clouds (looping)':39,
+  'Ambient — organic blooms (looping)':40,
 };
 const MODE_NAMES_FULL = Object.fromEntries(Object.entries(MODE_OPTIONS).map(([n, id]) => [id, n]));
 fWater.addBinding(state, 'mode', {
