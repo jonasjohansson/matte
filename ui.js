@@ -447,7 +447,7 @@
         const vb=document.createElement('div'); vb.className='ptsbar';
         const vr=document.createElement('button'); vr.className='btn sm'; vr.textContent='\u21ba reset vignette';
         vr.onclick=()=>{ if(E.resetVignette)E.resetVignette(); buildParams(m); };
-        vb.appendChild(vr); vs.appendChild(vb); paramsEl.appendChild(vs); }
+        vb.appendChild(vr); vs.appendChild(vb); tFinish.appendChild(vs); }
     }
     function selectMode(id){
       left.querySelectorAll('.chip').forEach(c=>c.classList.toggle('sel',+c.dataset.mode===id));
