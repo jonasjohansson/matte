@@ -223,6 +223,7 @@
         <label class="barchk wide" title="invert the matte (white↔black)"><input type="checkbox" id="ui-inv">Invert matte</label>
         <button class="btn usesrc-btn" id="ui-usesrc" title="use the A/B images for the transition (off = pure matte)">Use source images</button>
         <button class="btn" id="ui-opensrc" title="open the source-image library in a side panel">⊞ Source images</button>
+        <button class="btn" id="ui-colourise" title="colourise the matte preview with a gradient image (dark→light maps across it). Preview only — the recorded matte stays black-and-white.">Colourise…</button>
       </div>
       <div class="uigroup" id="ui-origin"><h5>Origin</h5><div id="origin-body"></div></div>
       <div class="uigroup" id="ui-vignette"><h5>Vignette</h5><div id="vign-body"></div></div>
@@ -358,6 +359,13 @@
     const syncPrev=()=>{ const on=E.matteOutput!==false; prev.textContent='Preview: '+(on?'Matte':'Colour'); prev.classList.toggle('on',!on); };
     prev.onclick=()=>{ E.setMatte(E.matteOutput===false); syncPrev(); };
     syncPrev();
+    // colourise (gradient-map the matte preview) — load a gradient image, click again to clear
+    { const cbtn=bar.querySelector('#ui-colourise');
+      const fin=document.createElement('input'); fin.type='file'; fin.accept='image/*'; fin.style.display='none'; document.body.appendChild(fin);
+      const sync=()=>{ const on=E.colourise; cbtn.classList.toggle('on',on); cbtn.textContent = on ? 'Colourise ✓ (clear)' : 'Colourise…'; };
+      cbtn.onclick=()=>{ if(E.colourise){ E.clearColourise(); sync(); } else { fin.click(); } };
+      fin.onchange=()=>{ const f=fin.files&&fin.files[0]; if(f){ E.loadColourise(f).then(sync); } fin.value=''; };
+      sync(); }
 
     // ── transport ──
     const bPlay=bar.querySelector('#ui-play'), bLoop=bar.querySelector('#ui-loop');

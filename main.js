@@ -42,6 +42,7 @@ const bindGroupLayout = device.createBindGroupLayout({
     { binding: 5, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
     { binding: 6, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
     { binding: 7, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+    { binding: 8, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } }, // colourise LUT
   ],
 });
 device.pushErrorScope('validation');
@@ -117,6 +118,7 @@ function makeSimBindGroup(stateIn) {
       { binding: 5, resource: (texT || placeholderTexT).createView() },
       { binding: 6, resource: texRegions.createView() },
       { binding: 7, resource: texTexture.createView() },
+      { binding: 8, resource: texLut.createView() },
     ],
   });
 }
@@ -132,6 +134,7 @@ function makeDisplayBindGroup(finalState) {
       { binding: 5, resource: (texT || placeholderTexT).createView() },
       { binding: 6, resource: texRegions.createView() },
       { binding: 7, resource: texTexture.createView() },
+      { binding: 8, resource: texLut.createView() },
     ],
   });
 }
@@ -172,6 +175,21 @@ function makePlaceholderTexture() {
 let texA = makePlaceholderTexture();
 let texB = makePlaceholderTexture();
 let texTexture = makePlaceholderTexture();  // grunge / paper texture (binding 7)
+// Colourise gradient-map LUT (binding 8): a horizontal ramp the matte's
+// brightness samples. Default = grayscale (black→white) so the matte stays pure
+// B/W; a user-uploaded gradient colourises the on-screen PREVIEW only (swapped
+// back to grayscale while recording, so the exported matte is untouched).
+function makeGrayRampTexture() {
+  const N = 256, data = new Uint8Array(N * 4);
+  for (let i = 0; i < N; i++) { data[i*4]=i; data[i*4+1]=i; data[i*4+2]=i; data[i*4+3]=255; }
+  const tex = device.createTexture({ label: 'lut-gray', size: [N, 1, 1], format: 'rgba8unorm',
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+  device.queue.writeTexture({ texture: tex }, data, { bytesPerRow: N * 4 }, [N, 1, 1]);
+  return tex;
+}
+const grayRampTex = makeGrayRampTexture();
+let texLut = grayRampTex;   // currently-bound LUT (gray ramp ⇒ no colourise)
+let colourLut = null;       // user-uploaded colour ramp, applied in preview when state.colourise
 let placeholderTexT = makePlaceholderTexture();
 let texT = null;
 // Per-pixel "fade time" texture for mode 31 (sequential region reveal). r =
@@ -210,10 +228,31 @@ function makeBindGroup(stateView) {
       { binding: 5, resource: (texT || placeholderTexT).createView() },
       { binding: 6, resource: texRegions.createView() },
       { binding: 7, resource: texTexture.createView() },
+      { binding: 8, resource: texLut.createView() },
     ],
   });
 }
 let bindGroup = makeBindGroup();
+
+// ── Colourise (gradient map) — preview only ──────────────────────────────────
+// Upload a gradient image; the matte's brightness samples across it so the B/W
+// effect becomes coloured ON SCREEN. The recorded matte stays B/W (startRecording
+// swaps texLut back to the grayscale ramp for the duration of the encode).
+async function loadColourise(file) {
+  try {
+    const bmp = await createImageBitmap(file);
+    const tex = device.createTexture({ label: 'lut-colour', size: [bmp.width, bmp.height, 1], format: 'rgba8unorm',
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT });
+    device.queue.copyExternalImageToTexture({ source: bmp }, { texture: tex }, [bmp.width, bmp.height, 1]);
+    bmp.close();
+    if (colourLut) colourLut.destroy();
+    colourLut = tex; state.colourise = true; texLut = colourLut; bindGroup = makeBindGroup();
+  } catch (e) { console.error('[colourise]', e); }
+}
+function clearColourise() {
+  state.colourise = false; texLut = grayRampTex; bindGroup = makeBindGroup();
+  if (colourLut) { colourLut.destroy(); colourLut = null; }
+}
 
 // ============================================================================
 // Particle layer (GPU compute sim + additive instanced draw)
@@ -2097,6 +2136,10 @@ async function startRecording(opts = {}) {
   const frameDuration = 1_000_000 / fps; // microseconds
   const wasPlaying = state.playing;
   const prevT = state.t;
+  // Colourise is preview-only: record with the grayscale ramp so the exported
+  // matte stays pure B/W, then restore the colour ramp afterwards.
+  const lutWasColour = (texLut !== grayRampTex);
+  if (lutWasColour) { texLut = grayRampTex; bindGroup = makeBindGroup(); }
 
   // Everything from configure → encode → mux → save is wrapped so a codec/mux
   // failure surfaces a message and still resets state (was silently aborting
@@ -2212,6 +2255,7 @@ async function startRecording(opts = {}) {
     recording = false;
     state.t = prevT;
     state.playing = wasPlaying;
+    if (lutWasColour) { texLut = colourLut || grayRampTex; bindGroup = makeBindGroup(); }  // restore colourise preview
     try { if (encoder.state !== 'closed') encoder.close(); } catch (e) {}
     resizeCanvas();  // restore the on-screen preview scale after full-res capture
   }
@@ -3019,6 +3063,9 @@ window.__engine = {
   // ── sources / texture ──
   loadFile, clearTexture,
   loadTexture(file) { if (file) loadTextureFile(file); },
+  // colourise (gradient map, preview only)
+  loadColourise, clearColourise,
+  get colourise() { return !!state.colourise; },
   // ── output folder ──
   hasFolderAPI: HAS_FS_ACCESS,
   get folderName() { return outputFolderProxy.name; },

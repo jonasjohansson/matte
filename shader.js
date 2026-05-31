@@ -94,6 +94,7 @@ struct Params {
 @group(0) @binding(5) var texT: texture_2d<f32>;
 @group(0) @binding(6) var texRegions: texture_2d<f32>;
 @group(0) @binding(7) var texTexture: texture_2d<f32>;
+@group(0) @binding(8) var texLut: texture_2d<f32>;
 
 fn texFitUV(uv: vec2f) -> vec2f {
   // texFit: 0 = stretch (fill, distort), 1 = contain (fit inside, letterbox),
@@ -1758,8 +1759,10 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
   if (p.matteOutput == 1u) {
     var mv = clamp(effMixT, 0.0, 1.0);
     if (p.matteInvert == 1u) { mv = 1.0 - mv; }
-    mv = mv * vign;
-    return vec4f(vec3f(mv), 1.0);
+    // gradient-map: texLut is a grayscale ramp by default (⇒ pure B/W matte), or
+    // a colour ramp for on-screen colourising (swapped back to gray when recording).
+    var col = textureSample(texLut, samp, vec2f(mv, 0.5)).rgb;
+    return vec4f(col * vign, 1.0);
   }
 
   // Texture overlay on the composite (image/preview look only — the matte path
