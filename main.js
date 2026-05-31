@@ -400,11 +400,10 @@ function previewScaleFactor(w, h) {
   return longer > cap ? cap / longer : 1;      // only ever scale DOWN
 }
 function resizeCanvas() {
-  const minimized = document.body.classList.contains('minimized');
-  const sidePanel = minimized ? 0 : 360;
-  const padding = minimized ? 0 : 32;
-  const maxW = window.innerWidth - sidePanel - padding;
-  const maxH = window.innerHeight - padding;
+  // Full-bleed: the effect fills the whole window; the rails float on top with a
+  // frosted backdrop, so no horizontal space is reserved for them.
+  const maxW = window.innerWidth;
+  const maxH = window.innerHeight;
   const { w, h } = computeOutputDims();
   // The display is purely a preview that always matches the OUTPUT aspect ratio.
   // CSS size = the output fit on screen; backing store = that size x dpr (sharp),

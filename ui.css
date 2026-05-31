@@ -10,7 +10,7 @@
   --ui-line:rgba(255,255,255,.10); --ui-line-2:rgba(255,255,255,.22);
   --ui-text:#f0f0f0; --ui-mut:rgba(240,240,240,.58); --ui-faint:rgba(240,240,240,.34);
   --ui-accent:#f0f0f0; --ui-accent-fg:#0a0a0a; --ui-accent-soft:rgba(240,240,240,.14);
-  --ui-rec:#ff5b5b;
+  --ui-rec:#ff5b5b; --ui-glass:rgba(12,12,12,.72);
   --ui-font:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
   /* type scale */
   --fz-label:9.5px;   /* uppercase section + field labels */
@@ -31,8 +31,7 @@
 #toggle-panel{ display:none !important; }
 
 /* ── canvas: centre, between the rails ── */
-#stage{ inset:0 calc(var(--modes) + var(--right)) var(--bottom) var(--left) !important;
-  padding:10px !important; transition:left .16s ease, right .16s ease; }
+#stage{ inset:0 !important; padding:0 !important; z-index:0; }
 
 /* ── shared label / section-heading look ── */
 .ui-heading{ color:var(--ui-mut); font-size:var(--fz-label); text-transform:uppercase;
@@ -43,7 +42,8 @@
   position:fixed; left:0; top:0; bottom:0; width:var(--left); z-index:310;
   display:flex; flex-direction:column; align-items:stretch; gap:var(--sp);
   padding:var(--sp-lg) 12px; overflow-y:auto;
-  background:var(--ui-bg); border-right:1px solid var(--ui-line);
+  background:var(--ui-glass); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+  border-right:1px solid var(--ui-line);
   font:var(--fz-body)/1.3 var(--ui-font); color:var(--ui-text);
 }
 #ui-controls .grp{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
@@ -59,12 +59,13 @@
 
 /* ── modes column (FAR right) ── */
 #ui-modes{ position:fixed; top:0; bottom:0; right:0; width:var(--modes); z-index:300;
-  overflow-y:auto; padding:var(--sp-lg) 9px; background:var(--ui-bg);
+  overflow-y:auto; padding:var(--sp-lg) 9px; background:var(--ui-glass);
+  backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
   border-left:1px solid var(--ui-line); font:var(--fz-body)/1.35 var(--ui-font); color:var(--ui-text); }
 .mgroup{ margin-bottom:var(--sp-lg); }
 .mgroup h4{ position:sticky; top:-14px; z-index:2; margin:0 0 7px; padding:6px 2px;
   color:var(--ui-text); font-size:var(--fz-label); text-transform:uppercase;
-  letter-spacing:.12em; font-weight:700; background:var(--ui-bg);
+  letter-spacing:.12em; font-weight:700; background:var(--ui-glass);
   border-bottom:1px solid var(--ui-line-2); }
 .chip{
   position:relative; display:block; width:100%; height:62px; margin:0 0 6px;
@@ -88,14 +89,15 @@
 
 /* ── settings rail (between canvas and modes) ── */
 #ui-right{ position:fixed; top:0; bottom:var(--bottom); right:var(--modes); width:var(--right); z-index:300;
-  overflow-y:auto; padding:var(--sp-lg) 14px 22px; background:var(--ui-bg);
+  overflow-y:auto; padding:var(--sp-lg) 14px 22px; background:var(--ui-glass);
+  backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
   border-left:1px solid var(--ui-line); font:var(--fz-body)/1.4 var(--ui-font); color:var(--ui-text); }
 #ui-right .modehead{ font-size:var(--fz-title); font-weight:600; color:var(--ui-text);
   letter-spacing:.01em; margin:0 0 var(--sp); }
 
 /* settings tabs */
 #ui-right .tabbar{ display:flex; gap:5px; margin:0 0 var(--sp-lg);
-  position:sticky; top:-14px; z-index:3; background:var(--ui-bg); padding:6px 0 4px; }
+  position:sticky; top:-14px; z-index:3; background:var(--ui-glass); padding:6px 0 4px; }
 #ui-right .tab{ flex:1; background:transparent; color:var(--ui-mut);
   border:1px solid var(--ui-line); border-radius:var(--r-sm);
   padding:6px 4px; font:var(--fz-body)/1 var(--ui-font); letter-spacing:.04em; cursor:pointer;
