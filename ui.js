@@ -237,9 +237,10 @@
     srcHost.innerHTML='<div class="sep"></div><div class="pop-title">Source Images</div><button class="btn usesrc-btn" id="ui-usesrc" title="use the A/B images for the transition (off = pure matte)">Use source images</button>';
     // 'use sources' toggle now lives in the bottom bar (next to the sources button)
     ['slot-bar','library-section'].forEach(id=>{ const el=document.getElementById(id); if(el) srcHost.appendChild(el); });
-    { const u=bar.querySelector('#ui-usesrc'); if(u){ u.checked=E.useSources; u.onchange=()=>{ E.setUseSources(u.checked); }; } }
+    { const u=srcHost.querySelector('#ui-usesrc');
+      const syncUse=()=>{ const on=E.useSources; u.classList.toggle('on',on); u.textContent = on ? 'Using source images' : 'Use source images'; };
+      u.onclick=()=>{ E.setUseSources(!E.useSources); syncUse(); }; syncUse(); }
     bar.appendChild(srcHost);   // sources live inline in the controls rail, below preview
-    bar.querySelector('#ui-sources').onclick=()=>{ srcHost.classList.toggle('collapsed'); };
 
     // PRESETS
     bar.querySelector('#ui-presets').onclick=()=>openPop('presets', bar.querySelector('#ui-presets'), (host)=>{
