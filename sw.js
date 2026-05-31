@@ -9,7 +9,7 @@
 //     by design (too large to bundle; SAM is an optional online enhancement)
 //
 // Bump VERSION whenever the precache list changes to evict the old cache.
-const VERSION = 'matte-v1';
+const VERSION = 'matte-v2';
 
 const PRECACHE = [
   './', './index.html', './manifest.json', './favicon.svg', './icon-192.png', './icon-512.png',
@@ -19,7 +19,7 @@ const PRECACHE = [
   './vendor/tweakpane-4.0.5.js', './vendor/tweakpane-plugin-essentials-0.2.1.js', './vendor/mp4-muxer-5.1.5.mjs',
   './defaults/lofoten_A.jpg', './defaults/lofoten_B.jpg',
   // mode thumbnails (m00–m47, no m29)
-  ...Array.from({ length: 48 }, (_, i) => i).filter(i => i !== 29)
+  ...Array.from({ length: 48 }, (_, i) => i)
     .map(i => `./thumbs/m${String(i).padStart(2, '0')}.png`),
 ];
 
