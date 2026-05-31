@@ -538,7 +538,7 @@
           return b; };
         rbar.appendChild(mkR('reveal',0)); rbar.appendChild(mkR('standalone loop',1));
         rs.appendChild(rbar);
-        const h=document.createElement('div'); h.className='hint';
+        const h=document.createElement('div'); h.className='hint'; h.style.marginTop='8px';
         h.textContent = (E.state.ambRole||0)<0.5
           ? 'Black\u2192white transition using this pattern (dissolves A\u2192B if images are loaded).'
           : 'Standalone looping field \u2014 not a black\u2192white transition.';
