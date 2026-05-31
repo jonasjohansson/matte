@@ -2054,125 +2054,131 @@ async function startRecording(opts = {}) {
     video: { codec: pick.muxerCodec, width: offW, height: totalH, frameRate: fps },
     fastStart: 'in-memory',
   });
+  // Capture encoder/muxer errors (the output + error callbacks fire async and
+  // outside the try below, so route them to a flag we re-throw on).
+  let encErr = null;
   const encoder = new VideoEncoder({
-    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
-    error: e => console.error('[encoder]', e),
+    output: (chunk, meta) => { try { muxer.addVideoChunk(chunk, meta); } catch (e) { encErr = encErr || e; console.error('[mux]', e); } },
+    error: e => { encErr = encErr || e; console.error('[encoder]', e); },
   });
-  encoder.configure({ ...pick.config, width: offW, height: totalH });
 
   const totalFrames = Math.max(2, Math.round(state.duration * fps));
   const frameDuration = 1_000_000 / fps; // microseconds
   const wasPlaying = state.playing;
   const prevT = state.t;
-  state.playing = false;
-  if (state.mode >= 10 && state.mode <= 14) advec.needsReset = true;
-  if (state.partEnable) particles.needsReset = true;  // restart particle sim for a clean recording
 
-  btnRecord.title = scale < 1
-    ? `Scaled to ${offW}×${totalH}. Recording…`
-    : 'Recording…';
+  // Everything from configure → encode → mux → save is wrapped so a codec/mux
+  // failure surfaces a message and still resets state (was silently aborting
+  // with no file and no error before).
+  try {
+    encoder.configure({ ...pick.config, width: offW, height: totalH });
+    state.playing = false;
+    if (state.mode >= 10 && state.mode <= 14) advec.needsReset = true;
+    if (state.partEnable) particles.needsReset = true;  // restart particle sim for a clean recording
 
-  for (let i = 0; i < totalFrames; i++) {
-    state.t = i / (totalFrames - 1);
-    // If T-slot has a video, seek it to the exact frame for this p.t and
-    // wait for the seek to complete BEFORE rendering — otherwise the GPU
-    // texture gets whatever frame was previously decoded, not the target.
-    const vT = state.videoT;
-    if (vT && vT.duration && isFinite(vT.duration)) {
-      const target = state.t * vT.duration;
-      if (Math.abs(vT.currentTime - target) > 1 / (fps * 2)) {
-        await new Promise(resolve => {
-          const onSeeked = () => { vT.removeEventListener('seeked', onSeeked); resolve(); };
-          vT.addEventListener('seeked', onSeeked);
-          vT.currentTime = Math.min(Math.max(0, target), vT.duration - 1e-4);
-          // safety timeout so a stalled seek doesn't hang the recording
-          setTimeout(() => { vT.removeEventListener('seeked', onSeeked); resolve(); }, 1000);
-        });
+    btnRecord.title = scale < 1 ? `Scaled to ${offW}×${totalH}. Recording…` : 'Recording…';
+
+    for (let i = 0; i < totalFrames; i++) {
+      state.t = i / (totalFrames - 1);
+      // If T-slot has a video, seek it to the exact frame for this p.t and
+      // wait for the seek to complete BEFORE rendering — otherwise the GPU
+      // texture gets whatever frame was previously decoded, not the target.
+      const vT = state.videoT;
+      if (vT && vT.duration && isFinite(vT.duration)) {
+        const target = state.t * vT.duration;
+        if (Math.abs(vT.currentTime - target) > 1 / (fps * 2)) {
+          await new Promise(resolve => {
+            const onSeeked = () => { vT.removeEventListener('seeked', onSeeked); resolve(); };
+            vT.addEventListener('seeked', onSeeked);
+            vT.currentTime = Math.min(Math.max(0, target), vT.duration - 1e-4);
+            // safety timeout so a stalled seek doesn't hang the recording
+            setTimeout(() => { vT.removeEventListener('seeked', onSeeked); resolve(); }, 1000);
+          });
+        }
+      }
+      renderFrame();
+      // wait one rAF so the WebGPU swap-chain commits the just-submitted frame
+      await new Promise(r => requestAnimationFrame(r));
+      offCtx.drawImage(canvas, 0, 0, recW, recH);
+
+      const vf = new VideoFrame(off, {
+        timestamp: Math.round(i * frameDuration),
+        duration: Math.round(frameDuration),
+      });
+      encoder.encode(vf);
+      vf.close();
+      if (encErr) throw encErr;   // bail as soon as the encoder/mux complains
+
+      btnRecord.title = `frame ${i + 1} / ${totalFrames}`;
+      setRecordProgress((i + 1) / totalFrames, `Recording ${Math.round((i + 1) / totalFrames * 100)}% · frame ${i + 1} / ${totalFrames}`);
+      // Back-pressure: if the encoder queue is getting long, let it drain.
+      if (encoder.encodeQueueSize > 16) {
+        await new Promise(r => setTimeout(r, 0));
       }
     }
-    renderFrame();
-    // wait one rAF so the WebGPU swap-chain commits the just-submitted frame
-    await new Promise(r => requestAnimationFrame(r));
-    offCtx.drawImage(canvas, 0, 0, recW, recH);
+    setRecordProgress(1, 'Encoding & muxing…');
+    await encoder.flush();
+    muxer.finalize();
+    if (encErr) throw encErr;
 
-    const vf = new VideoFrame(off, {
-      timestamp: Math.round(i * frameDuration),
-      duration: Math.round(frameDuration),
-    });
-    encoder.encode(vf);
-    vf.close();
+    const blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
+    if (blob.size < 1024) throw new Error('empty output — the encoder produced no data (codec or size unsupported)');
 
-    btnRecord.title = `frame ${i + 1} / ${totalFrames}`;
-    setRecordProgress((i + 1) / totalFrames, `Recording ${Math.round((i + 1) / totalFrames * 100)}% · frame ${i + 1} / ${totalFrames}`);
-    // Back-pressure: if the encoder queue is getting long, let it drain.
-    if (encoder.encodeQueueSize > 16) {
-      await new Promise(r => setTimeout(r, 0));
+    // Build filename with duration, fps, actual output dimensions, and pad.
+    let base = opts.filename || makeFilenameV2();
+    // optional project prefix, e.g. project "DML" → "DML_<name>" (sanitised)
+    const proj = (state.projectName || '').trim().replace(/[^A-Za-z0-9-]/g, '');
+    if (proj && !base.startsWith(proj + '_')) base = `${proj}_${base}`;
+    if (!/\.mp4$/i.test(base)) {
+      const tail = [`${Math.round(state.duration)}s`, `${fps}fps`, `${offW}x${totalH}`];
+      if (state.exportPadBottom > 0) tail.push(`pad=${fx(state.exportPadBottom)}`);
+      if (state.matteOutput || (!state.imgA && !state.imgB)) tail.push(state.matteInvert ? 'matte-inv' : 'matte');
+      base = `${base}__${tail.join('__')}`;
     }
-  }
-  setRecordProgress(1, 'Encoding & muxing…');
-  await encoder.flush();
-  muxer.finalize();
+    const filename = /\.mp4$/i.test(base) ? base : `${base}.mp4`;
+    const mb = (blob.size / 1048576).toFixed(1);
 
-  recording = false;
-  state.t = prevT;
-  state.playing = wasPlaying;
-  resizeCanvas();  // restore the on-screen preview scale after full-res capture
+    // Try the persistent output folder first; fall back to a browser download.
+    const savedToFolder = await saveBlobToOutputFolder(blob, filename);
+    let where = '';
+    if (savedToFolder) {
+      where = ` → ${getOutputDir()?.name || 'folder'}`;
+      console.log(`[record] saved ${filename} (${mb} MB) to folder`);
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.style.display = 'none';
+      document.body.appendChild(a);   // some browsers ignore click() on a detached anchor
+      a.click();
+      setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 1000);
+      console.log(`[record] downloaded ${filename} (${mb} MB)`);
+    }
 
-  const blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
-  if (blob.size < 1024) {
-    btnRecord.title = 'FAILED — empty output';
-    setTimeout(() => { btnRecord.title = originalTitle; }, 4000);
-    finishRecordProgress('Empty output — nothing captured', 'error', 4000);
+    finishRecordProgress(`Done ✓ · ${mb} MB${where}`, 'done', 3500);
+    btnRecord.title = `saved (${mb} MB)${where}`;
+    setTimeout(() => { btnRecord.title = originalTitle; }, 2500);
+
+    // Export history — so Jonas can see which modes were used. Keep last 50.
+    try {
+      const hist = JSON.parse(localStorage.getItem('matte.exports') || '[]');
+      hist.unshift({ mode: state.mode, fps, w: offW, h: totalH,
+                     dur: Math.round(state.duration), mb: +mb, file: filename, t: Date.now() });
+      localStorage.setItem('matte.exports', JSON.stringify(hist.slice(0, 50)));
+      window.dispatchEvent(new CustomEvent('matte-export'));
+    } catch (e) { /* private mode / quota — non-fatal */ }
+  } catch (err) {
+    const msg = (err && err.message) || String(err);
+    console.error('[record] failed', err);
+    finishRecordProgress('Record failed: ' + msg, 'error', 6000);
+    btnRecord.title = 'FAILED — ' + msg;
+    setTimeout(() => { btnRecord.title = originalTitle; }, 5000);
+  } finally {
     recording = false;
-    return;
+    state.t = prevT;
+    state.playing = wasPlaying;
+    try { if (encoder.state !== 'closed') encoder.close(); } catch (e) {}
+    resizeCanvas();  // restore the on-screen preview scale after full-res capture
   }
-
-  // Build filename with duration, fps, actual output dimensions, and pad
-  // (appended here so the actual encoded size is reflected, not the
-  // pre-scale request).
-  let base = opts.filename || makeFilenameV2();
-  // optional project prefix, e.g. project "DML" → "DML_<name>" (sanitised)
-  const proj = (state.projectName || '').trim().replace(/[^A-Za-z0-9-]/g, '');
-  if (proj && !base.startsWith(proj + '_')) base = `${proj}_${base}`;
-  if (!/\.mp4$/i.test(base)) {
-    const tail = [
-      `${Math.round(state.duration)}s`,
-      `${fps}fps`,
-      `${offW}x${totalH}`,
-    ];
-    if (state.exportPadBottom > 0) tail.push(`pad=${fx(state.exportPadBottom)}`);
-    if (state.matteOutput || (!state.imgA && !state.imgB)) tail.push(state.matteInvert ? 'matte-inv' : 'matte');
-    base = `${base}__${tail.join('__')}`;
-  }
-  const filename = /\.mp4$/i.test(base) ? base : `${base}.mp4`;
-
-  // Try the persistent output folder first; fall back to a browser download.
-  const savedToFolder = await saveBlobToOutputFolder(blob, filename);
-  let where = '';
-  if (savedToFolder) {
-    where = ` → ${getOutputDir()?.name || 'folder'}`;
-  } else {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = filename; a.style.display = 'none';
-    document.body.appendChild(a);   // some browsers ignore click() on a detached anchor
-    a.click();
-    setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 1000);
-  }
-
-  finishRecordProgress(`Done ✓ · ${(blob.size / 1024 / 1024).toFixed(1)} MB${where}`, 'done', 3500);
-  btnRecord.title = `saved (${(blob.size / 1024 / 1024).toFixed(1)} MB)${where}`;
-  setTimeout(() => { btnRecord.title = originalTitle; }, 2500);
-
-  // Export history — so Jonas can see which modes were used. Keep last 50.
-  try {
-    const hist = JSON.parse(localStorage.getItem('matte.exports') || '[]');
-    hist.unshift({ mode: state.mode, fps, w: offW, h: totalH,
-                   dur: Math.round(state.duration), mb: +(blob.size / 1048576).toFixed(1),
-                   file: filename, t: Date.now() });
-    localStorage.setItem('matte.exports', JSON.stringify(hist.slice(0, 50)));
-    window.dispatchEvent(new CustomEvent('matte-export'));
-  } catch (e) { /* private mode / quota — non-fatal */ }
 }
 
 const fStyle = tabFrame.addFolder({ title: 'Style', expanded: true });
