@@ -154,7 +154,7 @@
     const bar=document.createElement('div'); bar.id='ui-controls';
     bar.innerHTML=`
       <button class="btn ghost" id="t-left" title="modes">◧</button>
-      <div class="grp"><label>output</label><select id="ui-size"></select></div>
+      <div class="grp"><label>output</label><select id="ui-size"></select><label class="barchk" title="lock output to the source image aspect ratio (keeps the chosen resolution)"><input type="checkbox" id="ui-matchin">match source</label></div>
       <div class="grp" id="ui-wh" style="display:none"><input type="number" id="ui-w"><span style="color:var(--ui-mut)">×</span><input type="number" id="ui-h"></div>
       <div class="sep"></div>
       <div class="grp"><label>dur</label><input type="number" id="ui-dur" min="1" max="60" step="1" style="width:52px"><span style="color:var(--ui-mut)">s</span></div>
@@ -278,6 +278,8 @@
       const idx=SIZES.findIndex(s=>Array.isArray(s[1])&&s[1][0]===st.outW&&s[1][1]===st.outH);
       selSize.value=idx>=0?idx:(SIZES.length-1); whBox.style.display=idx>=0?'none':'flex'; wIn.value=st.outW; hIn.value=st.outH;
     }
+    const matchCb=bar.querySelector('#ui-matchin');
+    if(matchCb){ matchCb.checked=E.matchInput; matchCb.onchange=()=>{ E.setMatchInput(matchCb.checked); syncSizeUI(); }; }
     selSize.onchange=()=>{const s=SIZES[+selSize.value]; if(s[1]==='custom'){whBox.style.display='flex';return;} E.setSize(s[1][0],s[1][1]); syncSizeUI();};
     wIn.onchange=hIn.onchange=()=>{E.setSize(+wIn.value,+hIn.value); selSize.value=SIZES.length-1;};
 

@@ -32,7 +32,7 @@ body.no-right #stage{ right:0 !important; }
 body.no-left #ui-controls{ display:none; }
 body.no-right #ui-modes{ display:none; }
 .mgroup{ margin-bottom:11px; }
-.mgroup h4{ color:var(--ui-mut); font-size:9px; text-transform:uppercase; letter-spacing:.09em; margin:0 0 5px 1px; font-weight:600; }
+.mgroup h4{ position:sticky; top:-10px; z-index:2; color:var(--ui-text); font-size:11px; text-transform:uppercase; letter-spacing:.12em; margin:0 0 7px; padding:5px 2px 5px; font-weight:700; background:var(--ui-bg); border-bottom:1px solid var(--ui-line); }
 .chip{
   position:relative; display:block; width:100%; margin-bottom:4px; height:62px;
   border:1px solid var(--ui-line); border-radius:4px; overflow:hidden;

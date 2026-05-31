@@ -367,7 +367,14 @@ let recording = false;
 // The export format: the full output dimensions the user set, clamped to GPU max.
 function computeOutputDims() {
   let w, h;
-  if (state.customSize || (!state.imgA && !state.imgB)) {
+  const matchRef = state.matchInput ? (state.imgA || state.imgB) : null;
+  if (matchRef) {
+    // Match the source's aspect ratio, keeping the chosen output's longer edge.
+    const ar = matchRef.naturalWidth / Math.max(1, matchRef.naturalHeight);
+    const longEdge = Math.max(2, Math.round(Math.max(state.outW, state.outH)));
+    if (ar >= 1) { w = longEdge; h = Math.max(2, Math.round(longEdge / ar)); }
+    else         { h = longEdge; w = Math.max(2, Math.round(longEdge * ar)); }
+  } else if (state.customSize || (!state.imgA && !state.imgB)) {
     w = Math.max(2, Math.round(state.outW));
     h = Math.max(2, Math.round(state.outH));
   } else {
@@ -2842,7 +2849,7 @@ const SESSION_VERSION = 20;
 const PERSIST_KEYS = [
   ...PRESET_KEYS,
   'fit', 'bg',
-  'customSize', 'outW', 'outH', 'previewScale', 'useSources', 'texAmount', 'texBg', 'texFit',
+  'customSize', 'matchInput', 'outW', 'outH', 'previewScale', 'useSources', 'texAmount', 'texBg', 'texFit',
   'originAmount', 'originX', 'originY', 'originFromImage', 'turbulence', 'flow', 'undulate', 'animate', 'originPoints',
   'pointStagger', 'pointRandom', 'paintBrush',
   'auroraDensity', 'auroraHeight', 'auroraSpeed', 'auroraDark', 'auroraWave', 'driftAngle', 'driftAmount',
@@ -2889,6 +2896,8 @@ window.__tool = { state, pane, device, adapter, uploadTexture, loadTextureFile, 
 window.__engine = {
   state,
   // apply a state change with the right side-effect
+  setMatchInput(on) { state.matchInput = !!on; resizeCanvas(); saveSession(); },
+  get matchInput() { return !!state.matchInput; },
   setSize(w, h) {
     state.outW = Math.max(2, Math.round(w)); state.outH = Math.max(2, Math.round(h));
     state.customSize = true; resizeCanvas(); saveSession();

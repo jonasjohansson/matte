@@ -31,7 +31,7 @@ export const state = {
   // custom transition dimensions (independent of source footage size).
   // Default ON: trans is primarily a matte-video builder, so it boots to a
   // fixed canvas showing the B/W matte without requiring any footage.
-  customSize: true, outW: 1920, outH: 1080, previewScale: '1440',  // on-screen preview longer-edge cap (px) or 'full'; recording always full-res
+  customSize: true, matchInput: false, outW: 1920, outH: 1080, previewScale: '1440',  // on-screen preview longer-edge cap (px) or 'full'; recording always full-res
   // output mode — matte-first (B/W luma for AE) by default; bound in Setup,
   // so these must exist before the pane is built.
   matteOutput: true, matteInvert: false, useSources: true,
