@@ -185,9 +185,11 @@ fn ambPointBias(uv: vec2f, field: f32) -> f32 {
     nearest = min(nearest, length(duv) / (0.5 * diag));
   }
   // reach scales with ambSize so bigger fields spread wider from each point
-  let reach = mix(0.18, 0.6, p.ambSize);
-  let w = 1.0 - smoothstep(0.0, reach, nearest);   // 1 at a point -> 0 past reach
-  return field * mix(0.06, 1.0, w);
+  let reach = mix(0.22, 0.7, p.ambSize);
+  // sharp pull: full strength right at a point, a gentle curve, and a 0.3 floor
+  // far away so the field still reads (instead of crushing to black).
+  let w = pow(1.0 - smoothstep(0.0, reach, nearest), 1.6);  // 1 at point -> 0 past reach
+  return field * mix(0.3, 1.55, w);                          // boost near, dim (not kill) far
 }
 fn ambBokeh(uv: vec2f) -> f32 {
   let ph = p.t * 6.2831853;
