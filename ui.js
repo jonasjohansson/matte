@@ -187,6 +187,10 @@
         <label class="barchk wide" title="invert the matte (white↔black)"><input type="checkbox" id="ui-inv">Invert matte</label>
         <button class="btn usesrc-btn" id="ui-usesrc" title="use the A/B images for the transition (off = pure matte)">Use source images</button>
       </div>
+      <div class="uigroup" id="ui-origin">
+        <h5>Origin</h5>
+        <div id="origin-body"></div>
+      </div>
       <div class="uigroup">
         <h5>Export</h5>
         <div class="grp"><span id="recwrap"><button class="btn rec" id="ui-rec">● Record</button><span id="recbar"></span></span></div>
@@ -194,6 +198,7 @@
         <div class="grp"><button class="btn" id="ui-presets">Presets</button></div>
       </div>`;
     document.body.appendChild(bar);
+    const originGroup=bar.querySelector('#ui-origin'), originBody=bar.querySelector('#origin-body');
 
     // Fixed three-rail layout (controls · canvas · settings · modes); widths come
     // straight from the CSS vars — no runtime toggling.
@@ -341,6 +346,77 @@
       const s=document.createElement('div'); s.className='psec'+(dim?' dim':''); s.innerHTML=`<h4>${title}</h4>`;
       keys.forEach(k=>{const w=widget(k); if(w)s.appendChild(w);}); return s;
     }
+
+    // ── Origin: GLOBAL "where the effect starts" control, lives in the controls
+    // rail (not per-mode), since points/paint are shared across every effect. It
+    // still re-evaluates per mode — auto/points/paint availability and greying
+    // follow the shader audit: transition 1-32 (not particles 31) = auto/points/
+    // paint + amount; ambient 33-47 = POINTS only; ripples 34 & particles 31 =
+    // no effect → dimmed; mode 37 = paint-only. ──
+    function buildOrigin(m){
+      originBody.innerHTML='';
+      const SRC = (m===37) ? ['paint']
+                : (m===34 || m===31) ? []
+                : (m>=33 && m<=47) ? ['points']
+                : (m<=32) ? ['auto','points','paint'] : [];
+      const usesAmount = SRC.includes('auto');   // only mask-blend modes use originAmount
+      originGroup.classList.toggle('dim', SRC.length===0);
+      if (SRC.length===0){
+        const n=document.createElement('div'); n.className='hint'; n.textContent='No effect in this mode.';
+        originBody.appendChild(n); return;
+      }
+      let cur = (m===37) ? 'paint' : (E.originSource ? E.originSource() : 'auto');
+      if(!SRC.includes(cur)) cur=SRC[0];
+      if(E.originSource && E.originSource()!==cur && m!==37) E.setOriginSource(cur);  // clamp carry-over
+      const NAMES={auto:'Auto',points:'Points',paint:'Paint'};
+      if(SRC.length>1){
+        const lbl=document.createElement('div'); lbl.className='hint'; lbl.textContent='Start from'; originBody.appendChild(lbl);
+        const seg=document.createElement('div'); seg.className='seg';
+        SRC.forEach(v=>{ const btn=document.createElement('button'); btn.className='seg-btn'+(v===cur?' on':'');
+          btn.textContent=NAMES[v]; btn.onclick=()=>{ E.setOriginSource(v); buildOrigin(m); }; seg.appendChild(btn); });
+        originBody.appendChild(seg);
+      }
+      if(usesAmount){ const w=widget('originAmount'); if(w) originBody.appendChild(w); }
+      let pb=document.createElement('div'); pb.className='ptsbar';
+      if(cur==='auto'){
+        const w=widget('originFromImage'); if(w) originBody.appendChild(w);
+        const c2=document.createElement('span'); c2.className='hint'; c2.textContent='Grows from the centre (or image A’s bright area).';
+        pb.appendChild(c2);
+      } else if(cur==='points'){
+        const place=document.createElement('button'); place.className='btn sm';
+        const sync=()=>{ const on=E.state.placePoints; place.textContent=on?'✓ Click canvas — done':'✕ Place points'; place.classList.toggle('on',on); };
+        place.onclick=()=>{ E.setPlacePoints(!E.state.placePoints); sync(); };
+        const clr=document.createElement('button'); clr.className='btn sm'; clr.textContent='Clear';
+        clr.onclick=()=>{ E.clearPoints(); buildOrigin(m); };
+        pb.appendChild(place); pb.appendChild(clr); sync();
+        const n=(E.state.originPoints||[]).length;
+        const st2=document.createElement('span'); st2.className='hint';
+        st2.textContent = n? (n+' point'+(n>1?'s':'')+' placed (max 8)') : 'Click the canvas to add points (max 8).';
+        pb.appendChild(st2);
+        originBody.appendChild(pb);
+        ['pointStagger','pointRandom'].forEach(k=>{ const w=widget(k); if(w) originBody.appendChild(w); });
+        pb=null;
+      } else if(cur==='paint'){
+        if(m!==37){
+          const bd=document.createElement('span'); bd.className='hint'; bd.textContent='Show under brush:';
+          const back=(E.paintBackdrop?E.paintBackdrop():'A');
+          const seg=document.createElement('div'); seg.className='seg';
+          ['A','B'].forEach(v=>{ const btn=document.createElement('button'); btn.className='seg-btn'+(back===v?' on':'');
+            btn.textContent=v; btn.onclick=()=>{ E.setPaintBackdrop(v); buildOrigin(m); }; seg.appendChild(btn); });
+          originBody.appendChild(bd); originBody.appendChild(seg);
+        }
+        const w=widget('paintBrush'); if(w) originBody.appendChild(w);
+        const clr=document.createElement('button'); clr.className='btn sm'; clr.textContent='Clear painted region';
+        clr.onclick=()=>{ E.clearPaint(); buildOrigin(m); };
+        pb.appendChild(clr);
+        const painted=!!E.state._paintReady;
+        const st2=document.createElement('span'); st2.className='hint';
+        st2.textContent = painted? 'Region painted.' : 'Drag on the canvas to paint where it starts.';
+        pb.appendChild(st2);
+      }
+      if(pb) originBody.appendChild(pb);
+    }
+
     let _activeTab=0;
     function buildParams(m){
       paramsEl.innerHTML='';
@@ -352,19 +428,20 @@
         rnd.onclick=()=>{ E.randomizeMode(m); buildParams(m); };
         fb.appendChild(rs); fb.appendChild(rnd); paramsEl.appendChild(fb);
       }
-      // ── settings grouped into 3 tabs (reset/randomize stay pinned above) ──
+      // ── settings in 2 tabs (Origin moved to the global controls rail, so the
+      // old middle tab is gone). reset/randomize stay pinned above. ──
       const tabBar=document.createElement('div'); tabBar.className='tabbar';
       const tMode=document.createElement('div'); tMode.className='tabpane';
-      const tOrigin=document.createElement('div'); tOrigin.className='tabpane';
       const tFinish=document.createElement('div'); tFinish.className='tabpane';
-      const _panes=[tMode,tOrigin,tFinish];
-      [['Mode',0],['Origin',1],['Finish',2]].forEach(([label,ix])=>{
+      const _panes=[tMode,tFinish];
+      if(_activeTab>=_panes.length) _activeTab=0;
+      [['Mode',0],['Finish',1]].forEach(([label,ix])=>{
         const tb=document.createElement('button'); tb.className='tab'+(ix===_activeTab?' on':''); tb.textContent=label;
         tb.onclick=()=>{ _activeTab=ix; tabBar.querySelectorAll('.tab').forEach((b,bi)=>b.classList.toggle('on',bi===ix)); _panes.forEach((p,pi)=>p.style.display=pi===ix?'':'none'); };
         tabBar.appendChild(tb);
       });
       _panes.forEach((p,pi)=>p.style.display=pi===_activeTab?'':'none');
-      paramsEl.appendChild(tabBar); paramsEl.appendChild(tMode); paramsEl.appendChild(tOrigin); paramsEl.appendChild(tFinish);
+      paramsEl.appendChild(tabBar); paramsEl.appendChild(tMode); paramsEl.appendChild(tFinish);
       const _amb = (m>=33 && m<=47 && m!==37);
       if(_amb){
         const rs=section('Ambient role',[],false);
@@ -380,80 +457,7 @@
       tMode.appendChild(section('Reveal',['spread'],!REL.reveal(m)));
       tMode.appendChild(section('Movement',['turbulence','flow','undulate','animate'],!REL.movement(m)));
       { const dk = DIRK[m] || (REL.dir(m) ? ['driftAngle','driftAmount','sunX','sunY','streakMove'] : []);
-        if (dk.length) tOrigin.appendChild(section('Direction / source', dk, false)); }
-      {
-        // ── Origin: where every effect starts from (shared across all effects). ──
-        // Per-mode validity (from the shader audit): transition modes 1-32 (not
-        // particles 31) honour auto/points/paint + the amount blend; ambient
-        // 33-47 cluster around POINTS only (no auto/paint); ripples 34 & particles
-        // 31 ignore origin entirely → greyed.
-        const SRC = (m===37) ? ['paint']
-                  : (m===34 || m===31) ? []
-                  : (m>=33 && m<=47) ? ['points']
-                  : (m<=32) ? ['auto','points','paint'] : [];
-        const usesAmount = SRC.includes('auto');   // only the mask-blend modes use originAmount
-        const sec = section('Origin', [], SRC.length===0);
-        if (SRC.length===0){
-          const n=document.createElement('div'); n.className='hint'; n.textContent='Not used by this mode.';
-          sec.appendChild(n);
-        } else {
-          const blurb=document.createElement('div'); blurb.className='hint';
-          blurb.textContent='Where the effect starts — shared across all effects.';
-          sec.appendChild(blurb);
-          let cur = (m===37) ? 'paint' : (E.originSource ? E.originSource() : 'auto');
-          if(!SRC.includes(cur)) cur=SRC[0];
-          if(E.originSource && E.originSource()!==cur && m!==37) E.setOriginSource(cur);  // clamp invalid carry-over
-          const NAMES={auto:'Auto',points:'Points',paint:'Paint'};
-          if(SRC.length>1){
-            const lbl=document.createElement('div'); lbl.className='hint'; lbl.textContent='Start from'; sec.appendChild(lbl);
-            const seg=document.createElement('div'); seg.className='seg';
-            SRC.forEach(v=>{ const btn=document.createElement('button'); btn.className='seg-btn'+(v===cur?' on':'');
-              btn.textContent=NAMES[v]; btn.onclick=()=>{ E.setOriginSource(v); buildParams(m); }; seg.appendChild(btn); });
-            sec.appendChild(seg);
-          }
-          if(usesAmount){ const w=widget('originAmount'); if(w) sec.appendChild(w); }
-          // sub-controls + state line per source
-          let pb=document.createElement('div'); pb.className='ptsbar';
-          if(cur==='auto'){
-            const w=widget('originFromImage'); if(w) sec.appendChild(w);
-            const c2=document.createElement('span'); c2.className='hint'; c2.textContent='Grows from the centre (or image A\u2019s bright area).';
-            pb.appendChild(c2);
-          } else if(cur==='points'){
-            const place=document.createElement('button'); place.className='btn sm';
-            const sync=()=>{ const on=E.state.placePoints; place.textContent=on?'\u2713 Click canvas \u2014 done':'\u2715 Place points'; place.classList.toggle('on',on); };
-            place.onclick=()=>{ E.setPlacePoints(!E.state.placePoints); sync(); };
-            const clr=document.createElement('button'); clr.className='btn sm'; clr.textContent='Clear';
-            clr.onclick=()=>{ E.clearPoints(); buildParams(m); };
-            pb.appendChild(place); pb.appendChild(clr); sync();
-            const n=(E.state.originPoints||[]).length;
-            const st2=document.createElement('span'); st2.className='hint';
-            st2.textContent = n? (n+' point'+(n>1?'s':'')+' placed (max 8)') : 'Click the canvas to add points (max 8).';
-            pb.appendChild(st2);
-            sec.appendChild(pb);
-            ['pointStagger','pointRandom'].forEach(k=>{ const w=widget(k); if(w) sec.appendChild(w); });
-            pb=null;
-          } else if(cur==='paint'){
-            if(m!==37){
-              const bd=document.createElement('span'); bd.className='hint'; bd.textContent='Show under brush:';
-              const back=(E.paintBackdrop?E.paintBackdrop():'A');
-              const seg=document.createElement('div'); seg.className='seg';
-              ['A','B'].forEach(v=>{ const btn=document.createElement('button'); btn.className='seg-btn'+(back===v?' on':'');
-                btn.textContent=v; btn.onclick=()=>{ E.setPaintBackdrop(v); buildParams(m); }; seg.appendChild(btn); });
-              sec.appendChild(bd); sec.appendChild(seg);
-            }
-            const w=widget('paintBrush'); if(w) sec.appendChild(w);
-            const clr=document.createElement('button'); clr.className='btn sm'; clr.textContent='Clear painted region';
-            clr.onclick=()=>{ E.clearPaint(); buildParams(m); };
-            pb.appendChild(clr);
-            const painted=!!E.state._paintReady;
-            const st2=document.createElement('span'); st2.className='hint';
-            st2.textContent = painted? 'Region painted.' : 'Drag on the canvas to paint where it starts.';
-            pb.appendChild(st2);
-          }
-          if(pb) sec.appendChild(pb);
-        }
-        tOrigin.appendChild(sec);
-      }
+        if (dk.length) tMode.appendChild(section('Direction / source', dk, false)); }
       tFinish.appendChild(section('Advanced',['originX','originY','maskScale','curve','seed','maskShift','organic','edges'],!REL.advanced(m)));
       { const vs=section('Vignette (global)',['vignAmount','vignShape','vignFeather','vignTexture','vignAnimate'],false);
         const vb=document.createElement('div'); vb.className='ptsbar';
@@ -463,7 +467,7 @@
     }
     function selectMode(id){
       left.querySelectorAll('.chip').forEach(c=>c.classList.toggle('sel',+c.dataset.mode===id));
-      headEl.textContent=(MODE_NAME[id]||('mode '+id)).replace(/(^|[\s-])\w/g,ch=>ch.toUpperCase()); buildParams(id);
+      headEl.textContent=(MODE_NAME[id]||('mode '+id)).replace(/(^|[\s-])\w/g,ch=>ch.toUpperCase()); buildParams(id); buildOrigin(id);
     }
 
     syncSizeUI(); selectMode(st.mode);

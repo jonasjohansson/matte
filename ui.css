@@ -174,14 +174,20 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 #ui-controls .transport .ico{ flex:1 1 0; min-width:0; padding:0; font-size:14px; }
 .btn.ico{ min-height:var(--ctl-h); }
 
-/* per-group colour accents — a hue stripe + tinted heading per block */
+/* per-group colour accents — a hue stripe + tinted heading per block.
+   nth-of-type works because the .uigroup divs are the leading div children
+   of #ui-controls (src-host follows). Order: Output·Playback·View·Origin·Export. */
 #ui-controls .uigroup{ border-left-width:3px; }
-#ui-controls .uigroup:nth-of-type(1){ border-left-color:#4a90d9; }   /* Output  — blue */
+#ui-controls .uigroup:nth-of-type(1){ border-left-color:#4a90d9; }   /* Output   — blue */
 #ui-controls .uigroup:nth-of-type(2){ border-left-color:#46c08a; }   /* Playback — green */
-#ui-controls .uigroup:nth-of-type(3){ border-left-color:#d98b46; }   /* Export  — amber */
+#ui-controls .uigroup:nth-of-type(3){ border-left-color:#9fd0e0; }   /* View     — cyan */
+#ui-controls .uigroup:nth-of-type(4){ border-left-color:#c79fe0; }   /* Origin   — purple */
+#ui-controls .uigroup:nth-of-type(5){ border-left-color:#d98b46; }   /* Export   — amber */
 #ui-controls .uigroup:nth-of-type(1) h5{ color:#7fb4e8; }
 #ui-controls .uigroup:nth-of-type(2) h5{ color:#74d2a6; }
-#ui-controls .uigroup:nth-of-type(3) h5{ color:#e8b27f; }
+#ui-controls .uigroup:nth-of-type(3) h5{ color:#9fd0e0; }
+#ui-controls .uigroup:nth-of-type(4) h5{ color:#c79fe0; }
+#ui-controls .uigroup:nth-of-type(5) h5{ color:#e8b27f; }
 /* mode-grid group headers get a matching hue family */
 #ui-modes .mgroup:nth-of-type(1) h4{ color:#7fb4e8; border-bottom-color:#4a90d955; }
 #ui-modes .mgroup:nth-of-type(2) h4{ color:#74d2a6; border-bottom-color:#46c08a55; }
@@ -224,6 +230,15 @@ body.ui-hidden #stage{ inset:0 !important; }
 .seg-btn:last-child{ border-radius:0 var(--r-sm) var(--r-sm) 0; border-right-width:1px; }
 .seg-btn:hover{ color:var(--ui-text); }
 .seg-btn.on{ background:var(--ui-accent); color:var(--ui-accent-fg); border-color:var(--ui-accent); }
+
+/* Origin group (global, in controls rail) — compact, dims when mode ignores it */
+#ui-origin #origin-body{ display:flex; flex-direction:column; gap:6px; }
+#ui-origin.dim{ opacity:.45; }
+#ui-origin .hint{ color:var(--ui-mut); font-size:var(--fz-val); line-height:1.35; }
+#ui-origin .row{ margin-bottom:2px; gap:6px; }
+#ui-origin .row input[type=range]{ width:78px; }
+#ui-origin .ptsbar{ margin-top:2px; }
+#ui-origin .seg{ margin:0; }
 
 /* small inline select (start-source, etc.) */
 select.mini{ background:var(--ui-bg2); color:var(--ui-text); border:1px solid var(--ui-line);
