@@ -922,7 +922,7 @@ async function renderLibrary() {
     _libThumbUrls.set(entry.id, url);
     const tile = document.createElement('div');
     tile.className = 'library-thumb' + (entry.id === idA ? ' in-A' : '') + (entry.id === idB ? ' in-B' : '');
-    tile.title = `${entry.name}\nclick = A · shift-click = B · drag onto a slot`;
+    tile.title = `${entry.name}\ndrag onto a slot A / T / B`;
     tile.dataset.libId = entry.id;
     tile.draggable = true;
     tile.addEventListener('dragstart', (ev) => { ev.dataTransfer.setData('application/x-lib-id', String(entry.id)); ev.dataTransfer.effectAllowed = 'copy'; });

@@ -180,8 +180,12 @@
         <h5>Playback</h5>
         <div class="grp transport"><button class="btn ico" id="ui-play" title="play / pause">▶</button><button class="btn ico" id="ui-restart" title="restart from 0">⟳</button><button class="btn ico" id="ui-loop" title="loop playback">↻</button></div>
         <div class="grp" id="scrub-grp"><input type="range" id="ui-scrub" min="0" max="1" step="0.001" value="0" title="scrub the transition (progress)"><span class="val" id="ui-scrub-val">0.00</span></div>
+      </div>
+      <div class="uigroup">
+        <h5>View</h5>
         <div class="grp"><button class="btn" id="ui-preview" title="show B/W matte or the colour result on A/B">Preview: Matte</button></div>
         <label class="barchk wide" title="invert the matte (white↔black)"><input type="checkbox" id="ui-inv">Invert matte</label>
+        <button class="btn usesrc-btn" id="ui-usesrc" title="use the A/B images for the transition (off = pure matte)">Use source images</button>
       </div>
       <div class="uigroup">
         <h5>Export</h5>
@@ -210,10 +214,10 @@
     // SOURCES: relocate the live #side DOM (slot bar + library) into a dedicated
     // host once at init — keeps all of main.js's existing listeners intact.
     const srcHost=document.createElement('div'); srcHost.id='src-host';
-    srcHost.innerHTML='<div class="sep"></div><div class="pop-title">Source Images</div><button class="btn usesrc-btn" id="ui-usesrc" title="use the A/B images for the transition (off = pure matte)">Use source images</button>';
+    srcHost.innerHTML='<div class="sep"></div><div class="pop-title">Source Images</div>';
     // 'use sources' toggle now lives in the bottom bar (next to the sources button)
     ['slot-bar','library-section'].forEach(id=>{ const el=document.getElementById(id); if(el) srcHost.appendChild(el); });
-    { const u=srcHost.querySelector('#ui-usesrc');
+    { const u=bar.querySelector('#ui-usesrc');
       const syncUse=()=>{ const on=E.useSources; u.classList.toggle('on',on); u.textContent = on ? 'Using source images' : 'Use source images'; };
       u.onclick=()=>{ E.setUseSources(!E.useSources); syncUse(); }; syncUse(); }
     bar.appendChild(srcHost);   // sources live inline in the controls rail, below preview
@@ -245,10 +249,13 @@
       else if(E.folderName && E.folderName!=='browser default'){ await E.clearFolder(); refreshFolderBtn(); }  // cancel on an already-set folder = clear to default
     };
     refreshFolderBtn();
-    // full canvas via Tab (no button — it was a trap with no visible way back).
-    // 1/2/3 toggle individual panels; Tab toggles all; edge handles also work.
-    window.addEventListener('keydown',e=>{ if(e.key==='Tab' && e.target.tagName!=='INPUT' && e.target.tagName!=='SELECT'){ e.preventDefault(); toggleFull(); }});
-    // (layout is static CSS)
+    // show/hide all rails (pure-effect view). H or Tab toggles; a small always-
+    // visible handle (top-right) makes it reversible even when everything is hidden.
+    const uiToggle=document.createElement('button'); uiToggle.id='ui-hide'; uiToggle.title='show / hide panels (H)'; uiToggle.textContent='⊙';
+    document.body.appendChild(uiToggle);
+    const toggleUI=()=>{ document.body.classList.toggle('ui-hidden'); uiToggle.classList.toggle('on',document.body.classList.contains('ui-hidden')); };
+    uiToggle.onclick=toggleUI;
+    window.addEventListener('keydown',e=>{ const t=e.target.tagName; if(t==='INPUT'||t==='SELECT'||t==='TEXTAREA') return; if(e.key==='Tab'||e.key==='h'||e.key==='H'){ e.preventDefault(); toggleUI(); }});
 
     // ── output size ──
     const SIZES=[['ELVERKET ALL · 8000×4373',[8000,4373]],['ELVERKET Panorama · 8000×3411',[8000,3411]],
