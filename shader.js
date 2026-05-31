@@ -1135,6 +1135,29 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
 
 // ---- main shader ------------------------------------------------------------
 
+fn cellsMask(uv: vec2f) -> f32 {
+  // Lamp grid (mode 29): a jittered grid of cells, each "igniting" (black->white)
+  // at its own staggered time so a collage lights up cell by cell like lamps.
+  let cols = max(1.0, round(p.sedBands));
+  let rows = max(1.0, round(f32(p.bloomCount)));
+  var guv = uv;
+  if (p.dabsWobble > 0.001) {
+    let w = fbm(vec2f(uv.x * cols, uv.y * rows) + p.seed * 0.07);
+    guv = uv + (w - 0.5) * p.dabsWobble * 0.12;
+  }
+  let gx = floor(clamp(guv.x, 0.0, 0.9999) * cols);
+  let gy = floor(clamp(guv.y, 0.0, 0.9999) * rows);
+  let total = max(1.0, cols * rows);
+  let cellId = gx + gy * cols;
+  let h = hash21(vec2f(gx + 1.7, gy + 3.3) + p.seed * 1.31);
+  let seq = (cellId + 0.5) / total;
+  var ignite = mix(seq, h, clamp(p.moldWobble, 0.0, 1.0));            // order: sequential -> random
+  ignite = pow(clamp(ignite, 0.0, 1.0), mix(1.0, 2.6, clamp(p.glazeWarm, 0.0, 1.0)));  // cascade bias
+  let cuv = fract(vec2f(guv.x * cols, guv.y * rows)) - vec2f(0.5, 0.5);
+  ignite = ignite + length(cuv) * 1.414 * clamp(p.bloomRim, 0.0, 1.0) * 0.2;  // lamp: centre lights first
+  return clamp(ignite, 0.0, 1.0);
+}
+
 @fragment fn fs(in: VSOut) -> @location(0) vec4f {
   let uv = in.uv;
 
@@ -1215,7 +1238,7 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
     let lT = luma(cT);
     mask = clamp(select(1.0 - lT, lT, p.videoMaskInvert == 1u), 0.0, 1.0);
   } else if (p.mode == 29u) {
-    mask = filmMeltMask(uv);
+    mask = cellsMask(uv);
   } else if (p.mode == 30u) {
     // Light bloom: A's bright pixels reveal first (the light source in the
     // painting "burns through"); darker areas reveal as the bloom expands.
