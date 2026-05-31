@@ -11,7 +11,7 @@ import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
 import { SHADER, SIM_SHADER, INIT_SHADER } from './shader.js';
 import { IDB_NAME, IDB_STORE, IDB_LIB_STORE, idbOpen, idbGet, idbPut, idbClearAll, libList, libAdd, libDelete, makeThumb } from './idb.js';
 import { fitInfo, hexToRgb } from './util.js';
-import { codecMaxDim, pickEncoderConfig } from './recorder.js';
+import { ENCODER_CANDIDATES, encoderConfigSupported } from './recorder.js';
 import { HAS_FS_ACCESS, getOutputDir, setOutputDir, getOutputDirHandleWithPermission, saveBlobToOutputFolder } from './output.js';
 import { state } from './state.js';
 import { canvas, adapter, device, ctx, presentationFormat, GPU_MAX_TEX } from './core.js';
@@ -2005,28 +2005,58 @@ async function startRecording(opts = {}) {
   showRecordProgress(true);
   setRecordProgress(0, 'Preparing encoder…');
 
-  // Probe encoder support, scaling to the LARGEST hardware-supported size.
-  // isConfigSupported can reject a frame size even when the codec's nominal
-  // level would allow it (hardware caps), so we step through standard target
-  // long-edges instead of blindly shrinking ×0.75 — the old ladder overshot
-  // (e.g. an 8000px request fell to 3376 on a box that really supports 4096).
+  // ── Encoder analysis: find the largest size + best codec that ACTUALLY
+  // produces a file on THIS machine. isConfigSupported() lies on some GPUs
+  // (says yes, then encodes nothing — e.g. HEVC encode on Chrome/Windows), so
+  // for each standard target long-edge × candidate codec we cheap-gate, then
+  // really encode+mux 2 test frames and confirm bytes come out. First hit wins
+  // (largest size, highest-capability codec). On a 4090 this should land AV1@8K;
+  // elsewhere it falls back to 4K H.264. ──
+  const BITRATE = 12_000_000;
+  async function probeRealEncode(codec, muxerCodec, w, h) {
+    // Definitive: encode+mux 2 black frames, confirm a real file. Resolves fast
+    // when an encoder emits nothing; 7s timeout guards a genuinely-stuck path.
+    const fd = 1_000_000 / fps;
+    return await Promise.race([
+      (async () => {
+        let err = null, enc = null;
+        try {
+          const m = new Muxer({ target: new ArrayBufferTarget(), video: { codec: muxerCodec, width: w, height: h, frameRate: fps }, fastStart: 'in-memory' });
+          enc = new VideoEncoder({ output: (ch, meta) => { try { m.addVideoChunk(ch, meta); } catch (e) { err = err || e; } }, error: e => { err = err || e; } });
+          enc.configure({ codec, width: w, height: h, framerate: fps, bitrate: BITRATE, hardwareAcceleration: 'prefer-hardware' });
+          const cv = new OffscreenCanvas(w, h); const cx = cv.getContext('2d'); cx.fillStyle = '#000'; cx.fillRect(0, 0, w, h);
+          for (let i = 0; i < 2; i++) { const vf = new VideoFrame(cv, { timestamp: Math.round(i * fd), duration: Math.round(fd) }); enc.encode(vf); vf.close(); }
+          await enc.flush(); m.finalize();
+          try { enc.close(); } catch (e) {}
+          return !err && m.target.buffer.byteLength > 1024;
+        } catch (e) { try { if (enc) enc.close(); } catch (e2) {} return false; }
+      })(),
+      new Promise(res => setTimeout(() => res(false), 7000)),
+    ]);
+  }
+
   const baseLong = Math.max(recW, recH + padPx0);
   const baseW = recW, baseH = recH;
-  const targets = [];
-  for (const d of [baseLong, 8192, 7680, 4096, 3840, 2560, 1920]) {
-    if (d <= baseLong && !targets.includes(d)) targets.push(d);  // descending, deduped, ≤ request
-  }
-  let scale = 1;
-  let pick = null;
-  for (const targetLong of targets) {
-    const s = targetLong / baseLong;
-    const tW = Math.round(baseW * s), tH = Math.round(baseH * s);
+  const longs = [...new Set([baseLong, 7680, 4096, 3840, 2560, 1920].filter(d => d <= baseLong))];
+  setRecordProgress(0, 'Analysing encoder…');
+
+  let scale = 1, pick = null;
+  outer:
+  for (const L of longs) {
+    const s = L / baseLong;
+    const w = Math.round(baseW * s), h = Math.round(baseH * s);
     const padS = Math.round(padPx0 * s);
-    const tryW = tW + (tW % 2);
-    const tryH = (tH + padS) + ((tH + padS) % 2);
-    const p = await pickEncoderConfig(tryW, tryH, fps, 12_000_000);
-    if (p && Math.max(tryW, tryH) <= codecMaxDim(p.config.codec)) {
-      pick = p; scale = s; recW = tW; recH = tH; break;
+    const tW = w + (w % 2), tH = (h + padS) + ((h + padS) % 2);
+    for (const c of ENCODER_CANDIDATES) {
+      if (Math.max(tW, tH) > c.max) continue;
+      if (!(await encoderConfigSupported(c.codec, tW, tH, fps, BITRATE))) continue;
+      setRecordProgress(0, `Analysing encoder… ${c.label} @ ${tW}×${tH}`);
+      const ok = await probeRealEncode(c.codec, c.muxer, tW, tH);
+      console.log(`[record] probe ${c.label} @ ${tW}×${tH}: ${ok ? 'works ✓' : 'no output'}`);
+      if (ok) {
+        pick = { config: { codec: c.codec, width: tW, height: tH, framerate: fps, bitrate: BITRATE, hardwareAcceleration: 'prefer-hardware' }, muxerCodec: c.muxer, label: c.label };
+        scale = s; recW = w; recH = h; break outer;
+      }
     }
   }
   if (!pick) {

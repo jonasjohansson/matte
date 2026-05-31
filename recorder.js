@@ -1,43 +1,32 @@
 // Video codec selection for matte's MP4 recorder. Pure WebCodecs probing —
 // no app state/GPU. Imported by main.js's startRecording().
-
-// Max frame long-edge a given codec/level can encode (nominal — the real limit
-// is whatever VideoEncoder.isConfigSupported() accepts on this GPU's hardware
-// encoder, which often caps H.264/HEVC ≤L5.1 at 4096 regardless of level).
-export function codecMaxDim(codecString) {
-  if (codecString.includes('L153') || codecString.includes('L156')) return 4096;  // HEVC L5.x — 4K
-  if (codecString.includes('L120')) return 4096;                                  // HEVC L4 — 4K
-  if (codecString.includes('640033') || codecString.includes('640034')) return 4096; // AVC High L5.x
-  if (codecString.includes('640028')) return 4096;                                // AVC High L4
-  return 3840;
-}
-
-// Try a series of VideoEncoder configs in descending order of profile/level so
-// we pick the highest-headroom one this machine actually supports.
 //
-// NOTE: we deliberately stop at HEVC/H.264 Level 5.1 (~4K). HEVC Level 6 and AV1
-// are intentionally NOT offered: on several GPUs isConfigSupported() reports them
-// as supported but the encoder then produces no usable output (the file silently
-// fails to mux/download). The proven L5.1 codecs encode reliably and, since most
-// hardware encoders cap at ~3840–4096 anyway, give the same practical max size.
-export async function pickEncoderConfig(width, height, framerate, bitrate) {
-  if (typeof VideoEncoder === 'undefined') return null;
-  const candidates = [
-    { codec: 'hev1.1.6.L153.B0', muxer: 'hevc' }, // HEVC Main L5.1 — up to 4K
-    { codec: 'hev1.1.6.L120.B0', muxer: 'hevc' }, // HEVC Main L4   — 4K
-    { codec: 'avc1.640033',      muxer: 'avc'  }, // H.264 High L5.1 — 4K
-    { codec: 'avc1.640028',      muxer: 'avc'  }, // H.264 High L4   — 4K
-    { codec: 'avc1.42E01E',      muxer: 'avc'  }, // H.264 Baseline L3
-  ];
-  for (const c of candidates) {
-    try {
-      const cfg = {
-        codec: c.codec, width, height, framerate, bitrate,
-        hardwareAcceleration: 'prefer-hardware',
-      };
-      const r = await VideoEncoder.isConfigSupported(cfg);
-      if (r && r.supported) return { config: cfg, muxerCodec: c.muxer };
-    } catch {}
-  }
-  return null;
+// We DON'T trust isConfigSupported() alone: on several GPUs/browsers it reports
+// a codec as supported but the encoder then emits no usable output (notably
+// HEVC *encode* via WebCodecs on Chrome/Windows). So main.js uses this cheap
+// gate to skip the obviously-unsupported, then actually encode+mux a couple of
+// test frames to confirm a real file comes out before committing to a codec.
+
+// Ordered so that ≤4K exports use the codecs After Effects imports reliably
+// (HEVC / H.264) and only the >4K stretch reaches AV1 / HEVC-L6 — those get
+// skipped at ≤4K sizes because `max` gates them. `max` is the nominal long-edge
+// cap; the real limit is whatever the hardware encoder accepts at probe time.
+export const ENCODER_CANDIDATES = [
+  { codec: 'hev1.1.6.L153.B0', muxer: 'hevc', max: 4096, label: 'HEVC L5.1 (4K)' },        // HW on most, AE-friendly
+  { codec: 'avc1.640033',      muxer: 'avc',  max: 4096, label: 'H.264 High L5.1 (4K)' },  // universal
+  { codec: 'avc1.640028',      muxer: 'avc',  max: 4096, label: 'H.264 High L4 (4K)' },
+  { codec: 'av01.0.16M.08',    muxer: 'av1',  max: 8192, label: 'AV1 (8K)' },              // >4K: NVENC AV1 (RTX 40-series)
+  { codec: 'hev1.1.6.L186.B0', muxer: 'hevc', max: 8192, label: 'HEVC L6.1 (8K)' },        // >4K
+  { codec: 'avc1.42E01E',      muxer: 'avc',  max: 4096, label: 'H.264 Baseline' },        // last-resort
+];
+
+// Cheap pre-gate so we only run the expensive real probe on plausible configs.
+export async function encoderConfigSupported(codec, width, height, framerate, bitrate) {
+  if (typeof VideoEncoder === 'undefined') return false;
+  try {
+    const r = await VideoEncoder.isConfigSupported({
+      codec, width, height, framerate, bitrate, hardwareAcceleration: 'prefer-hardware',
+    });
+    return !!(r && r.supported);
+  } catch { return false; }
 }
