@@ -148,6 +148,9 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
   padding:6px 4px; font:inherit; font-size:11px; letter-spacing:.04em; cursor:pointer; }
 #ui-right .tab:hover{ color:var(--ui-text); border-color:rgba(240,240,240,.3); }
 #ui-right .tab.on{ background:var(--ui-accent); color:#000; border-color:var(--ui-accent); font-weight:600; }
+/* prominent 'use source images' toggle */
+#src-host .usesrc-btn{ width:100%; margin:8px 0 2px; text-align:center; }
+#src-host .usesrc-btn.on{ background:var(--ui-accent); color:#000; border-color:var(--ui-accent); font-weight:600; }
 select.mini{ background:#1a1a1a; color:var(--ui-fg,#f0f0f0); border:1px solid #333; font-size:9px; padding:2px 4px; border-radius:3px; font-family:inherit; }
 
 /* left-rail: action buttons fill the width */

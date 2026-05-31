@@ -179,7 +179,7 @@
       <div class="sep"></div>
       <div class="grp"><span id="recwrap"><button class="btn rec" id="ui-rec">● Record</button><span id="recbar"></span></span></div>
       <div class="sep"></div>
-      <div class="grp"><button class="btn" id="ui-sources">Sources</button><label class="barchk" title="use the A/B images (off = pure matte)"><input type="checkbox" id="ui-usesrc">use</label><button class="btn" id="ui-presets">Presets</button><button class="btn" id="ui-folder">Folder</button></div>
+      <div class="grp"><button class="btn" id="ui-presets">Presets</button><button class="btn" id="ui-folder">Folder</button></div>
       <div class="sep"></div>
       <div class="grp"><label>invert</label><input type="checkbox" id="ui-inv"></div>
       <div class="grp"><button class="btn" id="ui-preview" title="show B/W matte or the colour result on A/B">Preview: Matte</button></div>
@@ -234,7 +234,7 @@
     // SOURCES: relocate the live #side DOM (slot bar + library) into a dedicated
     // host once at init — keeps all of main.js's existing listeners intact.
     const srcHost=document.createElement('div'); srcHost.id='src-host';
-    srcHost.innerHTML='<div class="sep"></div><div class="pop-title">Source Images</div>';
+    srcHost.innerHTML='<div class="sep"></div><div class="pop-title">Source Images</div><button class="btn usesrc-btn" id="ui-usesrc" title="use the A/B images for the transition (off = pure matte)">Use source images</button>';
     // 'use sources' toggle now lives in the bottom bar (next to the sources button)
     ['slot-bar','library-section'].forEach(id=>{ const el=document.getElementById(id); if(el) srcHost.appendChild(el); });
     { const u=bar.querySelector('#ui-usesrc'); if(u){ u.checked=E.useSources; u.onchange=()=>{ E.setUseSources(u.checked); }; } }
