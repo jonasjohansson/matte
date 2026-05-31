@@ -356,6 +356,7 @@
       const s=document.createElement('div'); s.className='psec'+(dim?' dim':''); s.innerHTML=`<h4>${title}</h4>`;
       keys.forEach(k=>{const w=widget(k); if(w)s.appendChild(w);}); return s;
     }
+    let _activeTab=0;
     function buildParams(m){
       paramsEl.innerHTML='';
       {
@@ -366,6 +367,19 @@
         rnd.onclick=()=>{ E.randomizeMode(m); buildParams(m); };
         fb.appendChild(rs); fb.appendChild(rnd); paramsEl.appendChild(fb);
       }
+      // ── settings grouped into 3 tabs (reset/randomize stay pinned above) ──
+      const tabBar=document.createElement('div'); tabBar.className='tabbar';
+      const tMode=document.createElement('div'); tMode.className='tabpane';
+      const tOrigin=document.createElement('div'); tOrigin.className='tabpane';
+      const tFinish=document.createElement('div'); tFinish.className='tabpane';
+      const _panes=[tMode,tOrigin,tFinish];
+      [['Mode',0],['Origin',1],['Finish',2]].forEach(([label,ix])=>{
+        const tb=document.createElement('button'); tb.className='tab'+(ix===_activeTab?' on':''); tb.textContent=label;
+        tb.onclick=()=>{ _activeTab=ix; tabBar.querySelectorAll('.tab').forEach((b,bi)=>b.classList.toggle('on',bi===ix)); _panes.forEach((p,pi)=>p.style.display=pi===ix?'':'none'); };
+        tabBar.appendChild(tb);
+      });
+      _panes.forEach((p,pi)=>p.style.display=pi===_activeTab?'':'none');
+      paramsEl.appendChild(tabBar); paramsEl.appendChild(tMode); paramsEl.appendChild(tOrigin); paramsEl.appendChild(tFinish);
       const _amb = (m>=33 && m<=47 && m!==37);
       if(_amb){
         const rs=section('Ambient role',[],false);
@@ -375,13 +389,13 @@
           b.onclick=()=>{ E.state.ambRole=val; E.save(); if(E.restartPlayback)E.restartPlayback(); buildParams(m); };
           return b; };
         rbar.appendChild(mkR('dissolve A\u2192B',0)); rbar.appendChild(mkR('standalone',1));
-        rs.appendChild(rbar); paramsEl.appendChild(rs);
+        rs.appendChild(rbar); tMode.appendChild(rs);
       }
-      if(MK[m]) paramsEl.appendChild(section('this mode',MK[m],false));
-      paramsEl.appendChild(section('Reveal',['originAmount','spread'],!REL.reveal(m)));
-      paramsEl.appendChild(section('Movement',['turbulence','flow','undulate','animate'],!REL.movement(m)));
+      if(MK[m]) tMode.appendChild(section('this mode',MK[m],false));
+      tMode.appendChild(section('Reveal',['originAmount','spread'],!REL.reveal(m)));
+      tMode.appendChild(section('Movement',['turbulence','flow','undulate','animate'],!REL.movement(m)));
       { const dk = DIRK[m] || (REL.dir(m) ? ['driftAngle','driftAmount','sunX','sunY','streakMove'] : []);
-        if (dk.length) paramsEl.appendChild(section('Direction / source', dk, false)); }
+        if (dk.length) tOrigin.appendChild(section('Direction / source', dk, false)); }
       {
         const ptsRelevant = (m<=32 && m!==31) || m===34;   // transition modes + ripples
         const isPaint = (m===37);
@@ -426,9 +440,9 @@
           }
           sec.appendChild(pb);
         }
-        paramsEl.appendChild(sec);
+        tOrigin.appendChild(sec);
       }
-      paramsEl.appendChild(section('Advanced',['originX','originY','maskScale','curve','seed','maskShift','organic','edges'],!REL.advanced(m)));
+      tFinish.appendChild(section('Advanced',['originX','originY','maskScale','curve','seed','maskShift','organic','edges'],!REL.advanced(m)));
       { const vs=section('Vignette (global)',['vignAmount','vignShape','vignFeather','vignTexture','vignAnimate'],false);
         const vb=document.createElement('div'); vb.className='ptsbar';
         const vr=document.createElement('button'); vr.className='btn sm'; vr.textContent='\u21ba reset vignette';
