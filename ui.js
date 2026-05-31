@@ -237,8 +237,14 @@
       sync(); }
 
     // ── fold / unfold groups (controls rail + mode column), persisted ──
-    const FOLD_KEY='matte.folded';
-    let folded=new Set(); try{ folded=new Set(JSON.parse(localStorage.getItem(FOLD_KEY)||'[]')); }catch(e){}
+    // Defaults (first visit / no saved state): mode column + View/Origin/Export
+    // start collapsed; Output and Playback stay open. Key is versioned so the
+    // new defaults apply once even for users with older saved fold state.
+    const FOLD_KEY='matte.folded.v2';
+    let folded;
+    { const stored=localStorage.getItem(FOLD_KEY);
+      if(stored!=null){ try{ folded=new Set(JSON.parse(stored)); }catch(e){ folded=null; } }
+      if(!folded){ folded=new Set(['ctrl:View','ctrl:Origin','ctrl:Export']); MODES.forEach(([g])=>folded.add('mode:'+g)); } }
     const saveFold=()=>{ try{ localStorage.setItem(FOLD_KEY,JSON.stringify([...folded])); }catch(e){} };
     function makeFoldable(group,head,key){
       const body=document.createElement('div'); body.className='fold-body';
@@ -490,6 +496,9 @@
     }
     function selectMode(id){
       left.querySelectorAll('.chip').forEach(c=>c.classList.toggle('sel',+c.dataset.mode===id));
+      // settings header echoes the mode's group accent (read from the group h4 — CSS stays the source)
+      const chip=left.querySelector('.chip.sel'), grp=chip&&chip.closest('.mgroup');
+      headEl.style.color = grp ? getComputedStyle(grp.querySelector('h4')).color : 'var(--ui-text)';
       headEl.textContent=(MODE_NAME[id]||('mode '+id)).replace(/(^|[\s-])\w/g,ch=>ch.toUpperCase()); buildParams(id); buildOrigin(id);
     }
 
