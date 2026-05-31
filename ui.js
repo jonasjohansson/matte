@@ -279,15 +279,26 @@
       if(stored!=null){ try{ folded=new Set(JSON.parse(stored)); }catch(e){ folded=null; } }
       if(!folded){ folded=new Set(['ctrl:View','ctrl:Export','ctrl:Vignette']); MODES.forEach(([g])=>folded.add('mode:'+g)); } }
     const saveFold=()=>{ try{ localStorage.setItem(FOLD_KEY,JSON.stringify([...folded])); }catch(e){} };
-    function makeFoldable(group,head,key){
+    function makeFoldable(group,head,key,onToggle){
       const body=document.createElement('div'); body.className='fold-body';
       while(head.nextSibling) body.appendChild(head.nextSibling);
       group.appendChild(body); head.classList.add('fold-head');
       if(folded.has(key)) group.classList.add('folded');
-      head.addEventListener('click',()=>{ const f=group.classList.toggle('folded'); if(f)folded.add(key); else folded.delete(key); saveFold(); });
+      head.addEventListener('click',()=>{ const f=group.classList.toggle('folded'); if(f)folded.add(key); else folded.delete(key); if(onToggle)onToggle(f); saveFold(); });
     }
     bar.querySelectorAll('.uigroup').forEach(g=>{ const h=g.querySelector('h5'); if(h) makeFoldable(g,h,'ctrl:'+h.textContent.trim()); });
-    left.querySelectorAll('.mgroup').forEach(g=>{ const h=g.querySelector('h4'); if(h) makeFoldable(g,h,'mode:'+h.textContent.trim()); });
+    // Mode column = accordion: opening one group folds the others (Recent is
+    // independent and stays open alongside).
+    const modeGroups=[...left.querySelectorAll('.mgroup')].filter(g=>!g.classList.contains('mgroup-recent'));
+    left.querySelectorAll('.mgroup').forEach(g=>{
+      const h=g.querySelector('h4'); if(!h) return;
+      const recent=g.classList.contains('mgroup-recent');
+      makeFoldable(g,h,'mode:'+h.textContent.trim(), recent?null:(isFolded)=>{
+        if(isFolded) return;  // only collapse peers when THIS group just opened
+        modeGroups.forEach(o=>{ if(o!==g && !o.classList.contains('folded')){
+          o.classList.add('folded'); folded.add('mode:'+o.querySelector('h4').textContent.trim()); }});
+      });
+    });
 
     // OUTPUT FOLDER
     function refreshFolderBtn(){ const b=bar.querySelector('#ui-folder'); const n=E.folderName; b.textContent='Folder: '+(n&&n!=='browser default'?n:'default'); b.classList.toggle('on', !!(n&&n!=='browser default')); }
