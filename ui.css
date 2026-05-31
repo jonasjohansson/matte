@@ -116,18 +116,6 @@
 #ui-right .btn:hover{ border-color:var(--m); color:var(--m); background:var(--ui-hover); }
 #ui-right .btn.on{ background:var(--m); border-color:var(--m); color:#0a0a0a; }
 
-/* settings tabs */
-#ui-right .tabbar{ display:flex; gap:5px; margin:0 0 var(--sp-lg);
-  position:sticky; top:-14px; z-index:3; background:var(--ui-glass); padding:6px 0 4px; }
-#ui-right .tab{ flex:1; background:transparent; color:var(--ui-mut);
-  border:1px solid var(--ui-line); border-radius:var(--r-sm);
-  padding:6px 4px; font:var(--fz-body)/1 var(--ui-font); letter-spacing:.04em; cursor:pointer;
-  transition:color .12s, border-color .12s, background .12s; }
-#ui-right .tab:hover{ color:var(--ui-text); border-color:var(--ui-line-2); }
-#ui-right .tab.on{ background:var(--m); color:#0a0a0a; border-color:var(--m); }
-#ui-right .tabpane{ display:none; }
-#ui-right .tabpane.show{ display:block; }
-
 /* param sections + rows */
 .psec{ margin-bottom:var(--sp-lg); }
 .psec.dim{ display:none; }
@@ -183,10 +171,13 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 #ui-controls .barchk{ margin-left:0; }
 
 
-/* intro / how-it-works (top of controls rail; plain always-visible note —
-   <section> so it doesn't shift the .uigroup nth-of-type accents) */
-#ui-intro{ padding:2px 2px 0; }
+/* About / how-it-works — plain note at the BOTTOM of the controls rail
+   (<section> so it doesn't shift the .uigroup nth-of-type accents) */
+#ui-intro{ margin-top:4px; padding:12px 2px 2px; border-top:1px solid var(--ui-line); }
+#ui-intro .intro-label{ color:var(--ui-faint); font-size:var(--fz-label);
+  text-transform:uppercase; letter-spacing:.12em; font-weight:700; margin:0 0 8px; }
 #ui-intro p{ margin:0; color:var(--ui-mut); font-size:var(--fz-val); line-height:1.55; }
+#ui-intro p + p{ margin-top:8px; }
 #ui-intro strong{ color:var(--ui-text); font-weight:600; }
 
 /* subtle grouped blocks in the controls rail */
@@ -220,20 +211,18 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 
 /* per-group colour accents — a hue stripe + tinted heading per block.
    nth-of-type works because the .uigroup divs are the only div children of
-   #ui-controls. Order: Output·Playback·Export·View·Origin·Vignette. */
+   #ui-controls (#ui-intro is a <section>). Order: Output·Playback·View·Origin·Vignette. */
 #ui-controls .uigroup{ border-left-width:3px; }
-#ui-controls .uigroup:nth-of-type(1){ border-left-color:var(--hue-blue); }   /* Output */
+#ui-controls .uigroup:nth-of-type(1){ border-left-color:var(--hue-blue); }   /* Output (+export) */
 #ui-controls .uigroup:nth-of-type(2){ border-left-color:var(--hue-green); }  /* Playback */
-#ui-controls .uigroup:nth-of-type(3){ border-left-color:var(--hue-amber); }  /* Export */
-#ui-controls .uigroup:nth-of-type(4){ border-left-color:var(--hue-cyan); }   /* View */
-#ui-controls .uigroup:nth-of-type(5){ border-left-color:var(--hue-purple); } /* Origin */
-#ui-controls .uigroup:nth-of-type(6){ border-left-color:var(--hue-pink); }   /* Vignette */
+#ui-controls .uigroup:nth-of-type(3){ border-left-color:var(--hue-cyan); }   /* View */
+#ui-controls .uigroup:nth-of-type(4){ border-left-color:var(--hue-purple); } /* Origin */
+#ui-controls .uigroup:nth-of-type(5){ border-left-color:var(--hue-pink); }   /* Vignette */
 #ui-controls .uigroup:nth-of-type(1) h5{ color:var(--hue-blue); }
 #ui-controls .uigroup:nth-of-type(2) h5{ color:var(--hue-green); }
-#ui-controls .uigroup:nth-of-type(3) h5{ color:var(--hue-amber); }
-#ui-controls .uigroup:nth-of-type(4) h5{ color:var(--hue-cyan); }
-#ui-controls .uigroup:nth-of-type(5) h5{ color:var(--hue-purple); }
-#ui-controls .uigroup:nth-of-type(6) h5{ color:var(--hue-pink); }
+#ui-controls .uigroup:nth-of-type(3) h5{ color:var(--hue-cyan); }
+#ui-controls .uigroup:nth-of-type(4) h5{ color:var(--hue-purple); }
+#ui-controls .uigroup:nth-of-type(5) h5{ color:var(--hue-pink); }
 /* mode-grid group-header colours are set inline by ui.js (GROUP_COLORS), so a
    mode keeps its hue even as a duplicate chip in the Recent group. */
 #ui-modes .recent-chips{ display:block; }

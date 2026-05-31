@@ -199,9 +199,6 @@
     // ── bottom bar ──
     const bar=document.createElement('div'); bar.id='ui-controls';
     bar.innerHTML=`
-      <section id="ui-intro">
-        <p><strong>Matte</strong> builds black-and-white transition mattes for video. Pick a <strong>mode</strong> on the right and tune its <strong>settings</strong>. <strong>Origin</strong> sets where the effect starts; drop <strong>source images</strong> to preview it in colour. <strong>Play</strong> or <strong>scrub</strong> to preview, then <strong>Record</strong> to export. Click any heading to fold its panel.</p>
-      </section>
       <div class="uigroup">
         <h5>Output</h5>
         <div class="grp"><select id="ui-size" aria-label="output resolution preset"></select></div>
@@ -210,17 +207,15 @@
         <label class="barchk wide" title="lock the width:height ratio while typing"><input type="checkbox" id="ui-lockar">Lock aspect ratio</label>
         <div class="grp"><label for="ui-dur">dur</label><input type="number" id="ui-dur" min="1" max="60" step="1" aria-label="duration in seconds"><span class="unit">s</span></div>
         <div class="grp"><label for="ui-fps">fps</label><select id="ui-fps" aria-label="output frame rate"></select></div>
+        <div class="sep"></div>
+        <div class="grp" id="proj-grp"><label for="ui-proj">project</label><input type="text" id="ui-proj" placeholder="none" maxlength="24" aria-label="project name (filename prefix)" title="prefixed to export filenames, e.g. DML → DML_…"></div>
+        <div class="grp"><span id="recwrap"><button class="btn rec" id="ui-rec">● Record</button><span id="recbar"></span></span></div>
+        <div class="grp"><button class="btn" id="ui-folder" title="choose a folder to save recordings into">Folder: default</button></div>
       </div>
       <div class="uigroup">
         <h5>Playback</h5>
         <div class="grp transport"><button class="btn ico" id="ui-play" title="play / pause">▶</button><button class="btn ico" id="ui-restart" title="restart from 0">⟳</button><button class="btn ico" id="ui-loop" title="loop playback">↻</button></div>
         <div class="grp" id="scrub-grp"><input type="range" id="ui-scrub" min="0" max="1" step="0.001" value="0" aria-label="scrub transition progress" title="scrub the transition (progress)"><span class="val" id="ui-scrub-val">0.00</span></div>
-      </div>
-      <div class="uigroup">
-        <h5>Export</h5>
-        <div class="grp" id="proj-grp"><label for="ui-proj">project</label><input type="text" id="ui-proj" placeholder="none" maxlength="24" aria-label="project name (filename prefix)" title="prefixed to export filenames, e.g. DML → DML_…"></div>
-        <div class="grp"><span id="recwrap"><button class="btn rec" id="ui-rec">● Record</button><span id="recbar"></span></span></div>
-        <div class="grp"><button class="btn" id="ui-folder" title="choose a folder to save recordings into">Folder: default</button></div>
       </div>
       <div class="uigroup">
         <h5>View</h5>
@@ -230,7 +225,16 @@
         <button class="btn" id="ui-opensrc" title="open the source-image library in a side panel">⊞ Source images</button>
       </div>
       <div class="uigroup" id="ui-origin"><h5>Origin</h5><div id="origin-body"></div></div>
-      <div class="uigroup" id="ui-vignette"><h5>Vignette</h5><div id="vign-body"></div></div>`;
+      <div class="uigroup" id="ui-vignette"><h5>Vignette</h5><div id="vign-body"></div></div>
+      <section id="ui-intro">
+        <div class="intro-label">About</div>
+        <p><strong>Matte</strong> builds black-and-white transition mattes for video — designed to drive luma / track mattes in After Effects. It boots image-free: you're always looking at a matte you can record straight away.</p>
+        <p><strong>Modes</strong> (gallery, far right) are the look of the transition — watercolor blooms, paper grain, wet edges, light & burn, plus ambient loops. Open a group to browse; each mode's parameters appear in the <strong>settings</strong> panel beside the gallery. <strong>↺ reset</strong> / <strong>🎲 randomize</strong> are pinned at its top.</p>
+        <p><strong>Origin</strong> sets where the reveal begins: grow from the centre (or image A's bright area), place up to 8 <strong>points</strong> on the canvas, or <strong>paint</strong> a start region. <strong>Vignette</strong> darkens the edges. Both are global — they apply to every mode.</p>
+        <p><strong>Source images:</strong> open the <strong>⊞</strong> panel (View) and drag images onto A / B (and an optional video into T). Toggle <strong>Use source images</strong> to preview the matte applied to a real A→B dissolve in colour; leave it off for the pure B/W matte that gets recorded.</p>
+        <p><strong>Output:</strong> choose a resolution (or type W×H), duration, fps and an optional <strong>project</strong> name (prefixed to filenames). <strong>▶ play</strong> / scrub to preview, then <strong>● Record</strong> — each export is auto-numbered and saved to your chosen folder, or downloaded. The encoder is probed first so you always get the largest size that actually works on your machine.</p>
+        <p><strong>Ambient</strong> modes can run as a black→white <strong>reveal</strong> or a standalone <strong>loop</strong> (their settings panel). Recently exported modes collect under <strong>Recent</strong> at the top of the gallery. Click any heading to fold a panel; <strong>H</strong> or <strong>Tab</strong> hides the whole UI.</p>
+      </section>`;
     document.body.appendChild(bar);
     // Origin + Vignette are global (shared across modes) and live in the left
     // controls rail (foldable like the other groups).
@@ -503,7 +507,6 @@
       vb.appendChild(vr); vignBody.appendChild(vb);
     }
 
-    let _activeTab=0;
     function buildParams(m){
       paramsEl.innerHTML='';
       {
@@ -514,20 +517,8 @@
         rnd.onclick=()=>{ E.randomizeMode(m); buildParams(m); };
         fb.appendChild(rs); fb.appendChild(rnd); paramsEl.appendChild(fb);
       }
-      // ── settings in 2 tabs (Origin moved to the global controls rail, so the
-      // old middle tab is gone). reset/randomize stay pinned above. ──
-      const tabBar=document.createElement('div'); tabBar.className='tabbar';
-      const tMode=document.createElement('div'); tMode.className='tabpane';
-      const tFinish=document.createElement('div'); tFinish.className='tabpane';
-      const _panes=[tMode,tFinish];
-      if(_activeTab>=_panes.length) _activeTab=0;
-      [['Mode',0],['Finish',1]].forEach(([label,ix])=>{
-        const tb=document.createElement('button'); tb.className='tab'+(ix===_activeTab?' on':''); tb.textContent=label;
-        tb.onclick=()=>{ _activeTab=ix; tabBar.querySelectorAll('.tab').forEach((b,bi)=>b.classList.toggle('on',bi===ix)); _panes.forEach((p,pi)=>p.classList.toggle('show',pi===ix)); };
-        tabBar.appendChild(tb);
-      });
-      _panes.forEach((p,pi)=>p.classList.toggle('show',pi===_activeTab));
-      paramsEl.appendChild(tabBar); paramsEl.appendChild(tMode); paramsEl.appendChild(tFinish);
+      // Single scrolling panel (no tabs): Origin + Vignette live in the controls
+      // rail, so all that's left here is the mode's own params + Advanced.
       const _amb = (m>=33 && m<=47 && m!==37);
       if(_amb){
         const rs=section('Ambient mode',[],false);
@@ -543,14 +534,14 @@
           ? 'Black\u2192white transition using this pattern (dissolves A\u2192B if images are loaded).'
           : 'Standalone looping field \u2014 not a black\u2192white transition.';
         rs.appendChild(h);
-        tMode.appendChild(rs);
+        paramsEl.appendChild(rs);
       }
-      if(MK[m]) tMode.appendChild(section('this mode',MK[m],false));
-      tMode.appendChild(section('Reveal',['spread'],!REL.reveal(m)));
-      tMode.appendChild(section('Movement',['turbulence','flow','undulate','animate'],!REL.movement(m)));
+      if(MK[m]) paramsEl.appendChild(section('this mode',MK[m],false));
+      paramsEl.appendChild(section('Reveal',['spread'],!REL.reveal(m)));
+      paramsEl.appendChild(section('Movement',['turbulence','flow','undulate','animate'],!REL.movement(m)));
       { const dk = DIRK[m] || (REL.dir(m) ? ['driftAngle','driftAmount','sunX','sunY','streakMove'] : []);
-        if (dk.length) tMode.appendChild(section('Direction / source', dk, false)); }
-      tFinish.appendChild(section('Advanced',['originX','originY','maskScale','curve','seed','maskShift','organic','edges'],!REL.advanced(m)));
+        if (dk.length) paramsEl.appendChild(section('Direction / source', dk, false)); }
+      paramsEl.appendChild(section('Advanced',['originX','originY','maskScale','curve','seed','maskShift','organic','edges'],!REL.advanced(m)));
     }
     function selectMode(id){
       left.querySelectorAll('.chip').forEach(c=>c.classList.toggle('sel',+c.dataset.mode===id));
