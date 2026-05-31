@@ -200,7 +200,7 @@
     const bar=document.createElement('div'); bar.id='ui-controls';
     bar.innerHTML=`
       <section id="ui-intro">
-        <p><strong>Matte</strong> builds black-and-white transition mattes for video. Pick a <strong>mode</strong> on the right and tune its <strong>settings</strong> here. <strong>Origin</strong> sets where the effect starts; drop <strong>source images</strong> to preview it in colour. <strong>Play</strong> or <strong>scrub</strong> to preview, then <strong>Record</strong> to export. Click any heading to fold its panel.</p>
+        <p><strong>Matte</strong> builds black-and-white transition mattes for video. Pick a <strong>mode</strong> on the right and tune its <strong>settings</strong>. <strong>Origin</strong> sets where the effect starts; drop <strong>source images</strong> to preview it in colour. <strong>Play</strong> or <strong>scrub</strong> to preview, then <strong>Record</strong> to export. Click any heading to fold its panel.</p>
       </section>
       <div class="uigroup">
         <h5>Output</h5>
@@ -216,8 +216,6 @@
         <div class="grp transport"><button class="btn ico" id="ui-play" title="play / pause">▶</button><button class="btn ico" id="ui-restart" title="restart from 0">⟳</button><button class="btn ico" id="ui-loop" title="loop playback">↻</button></div>
         <div class="grp" id="scrub-grp"><input type="range" id="ui-scrub" min="0" max="1" step="0.001" value="0" aria-label="scrub transition progress" title="scrub the transition (progress)"><span class="val" id="ui-scrub-val">0.00</span></div>
       </div>
-      <div class="uigroup" id="ui-origin"><h5>Origin</h5><div id="origin-body"></div></div>
-      <div class="uigroup" id="ui-vignette"><h5>Vignette</h5><div id="vign-body"></div></div>
       <div class="uigroup">
         <h5>Export</h5>
         <div class="grp" id="proj-grp"><label for="ui-proj">project</label><input type="text" id="ui-proj" placeholder="none" maxlength="24" aria-label="project name (filename prefix)" title="prefixed to export filenames, e.g. DML → DML_…"></div>
@@ -230,7 +228,9 @@
         <label class="barchk wide" title="invert the matte (white↔black)"><input type="checkbox" id="ui-inv">Invert matte</label>
         <button class="btn usesrc-btn" id="ui-usesrc" title="use the A/B images for the transition (off = pure matte)">Use source images</button>
         <button class="btn" id="ui-opensrc" title="open the source-image library in a side panel">⊞ Source images</button>
-      </div>`;
+      </div>
+      <div class="uigroup" id="ui-origin"><h5>Origin</h5><div id="origin-body"></div></div>
+      <div class="uigroup" id="ui-vignette"><h5>Vignette</h5><div id="vign-body"></div></div>`;
     document.body.appendChild(bar);
     // Origin + Vignette are global (shared across modes) and live in the left
     // controls rail (foldable like the other groups).

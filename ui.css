@@ -218,20 +218,20 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 
 /* per-group colour accents — a hue stripe + tinted heading per block.
    nth-of-type works because the .uigroup divs are the only div children of
-   #ui-controls. Order: Output·Playback·Origin·Vignette·Export·View. */
+   #ui-controls. Order: Output·Playback·Export·View·Origin·Vignette. */
 #ui-controls .uigroup{ border-left-width:3px; }
 #ui-controls .uigroup:nth-of-type(1){ border-left-color:var(--hue-blue); }   /* Output */
 #ui-controls .uigroup:nth-of-type(2){ border-left-color:var(--hue-green); }  /* Playback */
-#ui-controls .uigroup:nth-of-type(3){ border-left-color:var(--hue-purple); } /* Origin */
-#ui-controls .uigroup:nth-of-type(4){ border-left-color:var(--hue-pink); }   /* Vignette */
-#ui-controls .uigroup:nth-of-type(5){ border-left-color:var(--hue-amber); }  /* Export */
-#ui-controls .uigroup:nth-of-type(6){ border-left-color:var(--hue-cyan); }   /* View */
+#ui-controls .uigroup:nth-of-type(3){ border-left-color:var(--hue-amber); }  /* Export */
+#ui-controls .uigroup:nth-of-type(4){ border-left-color:var(--hue-cyan); }   /* View */
+#ui-controls .uigroup:nth-of-type(5){ border-left-color:var(--hue-purple); } /* Origin */
+#ui-controls .uigroup:nth-of-type(6){ border-left-color:var(--hue-pink); }   /* Vignette */
 #ui-controls .uigroup:nth-of-type(1) h5{ color:var(--hue-blue); }
 #ui-controls .uigroup:nth-of-type(2) h5{ color:var(--hue-green); }
-#ui-controls .uigroup:nth-of-type(3) h5{ color:var(--hue-purple); }
-#ui-controls .uigroup:nth-of-type(4) h5{ color:var(--hue-pink); }
-#ui-controls .uigroup:nth-of-type(5) h5{ color:var(--hue-amber); }
-#ui-controls .uigroup:nth-of-type(6) h5{ color:var(--hue-cyan); }
+#ui-controls .uigroup:nth-of-type(3) h5{ color:var(--hue-amber); }
+#ui-controls .uigroup:nth-of-type(4) h5{ color:var(--hue-cyan); }
+#ui-controls .uigroup:nth-of-type(5) h5{ color:var(--hue-purple); }
+#ui-controls .uigroup:nth-of-type(6) h5{ color:var(--hue-pink); }
 /* mode-grid group-header colours are set inline by ui.js (GROUP_COLORS), so a
    mode keeps its hue even as a duplicate chip in the Recent group. */
 #ui-modes .recent-chips{ display:block; }
