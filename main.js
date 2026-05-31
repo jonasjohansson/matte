@@ -1651,7 +1651,7 @@ fForm.addBinding(state, 'formStrokeSize',   { min: 0.01, max: 0.2, step: 0.005, 
 fForm.addBinding(state, 'formStrokeWobble', { min: 0,    max: 1,   step: 0.01, label: 'edge wobble' });
 addModeFooter(fForm, 23);
 
-const fBloom = fWater.addFolder({ title: 'Cauliflower bloom storm', expanded: true });
+const fBloom = fWater.addFolder({ title: 'Cauliflower bloom', expanded: true });
 fBloom.addBinding(state, 'bloomLightBias',  { min: 0, max: 1, step: 0.01, label: 'light bias (B)' });
 fBloom.addBinding(state, 'bloomWobble',     { min: 0, max: 1, step: 0.01, label: 'bloom wobble' });
 fBloom.addBinding(state, 'bloomPaperShow',  { min: 0, max: 1, step: 0.01, label: 'paper-show pop' });
@@ -1875,7 +1875,7 @@ const MODE_NAMES_V2 = {
   10: 'advec', 15: 'wet-edge',
   16: 'stroke', 17: 'glaze', 18: 'edge-first', 19: 'flow', 20: 'dabs', 21: 'density',
   22: 'mold', 27: 'burn',
-  23: 'wc-form', 24: 'bloom-storm', 25: 'wet-stage', 26: 'pig-migration',
+  23: 'wc-form', 24: 'cauliflower-bloom', 25: 'wet-stage', 26: 'pig-migration',
 };
 const SED_SOURCE_NAMES = ['luma','sat','hue','detail','temp'];
 const SALT_SOURCE_NAMES = ['random','light','dark','col','edge'];

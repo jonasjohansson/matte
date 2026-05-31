@@ -82,7 +82,7 @@
   // modes grouped for the grid
   const MODES = [
     ['Reveal',[[0,'smooth'],[1,'pigment rim'],[7,'iris'],[15,'wet edge']]],
-    ['Watercolor',[[2,'paper grain'],[3,'backrun blooms'],[4,'wet diffusion'],[5,'tonal sediment'],[6,'salt'],[8,'wet bleed'],[9,'pigment run'],[17,'tonal wash'],[24,'cauliflower'],[25,'wet-stage'],[26,'migration']]],
+    ['Watercolor',[[2,'paper grain'],[3,'backrun blooms'],[4,'wet diffusion'],[5,'tonal sediment'],[6,'salt'],[8,'wet bleed'],[9,'pigment run'],[17,'tonal wash'],[24,'cauliflower bloom'],[25,'wet-stage'],[26,'migration']]],
     ['Painterly',[[16,'stroke-follow'],[22,'mold tendrils']]],
     ['Light & burn',[[27,'paper scorch'],[30,'light bloom']]],
     ['Ambient (loop)',[[33,'bokeh'],[34,'water ripples'],[35,'sun glare'],[36,'light streaks'],[38,'aurora'],[39,'godrays'],[40,'clouds'],[41,'caustics'],[42,'embers'],[43,'mist'],[44,'rain'],[45,'snow'],[46,'marble'],[47,'ink blooms']]],
