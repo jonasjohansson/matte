@@ -195,7 +195,6 @@
     const bar=document.createElement('div'); bar.id='ui-controls';
     bar.innerHTML=`
       <section id="ui-intro">
-        <h5>How it works</h5>
         <p><strong>Matte</strong> builds black-and-white transition mattes for video. Pick a <strong>mode</strong> on the right and tune its <strong>settings</strong> here. <strong>Origin</strong> sets where the effect starts; drop <strong>source images</strong> to preview it in colour. <strong>Play</strong> or <strong>scrub</strong> to preview, then <strong>Record</strong> to export. Click any heading to fold its panel.</p>
       </section>
       <div class="uigroup">
@@ -289,7 +288,6 @@
       if(folded.has(key)) group.classList.add('folded');
       head.addEventListener('click',()=>{ const f=group.classList.toggle('folded'); if(f)folded.add(key); else folded.delete(key); saveFold(); });
     }
-    { const intro=bar.querySelector('#ui-intro'), h=intro&&intro.querySelector('h5'); if(h) makeFoldable(intro,h,'ui:intro'); }
     bar.querySelectorAll('.uigroup').forEach(g=>{ const h=g.querySelector('h5'); if(h) makeFoldable(g,h,'ctrl:'+h.textContent.trim()); });
     globals.querySelectorAll('.uigroup').forEach(g=>{ const h=g.querySelector('h5'); if(h) makeFoldable(g,h,'glob:'+h.textContent.trim()); });
     left.querySelectorAll('.mgroup').forEach(g=>{ const h=g.querySelector('h4'); if(h) makeFoldable(g,h,'mode:'+h.textContent.trim()); });

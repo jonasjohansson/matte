@@ -106,7 +106,7 @@
 #ui-globals .uigroup h5{ margin:0; color:var(--ui-faint); font-size:var(--fz-label);
   text-transform:uppercase; letter-spacing:.12em; font-weight:700; }
 #ui-globals .fold-body{ display:flex; flex-direction:column; gap:7px; }
-#ui-globals .row{ gap:6px; margin-bottom:4px; }
+#ui-globals .row{ gap:6px; margin-bottom:9px; }
 #ui-globals .row input[type=range]{ width:70px; }
 
 /* ── tint every control in the settings panel with the current mode colour ── */
@@ -183,12 +183,9 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 #ui-controls .barchk{ margin-left:0; }
 
 
-/* intro / how-it-works (top of controls rail; <section> so it doesn't shift
-   the .uigroup nth-of-type accents) */
-#ui-intro{ background:rgba(255,255,255,.025); border:1px solid var(--ui-line);
-  border-left:3px solid var(--ui-line-2); border-radius:var(--r); padding:10px; }
-#ui-intro h5{ margin:0; color:var(--ui-faint); font-size:var(--fz-label);
-  text-transform:uppercase; letter-spacing:.12em; font-weight:700; }
+/* intro / how-it-works (top of controls rail; plain always-visible note —
+   <section> so it doesn't shift the .uigroup nth-of-type accents) */
+#ui-intro{ padding:2px 2px 0; }
 #ui-intro p{ margin:0; color:var(--ui-mut); font-size:var(--fz-val); line-height:1.55; }
 #ui-intro strong{ color:var(--ui-text); font-weight:600; }
 
