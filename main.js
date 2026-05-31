@@ -2157,9 +2157,14 @@ async function startRecording(opts = {}) {
 
     // Build filename with duration, fps, actual output dimensions, and pad.
     let base = opts.filename || makeFilenameV2();
-    // optional project prefix, e.g. project "DML" → "DML_<name>" (sanitised)
+    // Prepend "[project_]NNNN_" — an always-incrementing export index (persisted)
+    // so every file is uniquely named and sorts in the order it was made.
     const proj = (state.projectName || '').trim().replace(/[^A-Za-z0-9-]/g, '');
-    if (proj && !base.startsWith(proj + '_')) base = `${proj}_${base}`;
+    let seq = 1;
+    try { seq = (parseInt(localStorage.getItem('matte.exportSeq') || '0', 10) || 0) + 1; localStorage.setItem('matte.exportSeq', String(seq)); }
+    catch (e) { seq = 1; }
+    const head = (proj ? proj + '_' : '') + String(seq).padStart(4, '0');
+    if (!base.startsWith(head + '_')) base = `${head}_${base}`;
     if (!/\.mp4$/i.test(base)) {
       const tail = [`${Math.round(state.duration)}s`, `${fps}fps`, `${offW}x${totalH}`];
       if (state.exportPadBottom > 0) tail.push(`pad=${fx(state.exportPadBottom)}`);
