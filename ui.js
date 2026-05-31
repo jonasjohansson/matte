@@ -168,20 +168,27 @@
     // ── bottom bar ──
     const bar=document.createElement('div'); bar.id='ui-controls';
     bar.innerHTML=`
-      <div class="grp"><label>output</label><select id="ui-size"></select><label class="barchk" title="lock output to the source image aspect ratio (keeps the chosen resolution)"><input type="checkbox" id="ui-matchin">match source</label></div>
-      <div class="grp" id="ui-wh"><label>size</label><input type="number" id="ui-w" min="2" title="output width (px)"><span style="color:var(--ui-mut)">×</span><input type="number" id="ui-h" min="2" title="output height (px)"><label class="barchk" title="lock the width:height ratio while typing"><input type="checkbox" id="ui-lockar">lock</label></div>
-      <div class="sep"></div>
-      <div class="grp"><label>dur</label><input type="number" id="ui-dur" min="1" max="60" step="1" style="width:52px"><span style="color:var(--ui-mut)">s</span></div>
-      <div class="sep"></div>
-      <div class="grp"><button class="btn" id="ui-play">▶ Play</button><button class="btn" id="ui-restart" title="restart from 0">⟳ Restart</button><button class="btn" id="ui-loop">Loop</button></div>
-      <div class="grp" id="scrub-grp"><input type="range" id="ui-scrub" min="0" max="1" step="0.001" value="0" title="scrub the transition (progress)"><span class="val" id="ui-scrub-val">0.00</span></div>
-      <div class="sep"></div>
-      <div class="grp"><span id="recwrap"><button class="btn rec" id="ui-rec">● Record</button><span id="recbar"></span></span></div>
-      <div class="sep"></div>
-      <div class="grp"><button class="btn" id="ui-presets">Presets</button><button class="btn" id="ui-folder">Folder</button></div>
-      <div class="sep"></div>
-      <div class="grp"><label>invert</label><input type="checkbox" id="ui-inv"></div>
-      <div class="grp"><button class="btn" id="ui-preview" title="show B/W matte or the colour result on A/B">Preview: Matte</button></div>`;
+      <div class="uigroup">
+        <h5>Output</h5>
+        <div class="grp"><select id="ui-size"></select></div>
+        <label class="barchk wide" title="lock output to the source image aspect ratio (keeps the chosen resolution)"><input type="checkbox" id="ui-matchin">Match source aspect</label>
+        <div class="grp" id="ui-wh"><label>size</label><input type="number" id="ui-w" min="2" title="output width (px)"><span style="color:var(--ui-mut)">×</span><input type="number" id="ui-h" min="2" title="output height (px)"></div>
+        <label class="barchk wide" title="lock the width:height ratio while typing"><input type="checkbox" id="ui-lockar">Lock aspect ratio</label>
+        <div class="grp"><label>dur</label><input type="number" id="ui-dur" min="1" max="60" step="1"><span style="color:var(--ui-mut)">s</span></div>
+      </div>
+      <div class="uigroup">
+        <h5>Playback</h5>
+        <div class="grp"><button class="btn" id="ui-play">▶ Play</button><button class="btn" id="ui-restart" title="restart from 0">⟳ Restart</button><button class="btn" id="ui-loop">Loop</button></div>
+        <div class="grp" id="scrub-grp"><input type="range" id="ui-scrub" min="0" max="1" step="0.001" value="0" title="scrub the transition (progress)"><span class="val" id="ui-scrub-val">0.00</span></div>
+        <div class="grp"><button class="btn" id="ui-preview" title="show B/W matte or the colour result on A/B">Preview: Matte</button></div>
+        <label class="barchk wide" title="invert the matte (white↔black)"><input type="checkbox" id="ui-inv">Invert matte</label>
+      </div>
+      <div class="uigroup">
+        <h5>Export</h5>
+        <div class="grp"><span id="recwrap"><button class="btn rec" id="ui-rec">● Record</button><span id="recbar"></span></span></div>
+        <div class="grp"><button class="btn" id="ui-folder" title="choose a folder to save recordings into">Folder: default</button></div>
+        <div class="grp"><button class="btn" id="ui-presets">Presets</button></div>
+      </div>`;
     document.body.appendChild(bar);
 
     // Fixed three-rail layout (controls · canvas · settings · modes); widths come
@@ -198,7 +205,7 @@
       pop.style.left=Math.max(8, Math.min(window.innerWidth-pop.offsetWidth-8, r.left))+'px';
       pop.style.bottom=(window.innerHeight-r.top+8)+'px';
     }
-    document.addEventListener('click',(e)=>{ if(popOpen && !pop.contains(e.target) && !e.target.closest('#ui-sources,#ui-presets,#ui-folder')) closePop(); });
+    document.addEventListener('click',(e)=>{ if(popOpen && !pop.contains(e.target) && !e.target.closest('#ui-sources,#ui-presets')) closePop(); });
 
     // SOURCES: relocate the live #side DOM (slot bar + library) into a dedicated
     // host once at init — keeps all of main.js's existing listeners intact.
@@ -230,18 +237,13 @@
     });
 
     // OUTPUT FOLDER
-    function refreshFolderBtn(){ const b=bar.querySelector('#ui-folder'); b.textContent='folder: '+(E.folderName||'default'); }
-    bar.querySelector('#ui-folder').onclick=()=>openPop('folder', bar.querySelector('#ui-folder'), (host)=>{
-      host.innerHTML='<div class="pop-title">OUTPUT FOLDER</div>';
-      const cur=document.createElement('div'); cur.className='pop-row'; cur.style.color='var(--ui-mut)'; cur.textContent=E.folderName||'browser default'; host.appendChild(cur);
-      if(!E.hasFolderAPI){ const w=document.createElement('div'); w.className='pop-row'; w.textContent='not supported in this browser'; host.appendChild(w); return; }
-      const row=document.createElement('div'); row.className='pop-row';
-      const pick=document.createElement('button'); pick.className='btn sm'; pick.textContent='📁 pick folder';
-      pick.onclick=async()=>{ const n=await E.pickFolder(); if(n){ cur.textContent=n; refreshFolderBtn(); } };
-      const usd=document.createElement('button'); usd.className='btn sm'; usd.textContent='use default';
-      usd.onclick=async()=>{ await E.clearFolder(); cur.textContent='browser default'; refreshFolderBtn(); };
-      row.appendChild(pick); row.appendChild(usd); host.appendChild(row);
-    });
+    function refreshFolderBtn(){ const b=bar.querySelector('#ui-folder'); const n=E.folderName; b.textContent='Folder: '+(n&&n!=='browser default'?n:'default'); b.classList.toggle('on', !!(n&&n!=='browser default')); }
+    bar.querySelector('#ui-folder').onclick=async()=>{
+      if(!E.hasFolderAPI){ alert('Folder picking is not supported in this browser; recordings download instead.'); return; }
+      const n=await E.pickFolder();
+      if(n){ refreshFolderBtn(); }
+      else if(E.folderName && E.folderName!=='browser default'){ await E.clearFolder(); refreshFolderBtn(); }  // cancel on an already-set folder = clear to default
+    };
     refreshFolderBtn();
     // full canvas via Tab (no button — it was a trap with no visible way back).
     // 1/2/3 toggle individual panels; Tab toggles all; edge handles also work.

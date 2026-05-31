@@ -155,6 +155,17 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 #ui-controls #recwrap{ flex:1 1 100%; }
 #ui-controls .barchk{ margin-left:0; }
 
+
+/* subtle grouped blocks in the controls rail */
+#ui-controls .uigroup{ background:rgba(255,255,255,.025); border:1px solid var(--ui-line);
+  border-radius:var(--r); padding:10px; display:flex; flex-direction:column; gap:7px; }
+#ui-controls .uigroup h5{ margin:0 0 1px; color:var(--ui-faint); font-size:var(--fz-label);
+  text-transform:uppercase; letter-spacing:.12em; font-weight:700; }
+#ui-controls .uigroup .grp{ width:100%; }
+#ui-controls #ui-size{ flex:1; }
+#ui-controls #ui-dur{ flex:1; min-width:0; }
+.barchk.wide{ width:100%; gap:7px; text-transform:none; letter-spacing:.02em; font-size:var(--fz-body); color:var(--ui-text); }
+
 /* progress scrubber */
 #ui-scrub{ width:140px; accent-color:var(--ui-accent); height:3px; }
 #scrub-grp .val{ width:40px; color:var(--ui-mut); font-size:var(--fz-val); }
