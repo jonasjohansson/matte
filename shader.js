@@ -1279,7 +1279,12 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
       duv.x = duv.x * p.canvasAspect;
       d = length(duv) / (0.5 * diag);
     }
-    mask = mix(mask, clamp(d, 0.0, 1.0), p.originAmount);
+    // Front-load the radial reveal a touch: a centred front advances linearly
+    // but area grows with radius², so a pure distance field (exp 1) flips most
+    // of the frame in the back half (feels like "nothing, then sudden"). Raising
+    // d to >1 lowers the mid/outer reveal thresholds so coverage arrives more
+    // evenly (exp 2 = exactly area-linear; 1.5 is a gentle middle).
+    mask = mix(mask, pow(clamp(d, 0.0, 1.0), 1.5), p.originAmount);
   }
   // Turbulence: domain-warped multi-octave noise fractures the reveal front into
   // organic, ink-in-water tendrils instead of a smooth glossy edge. Higher =
