@@ -19,7 +19,7 @@
   /* metrics */
   --r:6px; --r-sm:4px; --sp:8px; --sp-lg:14px; --ctl-h:30px;
   /* panel widths (read by ui.js applyPanels) */
-  --left:264px; --modes:150px; --right:264px; --bottom:0px;
+  --left:264px; --modes:150px; --right:264px; --bottom:0px; --src:240px;
 }
 
 /* hide scrollbars (still scrollable) */
@@ -168,6 +168,18 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 #ui-controls #ui-dur{ flex:1; min-width:0; }
 .barchk.wide{ width:100%; gap:7px; text-transform:none; letter-spacing:.02em; font-size:var(--fz-body); color:var(--ui-text); }
 
+/* foldable groups (controls-rail h5 + mode-column h4). The body keeps the
+   parent's column spacing so collapsing doesn't reflow the controls. */
+.fold-head{ cursor:pointer; user-select:none; }
+.fold-head::before{ content:'\25BE'; display:inline-block; width:1em; margin-right:1px;
+  font-size:9px; opacity:.6; transition:transform .15s; vertical-align:middle; }
+.folded > .fold-head::before{ transform:rotate(-90deg); }
+.folded > .fold-body{ display:none !important; }
+#ui-controls .fold-body{ display:flex; flex-direction:column; gap:7px; }
+
+/* button bars that should fill the rail width (reset/randomize, role, vignette) */
+.ptsbar.split{ flex-wrap:nowrap; }
+.ptsbar.split > .btn{ flex:1 1 0; min-width:0; }
 
 /* compact icon buttons (transport) */
 #ui-controls .transport{ gap:6px; }
@@ -175,8 +187,8 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 .btn.ico{ min-height:var(--ctl-h); }
 
 /* per-group colour accents — a hue stripe + tinted heading per block.
-   nth-of-type works because the .uigroup divs are the leading div children
-   of #ui-controls (src-host follows). Order: Output·Playback·View·Origin·Export. */
+   nth-of-type works because the .uigroup divs are the only div children of
+   #ui-controls. Order: Output·Playback·View·Origin·Export. */
 #ui-controls .uigroup{ border-left-width:3px; }
 #ui-controls .uigroup:nth-of-type(1){ border-left-color:#4a90d9; }   /* Output   — blue */
 #ui-controls .uigroup:nth-of-type(2){ border-left-color:#46c08a; }   /* Playback — green */
@@ -198,7 +210,7 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 
 
 /* global show/hide of all rails (H or Tab); handle stays visible */
-body.ui-hidden #ui-controls, body.ui-hidden #ui-right, body.ui-hidden #ui-modes{ display:none; }
+body.ui-hidden #ui-controls, body.ui-hidden #ui-right, body.ui-hidden #ui-modes, body.ui-hidden #ui-sources{ display:none; }
 body.ui-hidden #stage{ inset:0 !important; }
 #ui-hide{ position:fixed; top:10px; right:10px; z-index:500; width:30px; height:30px;
   display:flex; align-items:center; justify-content:center; cursor:pointer;
@@ -244,13 +256,20 @@ body.ui-hidden #stage{ inset:0 !important; }
 select.mini{ background:var(--ui-bg2); color:var(--ui-text); border:1px solid var(--ui-line);
   font-size:var(--fz-val); padding:3px 5px; border-radius:var(--r-sm); min-height:0; font-family:inherit; }
 
-/* ── sources block (inline in the controls rail) ── */
-#src-host{ display:block; overflow-y:auto; background:var(--ui-bg);
-  font:var(--fz-body)/1.35 var(--ui-font); color:var(--ui-text); }
-#src-host .pop-title{ margin:0 0 var(--sp); color:var(--ui-mut); font-size:var(--fz-label);
+/* ── sources side panel (slides out just right of the controls rail) ── */
+#ui-sources{ position:fixed; top:0; bottom:0; left:var(--left); width:var(--src); z-index:308;
+  overflow-y:auto; padding:var(--sp-lg) 12px; background:var(--ui-glass);
+  backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+  border-right:1px solid var(--ui-line); color:var(--ui-text);
+  font:var(--fz-body)/1.35 var(--ui-font);
+  transform:translateX(-100%); transition:transform .2s ease; }
+body.sources-open #ui-sources{ transform:translateX(0); }
+#src-host{ display:block; }
+#src-host .src-head{ display:flex; align-items:center; justify-content:space-between; margin:0 0 var(--sp); }
+#src-host .pop-title{ margin:0; color:var(--ui-mut); font-size:var(--fz-label);
   text-transform:uppercase; letter-spacing:.1em; font-weight:700; }
+#src-host .src-close{ min-height:24px; padding:0 9px; }
 #src-host #slot-bar,#src-host #library-section{ position:static; width:auto; }
-#src-host .usesrc-btn{ width:100%; margin:var(--sp) 0; }
 
 /* presets / folder popovers */
 #ui-pop{ position:fixed; z-index:420; display:none; min-width:220px; max-width:420px;

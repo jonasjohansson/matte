@@ -186,6 +186,7 @@
         <div class="grp"><button class="btn" id="ui-preview" title="show B/W matte or the colour result on A/B">Preview: Matte</button></div>
         <label class="barchk wide" title="invert the matte (white↔black)"><input type="checkbox" id="ui-inv">Invert matte</label>
         <button class="btn usesrc-btn" id="ui-usesrc" title="use the A/B images for the transition (off = pure matte)">Use source images</button>
+        <button class="btn" id="ui-opensrc" title="open the source-image library in a side panel">⊞ Source images</button>
       </div>
       <div class="uigroup" id="ui-origin">
         <h5>Origin</h5>
@@ -216,16 +217,38 @@
     }
     document.addEventListener('click',(e)=>{ if(popOpen && !pop.contains(e.target) && !e.target.closest('#ui-sources,#ui-presets')) closePop(); });
 
-    // SOURCES: relocate the live #side DOM (slot bar + library) into a dedicated
-    // host once at init — keeps all of main.js's existing listeners intact.
+    // SOURCES: relocate the live #side DOM (slot bar + library) into its own
+    // slide-out panel that sits just right of the controls rail. Moving (not
+    // rebuilding) the nodes keeps all of main.js's existing listeners intact.
+    const srcPanel=document.createElement('div'); srcPanel.id='ui-sources';
     const srcHost=document.createElement('div'); srcHost.id='src-host';
-    srcHost.innerHTML='<div class="sep"></div><div class="pop-title">Source Images</div>';
-    // 'use sources' toggle now lives in the bottom bar (next to the sources button)
+    srcHost.innerHTML='<div class="src-head"><span class="pop-title">Source Images</span><button class="btn sm src-close" title="close panel">✕</button></div>';
     ['slot-bar','library-section'].forEach(id=>{ const el=document.getElementById(id); if(el) srcHost.appendChild(el); });
+    srcPanel.appendChild(srcHost); document.body.appendChild(srcPanel);
+    // 'use sources' toggle (engine on/off) stays in the View group
     { const u=bar.querySelector('#ui-usesrc');
       const syncUse=()=>{ const on=E.useSources; u.classList.toggle('on',on); u.textContent = on ? 'Using source images' : 'Use source images'; };
       u.onclick=()=>{ E.setUseSources(!E.useSources); syncUse(); }; syncUse(); }
-    bar.appendChild(srcHost);   // sources live inline in the controls rail, below preview
+    // open / close the sources side panel
+    { const ob=bar.querySelector('#ui-opensrc');
+      const sync=()=>{ ob.classList.toggle('on', document.body.classList.contains('sources-open')); };
+      ob.onclick=()=>{ document.body.classList.toggle('sources-open'); sync(); };
+      srcHost.querySelector('.src-close').onclick=()=>{ document.body.classList.remove('sources-open'); sync(); };
+      sync(); }
+
+    // ── fold / unfold groups (controls rail + mode column), persisted ──
+    const FOLD_KEY='matte.folded';
+    let folded=new Set(); try{ folded=new Set(JSON.parse(localStorage.getItem(FOLD_KEY)||'[]')); }catch(e){}
+    const saveFold=()=>{ try{ localStorage.setItem(FOLD_KEY,JSON.stringify([...folded])); }catch(e){} };
+    function makeFoldable(group,head,key){
+      const body=document.createElement('div'); body.className='fold-body';
+      while(head.nextSibling) body.appendChild(head.nextSibling);
+      group.appendChild(body); head.classList.add('fold-head');
+      if(folded.has(key)) group.classList.add('folded');
+      head.addEventListener('click',()=>{ const f=group.classList.toggle('folded'); if(f)folded.add(key); else folded.delete(key); saveFold(); });
+    }
+    bar.querySelectorAll('.uigroup').forEach(g=>{ const h=g.querySelector('h5'); if(h) makeFoldable(g,h,'ctrl:'+h.textContent.trim()); });
+    left.querySelectorAll('.mgroup').forEach(g=>{ const h=g.querySelector('h4'); if(h) makeFoldable(g,h,'mode:'+h.textContent.trim()); });
 
     // PRESETS
     bar.querySelector('#ui-presets').onclick=()=>openPop('presets', bar.querySelector('#ui-presets'), (host)=>{
@@ -421,7 +444,7 @@
     function buildParams(m){
       paramsEl.innerHTML='';
       {
-        const fb=document.createElement('div'); fb.className='ptsbar'; fb.style.margin='0 0 10px';
+        const fb=document.createElement('div'); fb.className='ptsbar split'; fb.style.margin='0 0 10px';
         const rs=document.createElement('button'); rs.className='btn sm'; rs.textContent='↺ reset mode';
         rs.onclick=()=>{ E.resetMode(m); buildParams(m); };
         const rnd=document.createElement('button'); rnd.className='btn sm'; rnd.textContent='🎲 randomize';
@@ -445,7 +468,7 @@
       const _amb = (m>=33 && m<=47 && m!==37);
       if(_amb){
         const rs=section('Ambient role',[],false);
-        const rbar=document.createElement('div'); rbar.className='ptsbar';
+        const rbar=document.createElement('div'); rbar.className='ptsbar split';
         const mkR=(label,val)=>{ const b=document.createElement('button'); b.className='btn sm'; b.textContent=label;
           b.classList.toggle('on',(E.state.ambRole||0)==val);
           b.onclick=()=>{ E.state.ambRole=val; E.save(); if(E.restartPlayback)E.restartPlayback(); buildParams(m); };
@@ -460,7 +483,7 @@
         if (dk.length) tMode.appendChild(section('Direction / source', dk, false)); }
       tFinish.appendChild(section('Advanced',['originX','originY','maskScale','curve','seed','maskShift','organic','edges'],!REL.advanced(m)));
       { const vs=section('Vignette (global)',['vignAmount','vignShape','vignFeather','vignTexture','vignAnimate'],false);
-        const vb=document.createElement('div'); vb.className='ptsbar';
+        const vb=document.createElement('div'); vb.className='ptsbar split';
         const vr=document.createElement('button'); vr.className='btn sm'; vr.textContent='\u21ba reset vignette';
         vr.onclick=()=>{ if(E.resetVignette)E.resetVignette(); buildParams(m); };
         vb.appendChild(vr); vs.appendChild(vb); tFinish.appendChild(vs); }
