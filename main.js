@@ -1974,6 +1974,7 @@ function setRecordProgress(frac, text, kind) {
   _recFill.style.width = Math.round(Math.max(0, Math.min(1, frac)) * 100) + '%';
   _recFill.style.background = kind === 'error' ? '#e44' : kind === 'done' ? '#2ec27a' : 'var(--accent)';
   _recLabel.textContent = text;
+  recBar.dataset.kind = kind || 'progress';  // ui.js reads this (robust vs colour-string parsing)
 }
 function finishRecordProgress(text, kind, ms) {
   setRecordProgress(1, text, kind);

@@ -164,8 +164,10 @@
 .btn:hover{ background:var(--ui-hover); border-color:var(--ui-line-2); }
 .btn.on{ background:var(--ui-accent); color:var(--ui-accent-fg); border-color:var(--ui-accent); }
 .btn.ghost{ padding:0 8px; color:var(--ui-mut); }
-.btn.rec{ color:var(--ui-rec); }
+.btn.rec{ color:var(--ui-rec); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; padding:0 10px; }
 .btn.rec.busy{ background:#3a1414; color:#ff9b9b; border-color:#5a2222; }
+.btn.rec.ok{ background:#123a23; color:#7fe0a6; border-color:#225a3a; }   /* saved/downloaded */
+.btn.rec.bad{ background:#3a1414; color:#ff9b9b; border-color:#5a2222; } /* failed */
 .btn.sm{ min-height:26px; padding:0 9px; font-size:var(--fz-val); }
 
 /* form controls */

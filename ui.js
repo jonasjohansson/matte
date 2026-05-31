@@ -364,15 +364,30 @@
       if(!scrubbing){ const t=E.state.t||0; scrub.value=t; scrubVal.textContent=t.toFixed(2); } }
     setInterval(refreshTransport,300); refreshTransport();
 
-    // ── record + progress ──
+    // ── record + progress ── mirror the engine's #rec-progress (fill + status
+    // text) onto the record button, since the top-centre toast is far from where
+    // the user clicks. The button shows "Analysing… / Recording NN% / Done ✓ → …".
     const bRec=bar.querySelector('#ui-rec'), recbar=bar.querySelector('#recbar');
+    const REC_IDLE='● Record';
     bRec.onclick=()=>E.startRecording();
+    let _recWasOn=false;
     setInterval(()=>{
       const ov=document.getElementById('rec-progress'); const on=ov&&getComputedStyle(ov).display!=='none';
       bRec.classList.toggle('busy',!!on);
-      if(on){const f=ov.querySelector('.rec-fill'); recbar.style.width=f.style.width;
-        recbar.className=''; if(/2ec27a/.test(f.style.background))recbar.classList.add('done');}
-      else recbar.style.width='0%';
+      if(on){
+        const f=ov.querySelector('.rec-fill'); const lbl=(ov.querySelector('.rec-label')||{}).textContent||'';
+        recbar.style.width=f.style.width;
+        const kind=ov.dataset.kind||'';   // 'progress' | 'done' | 'error', set by main.js
+        const done=kind==='done', err=kind==='error';
+        recbar.className=''; if(done)recbar.classList.add('done'); if(err)recbar.classList.add('err');
+        const short = lbl.length > 24 ? lbl.slice(0,23)+'…' : lbl;
+        bRec.textContent = short || (done?'Done ✓':'Recording…');
+        bRec.classList.toggle('ok',done); bRec.classList.toggle('bad',err);
+        _recWasOn=true;
+      } else {
+        recbar.style.width='0%';
+        if(_recWasOn){ bRec.textContent=REC_IDLE; bRec.classList.remove('ok','bad'); _recWasOn=false; }
+      }
     },120);
 
     // ── params builder ──
