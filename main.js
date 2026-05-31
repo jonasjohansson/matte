@@ -1391,7 +1391,7 @@ fPart.addBinding(state, 'partCenterY', { min: 0, max: 1, step: 0.01, label: 'cen
 // Per-mode default values — used by the "Reset defaults" button in each
 // mode folder to restore that mode's params without touching anything else.
 const MODE_DEFAULTS = {
-  29: { sedBands: 5, bloomCount: 10, dabsWobble: 0.3, bloomRim: 0.5, moldWobble: 0.6, glazeWarm: 0.3, spread: 0.15 },
+  29: { sedBands: 5, bloomCount: 10, dabsWobble: 0.3, bloomRim: 0.12, moldWobble: 0.6, glazeWarm: 0.3, spread: 0.0 },
   1:  { rimWidth: 0.12, rimDark: 0.6 },
   2:  { paperAngle: 0, paperAniso: 4, paperGranulation: 0.5, paperGrowth: 0.5, paperFollow: 0.35, paperPatches: 0.45 },
   3:  { bloomCount: 8, bloomRim: 0.6, bloomRate: 0.55, bloomImageBias: 0.6 },

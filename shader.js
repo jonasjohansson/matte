@@ -1340,6 +1340,12 @@ fn cellsMask(uv: vec2f) -> f32 {
   mask = clamp((mask - 0.1) / 0.78, 0.0, 1.0);
   mask = clamp(mask + p.maskShift, 0.0, 1.0);
   var mixT = clamp(smoothstep(mask - sp, mask + sp, t), 0.0, 1.0);
+  if (p.mode == 29u) {
+    // snap: a tiny reveal window so each cell ignites near-instantly. Edge
+    // softness still scales it, but with a much lower floor than the default.
+    let w29 = mix(0.004, 0.25, clamp(p.spread, 0.0, 1.0));
+    mixT = clamp(smoothstep(mask - w29, mask + w29, t), 0.0, 1.0);
+  }
   // Burn mode: hard step at the front — no crossfade between A and B at all.
   // The char band + glow at the front provide the only visible transition.
   // Per-pixel: A while the front hasn't passed, B once it has, with the burn
