@@ -206,9 +206,9 @@
         <h5>Output</h5>
         <div class="grp"><select id="ui-size" aria-label="output resolution preset"></select></div>
         <label class="barchk wide" title="lock output to the source image aspect ratio (keeps the chosen resolution)"><input type="checkbox" id="ui-matchin">Match source aspect</label>
-        <div class="grp" id="ui-wh"><label for="ui-w">size</label><input type="number" id="ui-w" min="2" aria-label="output width in pixels" title="output width (px)"><span style="color:var(--ui-mut)">×</span><input type="number" id="ui-h" min="2" aria-label="output height in pixels" title="output height (px)"></div>
+        <div class="grp" id="ui-wh"><label for="ui-w">size</label><input type="number" id="ui-w" min="2" aria-label="output width in pixels" title="output width (px)"><span class="unit">×</span><input type="number" id="ui-h" min="2" aria-label="output height in pixels" title="output height (px)"></div>
         <label class="barchk wide" title="lock the width:height ratio while typing"><input type="checkbox" id="ui-lockar">Lock aspect ratio</label>
-        <div class="grp"><label for="ui-dur">dur</label><input type="number" id="ui-dur" min="1" max="60" step="1" aria-label="duration in seconds"><span style="color:var(--ui-mut)">s</span></div>
+        <div class="grp"><label for="ui-dur">dur</label><input type="number" id="ui-dur" min="1" max="60" step="1" aria-label="duration in seconds"><span class="unit">s</span></div>
         <div class="grp"><label for="ui-fps">fps</label><select id="ui-fps" aria-label="output frame rate"></select></div>
       </div>
       <div class="uigroup">
@@ -507,7 +507,7 @@
     function buildParams(m){
       paramsEl.innerHTML='';
       {
-        const fb=document.createElement('div'); fb.className='ptsbar split'; fb.style.margin='0 0 10px';
+        const fb=document.createElement('div'); fb.className='ptsbar split params-tools';
         const rs=document.createElement('button'); rs.className='btn sm'; rs.textContent='↺ reset mode';
         rs.onclick=()=>{ E.resetMode(m); buildParams(m); };
         const rnd=document.createElement('button'); rnd.className='btn sm'; rnd.textContent='🎲 randomize';
@@ -523,10 +523,10 @@
       if(_activeTab>=_panes.length) _activeTab=0;
       [['Mode',0],['Finish',1]].forEach(([label,ix])=>{
         const tb=document.createElement('button'); tb.className='tab'+(ix===_activeTab?' on':''); tb.textContent=label;
-        tb.onclick=()=>{ _activeTab=ix; tabBar.querySelectorAll('.tab').forEach((b,bi)=>b.classList.toggle('on',bi===ix)); _panes.forEach((p,pi)=>p.style.display=pi===ix?'':'none'); };
+        tb.onclick=()=>{ _activeTab=ix; tabBar.querySelectorAll('.tab').forEach((b,bi)=>b.classList.toggle('on',bi===ix)); _panes.forEach((p,pi)=>p.classList.toggle('show',pi===ix)); };
         tabBar.appendChild(tb);
       });
-      _panes.forEach((p,pi)=>p.style.display=pi===_activeTab?'':'none');
+      _panes.forEach((p,pi)=>p.classList.toggle('show',pi===_activeTab));
       paramsEl.appendChild(tabBar); paramsEl.appendChild(tMode); paramsEl.appendChild(tFinish);
       const _amb = (m>=33 && m<=47 && m!==37);
       if(_amb){
@@ -538,7 +538,7 @@
           return b; };
         rbar.appendChild(mkR('reveal',0)); rbar.appendChild(mkR('standalone loop',1));
         rs.appendChild(rbar);
-        const h=document.createElement('div'); h.className='hint'; h.style.marginTop='8px';
+        const h=document.createElement('div'); h.className='hint sec-note';
         h.textContent = (E.state.ambRole||0)<0.5
           ? 'Black\u2192white transition using this pattern (dissolves A\u2192B if images are loaded).'
           : 'Standalone looping field \u2014 not a black\u2192white transition.';

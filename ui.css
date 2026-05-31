@@ -125,6 +125,8 @@
   transition:color .12s, border-color .12s, background .12s; }
 #ui-right .tab:hover{ color:var(--ui-text); border-color:var(--ui-line-2); }
 #ui-right .tab.on{ background:var(--m); color:#0a0a0a; border-color:var(--m); }
+#ui-right .tabpane{ display:none; }
+#ui-right .tabpane.show{ display:block; }
 
 /* param sections + rows */
 .psec{ margin-bottom:var(--sp-lg); }
@@ -256,6 +258,12 @@ body.ui-hidden #stage{ inset:0 !important; }
 /* point-placing / paint controls */
 .ptsbar{ display:flex; gap:6px; margin-top:7px; flex-wrap:wrap; align-items:center; }
 .ptsbar .hint{ color:var(--ui-mut); font-size:var(--fz-val); line-height:1.35; }
+/* a hint that needs separation from the controls above it */
+.sec-note{ margin-top:8px; }
+/* reset/randomize toolbar pinned above the settings tabs */
+.params-tools{ margin:0 0 10px; }
+/* inline unit/separator glyphs (×, s) next to number fields */
+#ui-controls .unit{ color:var(--ui-mut); }
 
 /* inline checkbox chip (e.g. match-source, lock) */
 .barchk{ display:inline-flex; align-items:center; gap:4px; color:var(--ui-mut);
