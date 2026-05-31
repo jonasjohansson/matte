@@ -155,7 +155,7 @@
     bar.innerHTML=`
       <button class="btn ghost" id="t-left" title="modes">◧</button>
       <div class="grp"><label>output</label><select id="ui-size"></select><label class="barchk" title="lock output to the source image aspect ratio (keeps the chosen resolution)"><input type="checkbox" id="ui-matchin">match source</label></div>
-      <div class="grp" id="ui-wh" style="display:none"><input type="number" id="ui-w"><span style="color:var(--ui-mut)">×</span><input type="number" id="ui-h"></div>
+      <div class="grp" id="ui-wh"><label>size</label><input type="number" id="ui-w" min="2" title="output width (px)"><span style="color:var(--ui-mut)">×</span><input type="number" id="ui-h" min="2" title="output height (px)"><label class="barchk" title="lock the width:height ratio while typing"><input type="checkbox" id="ui-lockar">lock</label></div>
       <div class="sep"></div>
       <div class="grp"><label>dur</label><input type="number" id="ui-dur" min="1" max="60" step="1" style="width:52px"><span style="color:var(--ui-mut)">s</span></div>
       <div class="sep"></div>
@@ -276,12 +276,15 @@
     const whBox=bar.querySelector('#ui-wh'), wIn=bar.querySelector('#ui-w'), hIn=bar.querySelector('#ui-h');
     function syncSizeUI(){
       const idx=SIZES.findIndex(s=>Array.isArray(s[1])&&s[1][0]===st.outW&&s[1][1]===st.outH);
-      selSize.value=idx>=0?idx:(SIZES.length-1); whBox.style.display=idx>=0?'none':'flex'; wIn.value=st.outW; hIn.value=st.outH;
+      selSize.value=idx>=0?idx:(SIZES.length-1); wIn.value=Math.round(st.outW); hIn.value=Math.round(st.outH);
     }
     const matchCb=bar.querySelector('#ui-matchin');
     if(matchCb){ matchCb.checked=E.matchInput; matchCb.onchange=()=>{ E.setMatchInput(matchCb.checked); syncSizeUI(); }; }
-    selSize.onchange=()=>{const s=SIZES[+selSize.value]; if(s[1]==='custom'){whBox.style.display='flex';return;} E.setSize(s[1][0],s[1][1]); syncSizeUI();};
-    wIn.onchange=hIn.onchange=()=>{E.setSize(+wIn.value,+hIn.value); selSize.value=SIZES.length-1;};
+    selSize.onchange=()=>{const s=SIZES[+selSize.value]; if(s[1]==='custom'){wIn.focus();return;} E.setSize(s[1][0],s[1][1]); syncSizeUI();};
+    const lockCb=bar.querySelector('#ui-lockar');
+    if(lockCb){ lockCb.checked=!!st.lockAspect; lockCb.onchange=()=>{ st.lockAspect=lockCb.checked; if(E.save)E.save(); }; }
+    wIn.onchange=()=>{ let w=Math.max(2,+wIn.value), h=Math.max(2,+hIn.value); if(st.lockAspect&&st.outH){ h=Math.max(2,Math.round(w*st.outH/st.outW)); } E.setSize(w,h); syncSizeUI(); };
+    hIn.onchange=()=>{ let w=Math.max(2,+wIn.value), h=Math.max(2,+hIn.value); if(st.lockAspect&&st.outW){ w=Math.max(2,Math.round(h*st.outW/st.outH)); } E.setSize(w,h); syncSizeUI(); };
 
     // (display-size control removed — the preview always matches the output aspect)
 
