@@ -212,18 +212,17 @@
         <div class="grp" id="scrub-grp"><input type="range" id="ui-scrub" min="0" max="1" step="0.001" value="0" aria-label="scrub transition progress" title="scrub the transition (progress)"><span class="val" id="ui-scrub-val">0.00</span></div>
       </div>
       <div class="uigroup">
+        <h5>Export</h5>
+        <div class="grp" id="proj-grp"><label for="ui-proj">project</label><input type="text" id="ui-proj" placeholder="none" maxlength="24" aria-label="project name (filename prefix)" title="prefixed to export filenames, e.g. DML → DML_…"></div>
+        <div class="grp"><span id="recwrap"><button class="btn rec" id="ui-rec">● Record</button><span id="recbar"></span></span></div>
+        <div class="grp"><button class="btn" id="ui-folder" title="choose a folder to save recordings into">Folder: default</button></div>
+      </div>
+      <div class="uigroup">
         <h5>View</h5>
         <div class="grp"><button class="btn" id="ui-preview" title="show B/W matte or the colour result on A/B">Preview: Matte</button></div>
         <label class="barchk wide" title="invert the matte (white↔black)"><input type="checkbox" id="ui-inv">Invert matte</label>
         <button class="btn usesrc-btn" id="ui-usesrc" title="use the A/B images for the transition (off = pure matte)">Use source images</button>
         <button class="btn" id="ui-opensrc" title="open the source-image library in a side panel">⊞ Source images</button>
-      </div>
-      <div class="uigroup">
-        <h5>Export</h5>
-        <div class="grp" id="proj-grp"><label for="ui-proj">project</label><input type="text" id="ui-proj" placeholder="none" maxlength="24" aria-label="project name (filename prefix)" title="prefixed to export filenames, e.g. DML → DML_…"></div>
-        <div class="grp"><span id="recwrap"><button class="btn rec" id="ui-rec">● Record</button><span id="recbar"></span></span></div>
-        <div class="grp"><button class="btn" id="ui-folder" title="choose a folder to save recordings into">Folder: default</button></div>
-        <div class="grp"><button class="btn" id="ui-presets">Presets</button></div>
       </div>`;
     document.body.appendChild(bar);
 
@@ -250,7 +249,7 @@
       pop.style.left=Math.max(8, Math.min(window.innerWidth-pop.offsetWidth-8, r.left))+'px';
       pop.style.bottom=(window.innerHeight-r.top+8)+'px';
     }
-    document.addEventListener('click',(e)=>{ if(popOpen && !pop.contains(e.target) && !e.target.closest('#ui-sources,#ui-presets')) closePop(); });
+    document.addEventListener('click',(e)=>{ if(popOpen && !pop.contains(e.target) && !e.target.closest('#ui-sources')) closePop(); });
 
     // SOURCES: relocate the live #side DOM (slot bar + library) into its own
     // slide-out panel that sits just right of the controls rail. Moving (not
@@ -272,9 +271,9 @@
       sync(); }
 
     // ── fold / unfold groups (controls rail + mode column), persisted ──
-    // Defaults (first visit / no saved state): mode column + View/Origin/Export
-    // start collapsed; Output and Playback stay open. Key is versioned so the
-    // new defaults apply once even for users with older saved fold state.
+    // Defaults (first visit / no saved state): mode column + Export/View start
+    // collapsed; Output and Playback stay open. Key is versioned so the new
+    // defaults apply once even for users with older saved fold state.
     const FOLD_KEY='matte.folded.v2';
     let folded;
     { const stored=localStorage.getItem(FOLD_KEY);
@@ -291,24 +290,6 @@
     bar.querySelectorAll('.uigroup').forEach(g=>{ const h=g.querySelector('h5'); if(h) makeFoldable(g,h,'ctrl:'+h.textContent.trim()); });
     globals.querySelectorAll('.uigroup').forEach(g=>{ const h=g.querySelector('h5'); if(h) makeFoldable(g,h,'glob:'+h.textContent.trim()); });
     left.querySelectorAll('.mgroup').forEach(g=>{ const h=g.querySelector('h4'); if(h) makeFoldable(g,h,'mode:'+h.textContent.trim()); });
-
-    // PRESETS
-    bar.querySelector('#ui-presets').onclick=()=>openPop('presets', bar.querySelector('#ui-presets'), (host)=>{
-      host.innerHTML='<div class="pop-title">PRESETS</div>';
-      const sel=document.createElement('select'); sel.style.width='100%';
-      const def=document.createElement('option'); def.value=''; def.textContent='— load preset —'; sel.appendChild(def);
-      E.presetOptions().forEach(o=>{const op=document.createElement('option');op.value=o.id;op.textContent=o.label;sel.appendChild(op);});
-      sel.onchange=()=>{ if(sel.value){ E.applyPreset(sel.value); } };
-      host.appendChild(sel);
-      const row=document.createElement('div'); row.className='pop-row';
-      const nm=document.createElement('input'); nm.type='text'; nm.placeholder='name'; nm.style.flex='1';
-      const sv=document.createElement('button'); sv.className='btn sm'; sv.textContent='save';
-      sv.onclick=()=>{ if(E.savePreset(nm.value)){ nm.value=''; bar.querySelector('#ui-presets').click(); bar.querySelector('#ui-presets').click(); } };
-      row.appendChild(nm); row.appendChild(sv); host.appendChild(row);
-      const del=document.createElement('button'); del.className='btn sm'; del.textContent='delete selected (user)';
-      del.style.marginTop='6px'; del.onclick=()=>{ if(E.deletePreset(sel.value)){ bar.querySelector('#ui-presets').click(); bar.querySelector('#ui-presets').click(); } };
-      host.appendChild(del);
-    });
 
     // OUTPUT FOLDER
     function refreshFolderBtn(){ const b=bar.querySelector('#ui-folder'); const n=E.folderName; b.textContent='Folder: '+(n&&n!=='browser default'?n:'default'); b.classList.toggle('on', !!(n&&n!=='browser default')); }

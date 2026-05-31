@@ -220,16 +220,16 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 
 /* per-group colour accents — a hue stripe + tinted heading per block.
    nth-of-type works because the .uigroup divs are the only div children of
-   #ui-controls. Order: Output·Playback·View·Export. */
+   #ui-controls. Order: Output·Playback·Export·View. */
 #ui-controls .uigroup{ border-left-width:3px; }
 #ui-controls .uigroup:nth-of-type(1){ border-left-color:#4a90d9; }   /* Output   — blue */
 #ui-controls .uigroup:nth-of-type(2){ border-left-color:#46c08a; }   /* Playback — green */
-#ui-controls .uigroup:nth-of-type(3){ border-left-color:#9fd0e0; }   /* View     — cyan */
-#ui-controls .uigroup:nth-of-type(4){ border-left-color:#d98b46; }   /* Export   — amber */
+#ui-controls .uigroup:nth-of-type(3){ border-left-color:#d98b46; }   /* Export   — amber */
+#ui-controls .uigroup:nth-of-type(4){ border-left-color:#9fd0e0; }   /* View     — cyan */
 #ui-controls .uigroup:nth-of-type(1) h5{ color:#7fb4e8; }
 #ui-controls .uigroup:nth-of-type(2) h5{ color:#74d2a6; }
-#ui-controls .uigroup:nth-of-type(3) h5{ color:#9fd0e0; }
-#ui-controls .uigroup:nth-of-type(4) h5{ color:#e8b27f; }
+#ui-controls .uigroup:nth-of-type(3) h5{ color:#e8b27f; }
+#ui-controls .uigroup:nth-of-type(4) h5{ color:#9fd0e0; }
 /* mode-grid group-header colours are set inline by ui.js (GROUP_COLORS), so a
    mode keeps its hue even as a duplicate chip in the Recent group. */
 #ui-modes .recent-chips{ display:block; }

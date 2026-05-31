@@ -2005,20 +2005,29 @@ async function startRecording(opts = {}) {
   showRecordProgress(true);
   setRecordProgress(0, 'Preparing encoder…');
 
-  // Probe encoder support at the requested size; scale down if needed and re-probe.
+  // Probe encoder support, scaling to the LARGEST hardware-supported size.
+  // isConfigSupported can reject a frame size even when the codec's nominal
+  // level would allow it (hardware caps), so we step through standard target
+  // long-edges instead of blindly shrinking ×0.75 — the old ladder overshot
+  // (e.g. an 8000px request fell to 3376 on a box that really supports 4096).
+  const baseLong = Math.max(recW, recH + padPx0);
+  const baseW = recW, baseH = recH;
+  const targets = [];
+  for (const d of [baseLong, 8192, 7680, 4096, 3840, 2560, 1920]) {
+    if (d <= baseLong && !targets.includes(d)) targets.push(d);  // descending, deduped, ≤ request
+  }
   let scale = 1;
   let pick = null;
-  for (let attempt = 0; attempt < 4; attempt++) {
-    const tryW = (recW + (recW % 2));
-    const tryH = ((recH + padPx0 * scale) + ((recH + padPx0 * scale) % 2));
-    pick = await pickEncoderConfig(tryW, Math.round(tryH), fps, 12_000_000);
-    if (pick) {
-      const cap = codecMaxDim(pick.config.codec);
-      if (Math.max(tryW, tryH) <= cap) break;
+  for (const targetLong of targets) {
+    const s = targetLong / baseLong;
+    const tW = Math.round(baseW * s), tH = Math.round(baseH * s);
+    const padS = Math.round(padPx0 * s);
+    const tryW = tW + (tW % 2);
+    const tryH = (tH + padS) + ((tH + padS) % 2);
+    const p = await pickEncoderConfig(tryW, tryH, fps, 12_000_000);
+    if (p && Math.max(tryW, tryH) <= codecMaxDim(p.config.codec)) {
+      pick = p; scale = s; recW = tW; recH = tH; break;
     }
-    scale *= 0.75;
-    recW = Math.round(recW * 0.75);
-    recH = Math.round(recH * 0.75);
   }
   if (!pick) {
     btnRecord.title = 'FAILED — no usable video encoder';
@@ -2145,8 +2154,10 @@ async function startRecording(opts = {}) {
   } else {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = filename; a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    a.href = url; a.download = filename; a.style.display = 'none';
+    document.body.appendChild(a);   // some browsers ignore click() on a detached anchor
+    a.click();
+    setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 1000);
   }
 
   finishRecordProgress(`Done ✓ · ${(blob.size / 1024 / 1024).toFixed(1)} MB${where}`, 'done', 3500);
