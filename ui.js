@@ -159,21 +159,49 @@
       <div class="sep"></div>
       <div class="grp"><label>dur</label><input type="number" id="ui-dur" min="1" max="60" step="1" style="width:52px"><span style="color:var(--ui-mut)">s</span></div>
       <div class="sep"></div>
-      <div class="grp"><button class="btn" id="ui-play">▶ play</button><button class="btn" id="ui-restart" title="restart from 0">⟳ restart</button><button class="btn" id="ui-loop">loop</button></div>
+      <div class="grp"><button class="btn" id="ui-play">▶ Play</button><button class="btn" id="ui-restart" title="restart from 0">⟳ Restart</button><button class="btn" id="ui-loop">Loop</button></div>
       <div class="grp" id="scrub-grp"><input type="range" id="ui-scrub" min="0" max="1" step="0.001" value="0" title="scrub the transition (progress)"><span class="val" id="ui-scrub-val">0.00</span></div>
       <div class="sep"></div>
-      <div class="grp"><span id="recwrap"><button class="btn rec" id="ui-rec">● record</button><span id="recbar"></span></span></div>
+      <div class="grp"><span id="recwrap"><button class="btn rec" id="ui-rec">● Record</button><span id="recbar"></span></span></div>
       <div class="sep"></div>
-      <div class="grp"><button class="btn" id="ui-sources">sources</button><label class="barchk" title="use the A/B images (off = pure matte)"><input type="checkbox" id="ui-usesrc">use</label><button class="btn" id="ui-presets">presets</button><button class="btn" id="ui-folder">folder</button></div>
+      <div class="grp"><button class="btn" id="ui-sources">Sources</button><label class="barchk" title="use the A/B images (off = pure matte)"><input type="checkbox" id="ui-usesrc">use</label><button class="btn" id="ui-presets">Presets</button><button class="btn" id="ui-folder">Folder</button></div>
       <div class="sep"></div>
       <div class="grp"><label>invert</label><input type="checkbox" id="ui-inv"></div>
-      <div class="grp"><button class="btn" id="ui-preview" title="show B/W matte or the colour result on A/B">preview: matte</button></div>
+      <div class="grp"><button class="btn" id="ui-preview" title="show B/W matte or the colour result on A/B">Preview: Matte</button></div>
       <button class="btn ghost" id="t-right" title="settings" style="margin-left:auto">◨</button>`;
     document.body.appendChild(bar);
 
-    // rail toggles
-    bar.querySelector('#t-left').onclick=()=>document.body.classList.toggle('no-left');
-    bar.querySelector('#t-right').onclick=()=>document.body.classList.toggle('no-right');
+    // ── panels: left (controls+sources) · modes · settings — independently toggled
+    //   keys 1/2/3, Tab = full canvas, or click the thin edge handle of each panel.
+    const _cs=getComputedStyle(document.documentElement);
+    const LW=parseInt(_cs.getPropertyValue('--left'))||196;
+    const MW=parseInt(_cs.getPropertyValue('--modes'))||150;
+    const RW=parseInt(_cs.getPropertyValue('--right'))||260;
+    const panels={left:true,modes:true,settings:true};
+    function applyPanels(){
+      const L=document.getElementById('ui-controls'),M=document.getElementById('ui-modes'),
+            R=document.getElementById('ui-right'),S=document.getElementById('stage');
+      if(L)L.style.display=panels.left?'':'none';
+      if(R)R.style.display=panels.settings?'':'none';
+      if(M)M.style.display=panels.modes?'':'none';
+      const rw=panels.settings?RW:0,mw=panels.modes?MW:0,lw=panels.left?LW:0;
+      if(M)M.style.right=rw+'px';
+      if(S){S.style.setProperty('left',lw+'px','important');S.style.setProperty('right',(mw+rw)+'px','important');}
+      document.querySelectorAll('.edge-handle').forEach(h=>h.classList.toggle('off',!panels[h.dataset.panel]));
+    }
+    function togglePanel(k){ panels[k]=!panels[k]; applyPanels(); }
+    function toggleFull(){ const any=panels.left||panels.modes||panels.settings; panels.left=panels.modes=panels.settings=!any; applyPanels(); }
+    // thin clickable edge handle for each panel
+    [['left',()=>LW-3],['modes',()=>window.innerWidth-RW-MW-3],['settings',()=>window.innerWidth-RW-3]].forEach(([k])=>{
+      const h=document.createElement('div'); h.className='edge-handle'; h.dataset.panel=k;
+      h.title=k+' panel (toggle)'; h.onclick=()=>togglePanel(k); document.body.appendChild(h);
+    });
+    window.addEventListener('keydown',e=>{
+      if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||e.target.tagName==='TEXTAREA') return;
+      if(e.key==='1'){togglePanel('left');} else if(e.key==='2'){togglePanel('modes');} else if(e.key==='3'){togglePanel('settings');}
+    });
+    bar.querySelector('#t-left').onclick=()=>togglePanel('left');
+    bar.querySelector('#t-right').onclick=()=>togglePanel('settings');
 
     // ── popovers (sources / presets / folder) ──
     const pop=document.createElement('div'); pop.id='ui-pop'; document.body.appendChild(pop);
@@ -191,12 +219,12 @@
     // SOURCES: relocate the live #side DOM (slot bar + library) into a dedicated
     // host once at init — keeps all of main.js's existing listeners intact.
     const srcHost=document.createElement('div'); srcHost.id='src-host';
-    srcHost.innerHTML='<div class="pop-title">SOURCE IMAGES</div>';
+    srcHost.innerHTML='<div class="sep"></div><div class="pop-title">Source Images</div>';
     // 'use sources' toggle now lives in the bottom bar (next to the sources button)
     ['slot-bar','library-section'].forEach(id=>{ const el=document.getElementById(id); if(el) srcHost.appendChild(el); });
     { const u=bar.querySelector('#ui-usesrc'); if(u){ u.checked=E.useSources; u.onchange=()=>{ E.setUseSources(u.checked); }; } }
-    document.body.appendChild(srcHost);
-    bar.querySelector('#ui-sources').onclick=()=>{ document.body.classList.toggle('no-sources'); };
+    bar.appendChild(srcHost);   // sources live inline in the controls rail, below preview
+    bar.querySelector('#ui-sources').onclick=()=>{ srcHost.classList.toggle('collapsed'); };
 
     // PRESETS
     bar.querySelector('#ui-presets').onclick=()=>openPop('presets', bar.querySelector('#ui-presets'), (host)=>{
@@ -230,12 +258,12 @@
       row.appendChild(pick); row.appendChild(usd); host.appendChild(row);
     });
     refreshFolderBtn();
-    // full-canvas toggle: hide both rails for a big preview (also via Tab)
+    // full-canvas button (also Tab) — toggleFull defined with the panel system above
     const tFull=document.createElement('button'); tFull.className='btn'; tFull.id='t-full'; tFull.textContent='⤢ Full canvas';
     tFull.title='full canvas (Tab)'; bar.insertBefore(tFull, bar.querySelector('#t-right'));
-    const toggleFull=()=>{const on=!document.body.classList.contains('no-left'); document.body.classList.toggle('no-left',on); document.body.classList.toggle('no-right',on);};
     tFull.onclick=toggleFull;
     window.addEventListener('keydown',e=>{ if(e.key==='Tab' && e.target.tagName!=='INPUT' && e.target.tagName!=='SELECT'){ e.preventDefault(); toggleFull(); }});
+    applyPanels();
 
     // ── output size ──
     const SIZES=[['ELVERKET ALL · 8000×4373',[8000,4373]],['ELVERKET Panorama · 8000×3411',[8000,3411]],
@@ -260,7 +288,7 @@
     durIn.onchange=()=>{st.duration=Math.max(.5,Math.min(45,+durIn.value));E.save();};
     const inv=bar.querySelector('#ui-inv'); inv.checked=!!st.matteInvert; inv.onchange=()=>{st.matteInvert=inv.checked;};
     const prev=bar.querySelector('#ui-preview');
-    const syncPrev=()=>{ const on=E.matteOutput!==false; prev.textContent='preview: '+(on?'matte':'colour'); prev.classList.toggle('on',!on); };
+    const syncPrev=()=>{ const on=E.matteOutput!==false; prev.textContent='Preview: '+(on?'Matte':'Colour'); prev.classList.toggle('on',!on); };
     prev.onclick=()=>{ E.setMatte(E.matteOutput===false); syncPrev(); };
     syncPrev();
 
