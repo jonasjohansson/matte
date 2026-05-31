@@ -105,18 +105,27 @@
     28:['videoMaskInvert','videoMaskFeather','videoBrightness','videoContrast','videoSaturate'],
     30:['lightIntensity','lightSpread','lightPeakT','lightFlashWidth','lightColor'],
     32:['texFit','texAmount','texBg'],
-    33:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'], 34:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],
-    35:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'], 36:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],
+    33:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // bokeh
+    34:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // ripples
+    35:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // glare
+    36:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // streaks
     38:['auroraDensity','auroraHeight','auroraSpeed','auroraWave','auroraDark'],
     39:['gdIntensity','gdBeams','gdCloud','gdPulse'],
-    41:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],
-    42:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],
-    43:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],
-    44:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],
-    45:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],
-    46:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],
-    47:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],
-    40:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],
+    40:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // clouds
+    41:['ambSize','ambSoft','ambSpeed','ambDetail'],                     // caustics (no count)
+    42:['ambCount','ambSize','ambDetail'],                              // embers
+    43:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // mist
+    44:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // rain
+    45:['ambCount','ambSize','ambSpeed'],                               // snow
+    46:['ambSize','ambSoft','ambSpeed','ambDetail'],                     // marble
+    47:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // ink blooms
+  };
+  // per-mode Direction/source keys (only what each ambient field reads).
+  const DIRK = {
+    33:['driftAngle','driftAmount'], 36:['driftAngle','streakMove'],
+    35:['sunX','sunY'], 39:['driftAmount','sunX','sunY'],
+    40:['driftAngle'], 41:['driftAngle','driftAmount'], 42:['driftAngle','driftAmount'],
+    43:['driftAngle'], 44:['driftAngle'], 45:['driftAngle','driftAmount'], 46:['driftAngle','driftAmount'],
   };
 
   // relevance of the global groups per mode
@@ -371,7 +380,8 @@
       if(MK[m]) paramsEl.appendChild(section('this mode',MK[m],false));
       paramsEl.appendChild(section('Reveal',['originAmount','spread'],!REL.reveal(m)));
       paramsEl.appendChild(section('Movement',['turbulence','flow','undulate','animate'],!REL.movement(m)));
-      paramsEl.appendChild(section('Direction / source',['driftAngle','driftAmount','sunX','sunY','streakMove'],!REL.dir(m)));
+      { const dk = DIRK[m] || (REL.dir(m) ? ['driftAngle','driftAmount','sunX','sunY','streakMove'] : []);
+        if (dk.length) paramsEl.appendChild(section('Direction / source', dk, false)); }
       {
         const ptsRelevant = (m<=32 && m!==31) || m===34;   // transition modes + ripples
         const isPaint = (m===37);

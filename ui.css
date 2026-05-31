@@ -86,7 +86,10 @@ body.no-right #ui-right{ display:none; }
 #ui-controls .sep{ width:100%; height:1px; background:var(--ui-line); margin:2px 0; }
 #ui-controls label{ color:var(--ui-mut); font-size:10px; text-transform:uppercase; letter-spacing:.05em; }
 #ui-controls select,#ui-controls #ui-scrub{ flex:1; min-width:0; width:auto; }
-#ui-controls input[type=number]{ width:48px; }
+#ui-controls input[type=number]{ flex:1; min-width:0; width:auto; }
+#ui-controls #ui-wh{ gap:5px; }
+#ui-controls #ui-wh > label{ flex:0 0 100%; margin-bottom:2px; }
+#ui-controls #ui-wh input{ flex:1 1 0; }
 #t-left,#t-right{ display:none; }
 
 .btn{
