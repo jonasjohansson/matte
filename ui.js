@@ -200,7 +200,9 @@
       if(R)R.style.display=panels.settings?'':'none';
       if(M)M.style.display=panels.modes?'':'none';
       const rw=panels.settings?RW:0,mw=panels.modes?MW:0,lw=panels.left?LW:0;
-      if(M)M.style.right=rw+'px';
+      // modes are the far-right rail (right:0 via CSS); settings sits left of modes.
+      if(M)M.style.right='0px';
+      if(R)R.style.right=mw+'px';
       if(S){S.style.setProperty('left',lw+'px','important');S.style.setProperty('right',(mw+rw)+'px','important');}
       document.querySelectorAll('.edge-handle').forEach(h=>h.classList.toggle('off',!panels[h.dataset.panel]));
     }
