@@ -928,6 +928,7 @@ async function renderLibrary() {
     tile.addEventListener('dragstart', (ev) => { ev.dataTransfer.setData('application/x-lib-id', String(entry.id)); ev.dataTransfer.effectAllowed = 'copy'; });
     const img = document.createElement('img');
     img.src = url;
+    img.alt = entry.name || 'library image';
     tile.appendChild(img);
     const del = document.createElement('span');
     del.className = 'lib-del'; del.textContent = '×'; del.title = 'Remove';
@@ -985,7 +986,7 @@ function updateSlotPreview(slot, url) {
   if (!el) return;   // slot DOM may be relocated/absent in the custom UI — skip the thumbnail
   el.querySelector('.placeholder')?.remove();
   let im = el.querySelector('img');
-  if (!im) { im = document.createElement('img'); el.appendChild(im); }
+  if (!im) { im = document.createElement('img'); im.alt = `source image ${slot}`; el.appendChild(im); }
   im.src = url;
 }
 
@@ -1091,16 +1092,7 @@ document.getElementById('reset').addEventListener('click', async () => {
 
 window.addEventListener('resize', resizeCanvas);
 
-// Panel minimize
-const togglePanelBtn = document.getElementById('toggle-panel');
-function setMinimized(min) {
-  document.body.classList.toggle('minimized', min);
-  togglePanelBtn.textContent = min ? '›' : '‹';
-  togglePanelBtn.title = min ? 'Show controls (Tab)' : 'Hide controls (Tab)';
-  requestAnimationFrame(() => requestAnimationFrame(resizeCanvas));
-  setTimeout(resizeCanvas, 250);
-}
-togglePanelBtn.addEventListener('click', () => setMinimized(!document.body.classList.contains('minimized')));
+// (panel show/hide is owned by ui.js — H / Tab toggles body.ui-hidden)
 
 // ============================================================================
 // Tweakpane (minimal for milestone 1)
@@ -2364,7 +2356,6 @@ fStarred.addButton({ title: 'Clear all stars' }).on('click', () => {
 window.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
   if (e.key === ' ')          { e.preventDefault(); togglePlay(); }
-  if (e.key === 'Tab')        { e.preventDefault(); setMinimized(!document.body.classList.contains('minimized')); }
   if (e.key === 'ArrowLeft')  { state.t = Math.max(0, state.t - 0.02); pane.refresh(); }
   if (e.key === 'ArrowRight') { state.t = Math.min(1, state.t + 0.02); pane.refresh(); }
 });

@@ -3,20 +3,29 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Matte — a desktop WebGPU tool for building black-and-white transition mattes for video, with dozens of organic reveal modes, paint/point origins, and video export.">
   <title>Matte</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg">
   <link rel="stylesheet" href="./style.css">
   <link rel="stylesheet" href="./ui.css">
 </head>
 <body>
+  <!-- Matte is a desktop-only WebGPU tool; gate touch devices with a notice. -->
+  <div id="mobile-gate">
+    <div class="mg-card">
+      <img src="./favicon.svg" alt="" width="60" height="60">
+      <h1>Matte</h1>
+      <p>Matte is a desktop tool. It needs WebGPU and a mouse or trackpad to place points, paint, and scrub.</p>
+      <p class="mg-sub">Please open it on a computer in Chrome, Edge, or another WebGPU-capable browser.</p>
+    </div>
+  </div>
+
   <div id="stage">
     <canvas id="canvas" class="empty"></canvas>
     <canvas id="sam-overlay"></canvas>
   </div>
 
-  <button id="toggle-panel" title="Hide controls (Tab)">‹</button>
-
-  <div id="side">
+  <div id="side" inert aria-hidden="true">
     <div id="tp-host"></div>
     <details id="source-section">
       <summary>Source images (optional)</summary>

@@ -174,16 +174,16 @@
       </section>
       <div class="uigroup">
         <h5>Output</h5>
-        <div class="grp"><select id="ui-size"></select></div>
+        <div class="grp"><select id="ui-size" aria-label="output resolution preset"></select></div>
         <label class="barchk wide" title="lock output to the source image aspect ratio (keeps the chosen resolution)"><input type="checkbox" id="ui-matchin">Match source aspect</label>
-        <div class="grp" id="ui-wh"><label>size</label><input type="number" id="ui-w" min="2" title="output width (px)"><span style="color:var(--ui-mut)">×</span><input type="number" id="ui-h" min="2" title="output height (px)"></div>
+        <div class="grp" id="ui-wh"><label for="ui-w">size</label><input type="number" id="ui-w" min="2" aria-label="output width in pixels" title="output width (px)"><span style="color:var(--ui-mut)">×</span><input type="number" id="ui-h" min="2" aria-label="output height in pixels" title="output height (px)"></div>
         <label class="barchk wide" title="lock the width:height ratio while typing"><input type="checkbox" id="ui-lockar">Lock aspect ratio</label>
-        <div class="grp"><label>dur</label><input type="number" id="ui-dur" min="1" max="60" step="1"><span style="color:var(--ui-mut)">s</span></div>
+        <div class="grp"><label for="ui-dur">dur</label><input type="number" id="ui-dur" min="1" max="60" step="1" aria-label="duration in seconds"><span style="color:var(--ui-mut)">s</span></div>
       </div>
       <div class="uigroup">
         <h5>Playback</h5>
         <div class="grp transport"><button class="btn ico" id="ui-play" title="play / pause">▶</button><button class="btn ico" id="ui-restart" title="restart from 0">⟳</button><button class="btn ico" id="ui-loop" title="loop playback">↻</button></div>
-        <div class="grp" id="scrub-grp"><input type="range" id="ui-scrub" min="0" max="1" step="0.001" value="0" title="scrub the transition (progress)"><span class="val" id="ui-scrub-val">0.00</span></div>
+        <div class="grp" id="scrub-grp"><input type="range" id="ui-scrub" min="0" max="1" step="0.001" value="0" aria-label="scrub transition progress" title="scrub the transition (progress)"><span class="val" id="ui-scrub-val">0.00</span></div>
       </div>
       <div class="uigroup">
         <h5>View</h5>
@@ -361,17 +361,17 @@
         const cb=row.querySelector('input'); cb.checked=!!st[key]; cb.onchange=()=>{st[key]=cb.checked;}; return row;
       }
       if(spec.t==='color'){
-        row.innerHTML=`<span class="lab">${spec.label}</span><input type="color">`;
+        row.innerHTML=`<span class="lab">${spec.label}</span><input type="color" aria-label="${spec.label}">`;
         const ci=row.querySelector('input'); ci.value=st[key]||'#ffffff'; ci.oninput=()=>{st[key]=ci.value;}; return row;
       }
       if(spec.t==='select'){
-        row.innerHTML=`<span class="lab">${spec.label}</span><select></select>`;
+        row.innerHTML=`<span class="lab">${spec.label}</span><select aria-label="${spec.label}"></select>`;
         const se=row.querySelector('select');
         Object.entries(spec.opts).forEach(([l,v])=>{const o=document.createElement('option');o.value=v;o.textContent=l;se.appendChild(o);});
         se.value=st[key]; se.onchange=()=>{st[key]=isNaN(+se.value)?se.value:+se.value;}; return row;
       }
       const [label,mn,mx,stp]=spec; const dec=(stp+'').includes('.')?(stp+'').split('.')[1].length:0;
-      row.innerHTML=`<span class="lab">${label}</span><input type="range" min="${mn}" max="${mx}" step="${stp}"><span class="val"></span>`;
+      row.innerHTML=`<span class="lab">${label}</span><input type="range" min="${mn}" max="${mx}" step="${stp}" aria-label="${label}"><span class="val"></span>`;
       const r=row.querySelector('input'), v=row.querySelector('.val');
       r.value=st[key]; v.textContent=(+st[key]).toFixed(dec);
       r.oninput=()=>{st[key]=+r.value; v.textContent=(+r.value).toFixed(dec);}; return row;

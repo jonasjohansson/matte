@@ -8,7 +8,7 @@
   /* palette */
   --ui-bg:#0c0c0c; --ui-bg2:#161616; --ui-hover:#242424;
   --ui-line:rgba(255,255,255,.10); --ui-line-2:rgba(255,255,255,.22);
-  --ui-text:#f0f0f0; --ui-mut:rgba(240,240,240,.58); --ui-faint:rgba(240,240,240,.34);
+  --ui-text:#f0f0f0; --ui-mut:rgba(240,240,240,.68); --ui-faint:rgba(240,240,240,.5);
   --ui-accent:#f0f0f0; --ui-accent-fg:#0a0a0a; --ui-accent-soft:rgba(240,240,240,.14);
   --ui-rec:#ff5b5b; --ui-glass:rgba(12,12,12,.72);
   --ui-font:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
@@ -18,7 +18,7 @@
   --fz-title:13px;    /* mode name */
   /* metrics */
   --r:6px; --r-sm:4px; --sp:8px; --sp-lg:14px; --ctl-h:30px;
-  /* panel widths (read by ui.js applyPanels) */
+  /* rail widths */
   --left:264px; --modes:150px; --right:264px; --bottom:0px; --src:240px;
 }
 
@@ -28,7 +28,6 @@
 
 /* hide the off-screen Tweakpane registry */
 #side{ left:-9999px !important; pointer-events:none; }
-#toggle-panel{ display:none !important; }
 
 /* ── canvas: centre, between the rails ── */
 #stage{ inset:0 !important; padding:0 !important; z-index:0; }
@@ -55,7 +54,6 @@
 #ui-controls #ui-wh{ gap:5px; }
 #ui-controls #ui-wh > label{ flex:0 0 100%; margin-bottom:2px; }
 #ui-controls #ui-wh input{ flex:1 1 0; }
-#t-left,#t-right{ display:none; }
 
 /* ── modes column (FAR right) ── */
 #ui-modes{ position:fixed; top:0; bottom:0; right:0; width:var(--modes); z-index:300;
@@ -304,3 +302,14 @@ body.sources-open #ui-sources{ transform:translateX(0); }
 
 /* ── panel toggles ── */
 /* fixed layout — no panel toggles */
+
+/* ── desktop-only gate: shown on touch devices (no precise pointer) ── */
+#mobile-gate{ display:none; position:fixed; inset:0; z-index:9999; padding:32px;
+  align-items:center; justify-content:center; text-align:center;
+  background:var(--ui-bg); color:var(--ui-text); font:var(--fz-body)/1.55 var(--ui-font); }
+#mobile-gate .mg-card{ max-width:340px; display:flex; flex-direction:column; align-items:center; gap:14px; }
+#mobile-gate img{ border-radius:14px; }
+#mobile-gate h1{ margin:0; font-size:22px; letter-spacing:.06em; font-weight:600; }
+#mobile-gate p{ margin:0; color:var(--ui-mut); font-size:13px; }
+#mobile-gate .mg-sub{ color:var(--ui-faint); font-size:12px; }
+@media (hover:none) and (pointer:coarse){ #mobile-gate{ display:flex; } }
