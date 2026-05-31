@@ -216,6 +216,8 @@
         <div class="grp transport"><button class="btn ico" id="ui-play" title="play / pause">▶</button><button class="btn ico" id="ui-restart" title="restart from 0">⟳</button><button class="btn ico" id="ui-loop" title="loop playback">↻</button></div>
         <div class="grp" id="scrub-grp"><input type="range" id="ui-scrub" min="0" max="1" step="0.001" value="0" aria-label="scrub transition progress" title="scrub the transition (progress)"><span class="val" id="ui-scrub-val">0.00</span></div>
       </div>
+      <div class="uigroup" id="ui-origin"><h5>Origin</h5><div id="origin-body"></div></div>
+      <div class="uigroup" id="ui-vignette"><h5>Vignette</h5><div id="vign-body"></div></div>
       <div class="uigroup">
         <h5>Export</h5>
         <div class="grp" id="proj-grp"><label for="ui-proj">project</label><input type="text" id="ui-proj" placeholder="none" maxlength="24" aria-label="project name (filename prefix)" title="prefixed to export filenames, e.g. DML → DML_…"></div>
@@ -230,18 +232,10 @@
         <button class="btn" id="ui-opensrc" title="open the source-image library in a side panel">⊞ Source images</button>
       </div>`;
     document.body.appendChild(bar);
-
-    // ── globals rail (3rd right sidebar): Origin + Vignette — shared across every
-    // mode, so they live outside the per-mode settings panel. ──
-    const globals=document.createElement('div'); globals.id='ui-globals';
-    globals.innerHTML=`<div class="uigroup" id="ui-origin"><h5>Origin</h5><div id="origin-body"></div></div>`+
-                      `<div class="uigroup" id="ui-vignette"><h5>Vignette</h5><div id="vign-body"></div></div>`;
-    document.body.appendChild(globals);
-    const originGroup=globals.querySelector('#ui-origin'), originBody=globals.querySelector('#origin-body');
-    const vignBody=globals.querySelector('#vign-body');
-
-    // Fixed three-rail layout (controls · canvas · settings · modes); widths come
-    // straight from the CSS vars — no runtime toggling.
+    // Origin + Vignette are global (shared across modes) and live in the left
+    // controls rail (foldable like the other groups).
+    const originGroup=bar.querySelector('#ui-origin'), originBody=bar.querySelector('#origin-body');
+    const vignBody=bar.querySelector('#vign-body');
 
     // ── popovers (sources / presets / folder) ──
     const pop=document.createElement('div'); pop.id='ui-pop'; document.body.appendChild(pop);
@@ -279,11 +273,11 @@
     // Defaults (first visit / no saved state): mode column + Export/View start
     // collapsed; Output and Playback stay open. Key is versioned so the new
     // defaults apply once even for users with older saved fold state.
-    const FOLD_KEY='matte.folded.v2';
+    const FOLD_KEY='matte.folded.v3';
     let folded;
     { const stored=localStorage.getItem(FOLD_KEY);
       if(stored!=null){ try{ folded=new Set(JSON.parse(stored)); }catch(e){ folded=null; } }
-      if(!folded){ folded=new Set(['ctrl:View','ctrl:Export']); MODES.forEach(([g])=>folded.add('mode:'+g)); } }
+      if(!folded){ folded=new Set(['ctrl:View','ctrl:Export','ctrl:Vignette']); MODES.forEach(([g])=>folded.add('mode:'+g)); } }
     const saveFold=()=>{ try{ localStorage.setItem(FOLD_KEY,JSON.stringify([...folded])); }catch(e){} };
     function makeFoldable(group,head,key){
       const body=document.createElement('div'); body.className='fold-body';
@@ -293,7 +287,6 @@
       head.addEventListener('click',()=>{ const f=group.classList.toggle('folded'); if(f)folded.add(key); else folded.delete(key); saveFold(); });
     }
     bar.querySelectorAll('.uigroup').forEach(g=>{ const h=g.querySelector('h5'); if(h) makeFoldable(g,h,'ctrl:'+h.textContent.trim()); });
-    globals.querySelectorAll('.uigroup').forEach(g=>{ const h=g.querySelector('h5'); if(h) makeFoldable(g,h,'glob:'+h.textContent.trim()); });
     left.querySelectorAll('.mgroup').forEach(g=>{ const h=g.querySelector('h4'); if(h) makeFoldable(g,h,'mode:'+h.textContent.trim()); });
 
     // OUTPUT FOLDER

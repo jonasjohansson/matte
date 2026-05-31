@@ -25,7 +25,7 @@
   /* metrics */
   --r:6px; --r-sm:4px; --sp:8px; --sp-lg:14px; --ctl-h:30px;
   /* rail widths */
-  --left:264px; --modes:150px; --right:264px; --globals:236px; --bottom:0px; --src:240px;
+  --left:264px; --modes:150px; --right:264px; --bottom:0px; --src:240px;
 }
 
 /* hide scrollbars (still scrollable) */
@@ -92,7 +92,7 @@
 .mgroup-archive h4::after{ content:" · deprecated"; font-weight:400; letter-spacing:0; }
 
 /* ── settings rail (mode settings; sits left of the globals + modes rails) ── */
-#ui-right{ position:fixed; top:0; bottom:var(--bottom); right:calc(var(--modes) + var(--globals)); width:var(--right); z-index:300;
+#ui-right{ position:fixed; top:0; bottom:var(--bottom); right:var(--modes); width:var(--right); z-index:300;
   overflow-y:auto; padding:var(--sp-lg) 14px 22px; background:var(--ui-glass);
   backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
   border-left:1px solid var(--ui-line); font:var(--fz-body)/1.4 var(--ui-font); color:var(--ui-text); }
@@ -100,20 +100,10 @@
 #ui-right .modehead{ font-size:var(--fz-title); font-weight:600; color:var(--m);
   letter-spacing:.01em; margin:0 0 var(--sp); }
 
-/* ── globals rail (Origin + Vignette; right of the mode settings) ── */
-#ui-globals{ position:fixed; top:0; bottom:var(--bottom); right:var(--modes); width:var(--globals); z-index:300;
-  overflow-y:auto; padding:var(--sp-lg) 12px 22px; background:var(--ui-glass);
-  backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
-  border-left:1px solid var(--ui-line); font:var(--fz-body)/1.4 var(--ui-font); color:var(--ui-text);
-  display:flex; flex-direction:column; gap:var(--sp); }
-#ui-globals .uigroup{ background:rgba(255,255,255,.025); border:1px solid var(--ui-line);
-  border-left:3px solid var(--ui-line-2); border-radius:var(--r); padding:10px;
-  display:flex; flex-direction:column; gap:7px; }
-#ui-globals .uigroup h5{ margin:0; color:var(--ui-faint); font-size:var(--fz-label);
-  text-transform:uppercase; letter-spacing:.12em; font-weight:700; }
-#ui-globals .fold-body{ display:flex; flex-direction:column; gap:7px; }
-#ui-globals .row{ gap:6px; margin-bottom:9px; }
-#ui-globals .row input[type=range]{ width:70px; }
+/* Vignette lives in the controls rail; keep its sliders narrow so labels fit.
+   (Origin has its own compact rules further down.) */
+#ui-vignette .row input[type=range]{ width:78px; }
+#ui-vignette .row{ gap:6px; margin-bottom:5px; }
 
 /* ── tint every control in the settings panel with the current mode colour ── */
 #ui-right .row input[type=range]{ accent-color:var(--m); }
@@ -228,16 +218,20 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 
 /* per-group colour accents — a hue stripe + tinted heading per block.
    nth-of-type works because the .uigroup divs are the only div children of
-   #ui-controls. Order: Output·Playback·Export·View. */
+   #ui-controls. Order: Output·Playback·Origin·Vignette·Export·View. */
 #ui-controls .uigroup{ border-left-width:3px; }
 #ui-controls .uigroup:nth-of-type(1){ border-left-color:var(--hue-blue); }   /* Output */
 #ui-controls .uigroup:nth-of-type(2){ border-left-color:var(--hue-green); }  /* Playback */
-#ui-controls .uigroup:nth-of-type(3){ border-left-color:var(--hue-amber); }  /* Export */
-#ui-controls .uigroup:nth-of-type(4){ border-left-color:var(--hue-cyan); }   /* View */
+#ui-controls .uigroup:nth-of-type(3){ border-left-color:var(--hue-purple); } /* Origin */
+#ui-controls .uigroup:nth-of-type(4){ border-left-color:var(--hue-pink); }   /* Vignette */
+#ui-controls .uigroup:nth-of-type(5){ border-left-color:var(--hue-amber); }  /* Export */
+#ui-controls .uigroup:nth-of-type(6){ border-left-color:var(--hue-cyan); }   /* View */
 #ui-controls .uigroup:nth-of-type(1) h5{ color:var(--hue-blue); }
 #ui-controls .uigroup:nth-of-type(2) h5{ color:var(--hue-green); }
-#ui-controls .uigroup:nth-of-type(3) h5{ color:var(--hue-amber); }
-#ui-controls .uigroup:nth-of-type(4) h5{ color:var(--hue-cyan); }
+#ui-controls .uigroup:nth-of-type(3) h5{ color:var(--hue-purple); }
+#ui-controls .uigroup:nth-of-type(4) h5{ color:var(--hue-pink); }
+#ui-controls .uigroup:nth-of-type(5) h5{ color:var(--hue-amber); }
+#ui-controls .uigroup:nth-of-type(6) h5{ color:var(--hue-cyan); }
 /* mode-grid group-header colours are set inline by ui.js (GROUP_COLORS), so a
    mode keeps its hue even as a duplicate chip in the Recent group. */
 #ui-modes .recent-chips{ display:block; }
@@ -245,7 +239,7 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 
 
 /* global show/hide of all rails (H or Tab); handle stays visible */
-body.ui-hidden #ui-controls, body.ui-hidden #ui-right, body.ui-hidden #ui-modes, body.ui-hidden #ui-sources, body.ui-hidden #ui-globals{ display:none; }
+body.ui-hidden #ui-controls, body.ui-hidden #ui-right, body.ui-hidden #ui-modes, body.ui-hidden #ui-sources{ display:none; }
 body.ui-hidden #stage{ inset:0 !important; }
 #ui-hide{ position:fixed; top:10px; right:10px; z-index:500; width:30px; height:30px;
   display:flex; align-items:center; justify-content:center; cursor:pointer;
