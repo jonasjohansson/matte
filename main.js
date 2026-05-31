@@ -2122,6 +2122,9 @@ async function startRecording(opts = {}) {
   // (appended here so the actual encoded size is reflected, not the
   // pre-scale request).
   let base = opts.filename || makeFilenameV2();
+  // optional project prefix, e.g. project "DML" → "DML_<name>" (sanitised)
+  const proj = (state.projectName || '').trim().replace(/[^A-Za-z0-9-]/g, '');
+  if (proj && !base.startsWith(proj + '_')) base = `${proj}_${base}`;
   if (!/\.mp4$/i.test(base)) {
     const tail = [
       `${Math.round(state.duration)}s`,
@@ -2855,7 +2858,7 @@ const PERSIST_KEYS = [
   'auroraDensity', 'auroraHeight', 'auroraSpeed', 'auroraDark', 'auroraWave', 'driftAngle', 'driftAmount',
   'gdIntensity', 'gdBeams', 'gdCloud', 'gdPulse',
   'ambCount', 'ambSize', 'ambSoft', 'ambSpeed', 'ambDetail', 'sunX', 'sunY', 'streakMove', 'vignAmount', 'vignFeather', 'vignAnimate', 'vignTexture', 'vignShape', 'ambRole',
-  'exportFps', 'exportSizeMode', 'exportPadBottom', 'matteOutput', 'matteInvert',
+  'exportFps', 'exportSizeMode', 'exportPadBottom', 'matteOutput', 'matteInvert', 'projectName',
   'slotAFillMode', 'slotAColor', 'slotBFillMode', 'slotBColor', 'keepAOutsideB',
   'partEnable', 'partCount', 'partBurst', 'partSpeed', 'partCurl', 'partTrail',
   'partDrag', 'partGravity', 'partLife', 'partFade', 'partSize', 'partGlow',

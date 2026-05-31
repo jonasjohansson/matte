@@ -12,6 +12,7 @@ export const state = {
   startTime: 0,
   reverse: false,
   duration: 15.0,
+  projectName: '',   // optional export-filename prefix, e.g. "DML" → "DML_…"
   // texture input (grunge / watercolor paper) — modulates the reveal + bg tint
   texImg: null, texAmount: 0.0, texBg: 0.0, texAspect: 1.0, texFit: 2,  // fit: 0 stretch,1 contain,2 cover (default cover = fill)
   // origin: transitions grow from within (inside-out). Default centre; auto-set

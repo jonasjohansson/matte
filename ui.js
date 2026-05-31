@@ -219,18 +219,23 @@
         <button class="btn usesrc-btn" id="ui-usesrc" title="use the A/B images for the transition (off = pure matte)">Use source images</button>
         <button class="btn" id="ui-opensrc" title="open the source-image library in a side panel">⊞ Source images</button>
       </div>
-      <div class="uigroup" id="ui-origin">
-        <h5>Origin</h5>
-        <div id="origin-body"></div>
-      </div>
       <div class="uigroup">
         <h5>Export</h5>
+        <div class="grp" id="proj-grp"><label for="ui-proj">project</label><input type="text" id="ui-proj" placeholder="none" maxlength="24" aria-label="project name (filename prefix)" title="prefixed to export filenames, e.g. DML → DML_…"></div>
         <div class="grp"><span id="recwrap"><button class="btn rec" id="ui-rec">● Record</button><span id="recbar"></span></span></div>
         <div class="grp"><button class="btn" id="ui-folder" title="choose a folder to save recordings into">Folder: default</button></div>
         <div class="grp"><button class="btn" id="ui-presets">Presets</button></div>
       </div>`;
     document.body.appendChild(bar);
-    const originGroup=bar.querySelector('#ui-origin'), originBody=bar.querySelector('#origin-body');
+
+    // ── globals rail (3rd right sidebar): Origin + Vignette — shared across every
+    // mode, so they live outside the per-mode settings panel. ──
+    const globals=document.createElement('div'); globals.id='ui-globals';
+    globals.innerHTML=`<div class="uigroup" id="ui-origin"><h5>Origin</h5><div id="origin-body"></div></div>`+
+                      `<div class="uigroup" id="ui-vignette"><h5>Vignette</h5><div id="vign-body"></div></div>`;
+    document.body.appendChild(globals);
+    const originGroup=globals.querySelector('#ui-origin'), originBody=globals.querySelector('#origin-body');
+    const vignBody=globals.querySelector('#vign-body');
 
     // Fixed three-rail layout (controls · canvas · settings · modes); widths come
     // straight from the CSS vars — no runtime toggling.
@@ -275,7 +280,7 @@
     let folded;
     { const stored=localStorage.getItem(FOLD_KEY);
       if(stored!=null){ try{ folded=new Set(JSON.parse(stored)); }catch(e){ folded=null; } }
-      if(!folded){ folded=new Set(['ctrl:View','ctrl:Origin','ctrl:Export']); MODES.forEach(([g])=>folded.add('mode:'+g)); } }
+      if(!folded){ folded=new Set(['ctrl:View','ctrl:Export']); MODES.forEach(([g])=>folded.add('mode:'+g)); } }
     const saveFold=()=>{ try{ localStorage.setItem(FOLD_KEY,JSON.stringify([...folded])); }catch(e){} };
     function makeFoldable(group,head,key){
       const body=document.createElement('div'); body.className='fold-body';
@@ -286,6 +291,7 @@
     }
     { const intro=bar.querySelector('#ui-intro'), h=intro&&intro.querySelector('h5'); if(h) makeFoldable(intro,h,'ui:intro'); }
     bar.querySelectorAll('.uigroup').forEach(g=>{ const h=g.querySelector('h5'); if(h) makeFoldable(g,h,'ctrl:'+h.textContent.trim()); });
+    globals.querySelectorAll('.uigroup').forEach(g=>{ const h=g.querySelector('h5'); if(h) makeFoldable(g,h,'glob:'+h.textContent.trim()); });
     left.querySelectorAll('.mgroup').forEach(g=>{ const h=g.querySelector('h4'); if(h) makeFoldable(g,h,'mode:'+h.textContent.trim()); });
 
     // PRESETS
@@ -353,6 +359,8 @@
     [24,25,30,50,60].forEach(f=>{const o=document.createElement('option');o.value=f;o.textContent=f+' fps';fpsIn.appendChild(o);});
     fpsIn.value=st.exportFps||25;
     fpsIn.onchange=()=>{ st.exportFps=+fpsIn.value; E.save(); };
+    const projIn=bar.querySelector('#ui-proj'); projIn.value=st.projectName||'';
+    projIn.oninput=()=>{ st.projectName=projIn.value; E.save(); };
     const inv=bar.querySelector('#ui-inv'); inv.checked=!!st.matteInvert; inv.onchange=()=>{st.matteInvert=inv.checked;};
     const prev=bar.querySelector('#ui-preview');
     const syncPrev=()=>{ const on=E.matteOutput!==false; prev.textContent='Preview: '+(on?'Matte':'Colour'); prev.classList.toggle('on',!on); };
@@ -482,6 +490,16 @@
       if(pb) originBody.appendChild(pb);
     }
 
+    // ── Vignette: global post-effect, lives in the globals rail (not per-mode). ──
+    function buildVignette(){
+      vignBody.innerHTML='';
+      ['vignAmount','vignShape','vignFeather','vignTexture','vignAnimate'].forEach(k=>{ const w=widget(k); if(w) vignBody.appendChild(w); });
+      const vb=document.createElement('div'); vb.className='ptsbar split';
+      const vr=document.createElement('button'); vr.className='btn sm'; vr.textContent='↺ reset vignette';
+      vr.onclick=()=>{ if(E.resetVignette)E.resetVignette(); buildVignette(); };
+      vb.appendChild(vr); vignBody.appendChild(vb);
+    }
+
     let _activeTab=0;
     function buildParams(m){
       paramsEl.innerHTML='';
@@ -524,11 +542,6 @@
       { const dk = DIRK[m] || (REL.dir(m) ? ['driftAngle','driftAmount','sunX','sunY','streakMove'] : []);
         if (dk.length) tMode.appendChild(section('Direction / source', dk, false)); }
       tFinish.appendChild(section('Advanced',['originX','originY','maskScale','curve','seed','maskShift','organic','edges'],!REL.advanced(m)));
-      { const vs=section('Vignette (global)',['vignAmount','vignShape','vignFeather','vignTexture','vignAnimate'],false);
-        const vb=document.createElement('div'); vb.className='ptsbar split';
-        const vr=document.createElement('button'); vr.className='btn sm'; vr.textContent='\u21ba reset vignette';
-        vr.onclick=()=>{ if(E.resetVignette)E.resetVignette(); buildParams(m); };
-        vb.appendChild(vr); vs.appendChild(vb); tFinish.appendChild(vs); }
     }
     function selectMode(id){
       left.querySelectorAll('.chip').forEach(c=>c.classList.toggle('sel',+c.dataset.mode===id));
@@ -538,7 +551,7 @@
       headEl.textContent=(MODE_NAME[id]||('mode '+id)).replace(/(^|[\s-])\w/g,ch=>ch.toUpperCase()); buildParams(id); buildOrigin(id);
     }
 
-    syncSizeUI(); selectMode(st.mode);
+    buildVignette(); syncSizeUI(); selectMode(st.mode);
     setInterval(syncSizeUI, 1500);
   }
 })();
