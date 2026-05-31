@@ -151,7 +151,7 @@
       items.forEach(([id,name])=>{
         const c=document.createElement('button'); c.className='chip'; c.dataset.mode=id;
         const url=`thumbs/m${String(id).padStart(2,'0')}.png`;
-        c.innerHTML=`<span class="nm">${name}</span>`;
+        c.innerHTML=`<span class="nm">${name.replace(/(^|[\s-])\w/g,ch=>ch.toUpperCase())}</span>`;
         c.style.backgroundImage=`url(${url})`;
         c.onclick=()=>{E.setMode(id);selectMode(id);};
         g.appendChild(c);
@@ -168,7 +168,6 @@
     // ── bottom bar ──
     const bar=document.createElement('div'); bar.id='ui-controls';
     bar.innerHTML=`
-      <button class="btn ghost" id="t-left" title="modes">◧</button>
       <div class="grp"><label>output</label><select id="ui-size"></select><label class="barchk" title="lock output to the source image aspect ratio (keeps the chosen resolution)"><input type="checkbox" id="ui-matchin">match source</label></div>
       <div class="grp" id="ui-wh"><label>size</label><input type="number" id="ui-w" min="2" title="output width (px)"><span style="color:var(--ui-mut)">×</span><input type="number" id="ui-h" min="2" title="output height (px)"><label class="barchk" title="lock the width:height ratio while typing"><input type="checkbox" id="ui-lockar">lock</label></div>
       <div class="sep"></div>
@@ -182,43 +181,11 @@
       <div class="grp"><button class="btn" id="ui-presets">Presets</button><button class="btn" id="ui-folder">Folder</button></div>
       <div class="sep"></div>
       <div class="grp"><label>invert</label><input type="checkbox" id="ui-inv"></div>
-      <div class="grp"><button class="btn" id="ui-preview" title="show B/W matte or the colour result on A/B">Preview: Matte</button></div>
-      <button class="btn ghost" id="t-right" title="settings" style="margin-left:auto">◨</button>`;
+      <div class="grp"><button class="btn" id="ui-preview" title="show B/W matte or the colour result on A/B">Preview: Matte</button></div>`;
     document.body.appendChild(bar);
 
-    // ── panels: left (controls+sources) · modes · settings — independently toggled
-    //   keys 1/2/3, Tab = full canvas, or click the thin edge handle of each panel.
-    const _cs=getComputedStyle(document.documentElement);
-    const LW=parseInt(_cs.getPropertyValue('--left'))||196;
-    const MW=parseInt(_cs.getPropertyValue('--modes'))||150;
-    const RW=parseInt(_cs.getPropertyValue('--right'))||260;
-    const panels={left:true,modes:true,settings:true};
-    function applyPanels(){
-      const L=document.getElementById('ui-controls'),M=document.getElementById('ui-modes'),
-            R=document.getElementById('ui-right'),S=document.getElementById('stage');
-      if(L)L.style.display=panels.left?'':'none';
-      if(R)R.style.display=panels.settings?'':'none';
-      if(M)M.style.display=panels.modes?'':'none';
-      const rw=panels.settings?RW:0,mw=panels.modes?MW:0,lw=panels.left?LW:0;
-      // modes are the far-right rail (right:0 via CSS); settings sits left of modes.
-      if(M)M.style.right='0px';
-      if(R)R.style.right=mw+'px';
-      if(S){S.style.setProperty('left',lw+'px','important');S.style.setProperty('right',(mw+rw)+'px','important');}
-      document.querySelectorAll('.edge-handle').forEach(h=>h.classList.toggle('off',!panels[h.dataset.panel]));
-    }
-    function togglePanel(k){ panels[k]=!panels[k]; applyPanels(); }
-    function toggleFull(){ const any=panels.left||panels.modes||panels.settings; panels.left=panels.modes=panels.settings=!any; applyPanels(); }
-    // thin clickable edge handle for each panel
-    [['left',()=>LW-3],['modes',()=>window.innerWidth-RW-MW-3],['settings',()=>window.innerWidth-RW-3]].forEach(([k])=>{
-      const h=document.createElement('div'); h.className='edge-handle'; h.dataset.panel=k;
-      h.title=k+' panel (toggle)'; h.onclick=()=>togglePanel(k); document.body.appendChild(h);
-    });
-    window.addEventListener('keydown',e=>{
-      if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||e.target.tagName==='TEXTAREA') return;
-      if(e.key==='1'){togglePanel('left');} else if(e.key==='2'){togglePanel('modes');} else if(e.key==='3'){togglePanel('settings');}
-    });
-    bar.querySelector('#t-left').onclick=()=>togglePanel('left');
-    bar.querySelector('#t-right').onclick=()=>togglePanel('settings');
+    // Fixed three-rail layout (controls · canvas · settings · modes); widths come
+    // straight from the CSS vars — no runtime toggling.
 
     // ── popovers (sources / presets / folder) ──
     const pop=document.createElement('div'); pop.id='ui-pop'; document.body.appendChild(pop);
@@ -279,7 +246,7 @@
     // full canvas via Tab (no button — it was a trap with no visible way back).
     // 1/2/3 toggle individual panels; Tab toggles all; edge handles also work.
     window.addEventListener('keydown',e=>{ if(e.key==='Tab' && e.target.tagName!=='INPUT' && e.target.tagName!=='SELECT'){ e.preventDefault(); toggleFull(); }});
-    applyPanels();
+    // (layout is static CSS)
 
     // ── output size ──
     const SIZES=[['ELVERKET ALL · 8000×4373',[8000,4373]],['ELVERKET Panorama · 8000×3411',[8000,3411]],
@@ -460,7 +427,7 @@
     }
     function selectMode(id){
       left.querySelectorAll('.chip').forEach(c=>c.classList.toggle('sel',+c.dataset.mode===id));
-      headEl.textContent=MODE_NAME[id]||('mode '+id); buildParams(id);
+      headEl.textContent=(MODE_NAME[id]||('mode '+id)).replace(/(^|[\s-])\w/g,ch=>ch.toUpperCase()); buildParams(id);
     }
 
     syncSizeUI(); selectMode(st.mode);
