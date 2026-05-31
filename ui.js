@@ -258,10 +258,8 @@
       row.appendChild(pick); row.appendChild(usd); host.appendChild(row);
     });
     refreshFolderBtn();
-    // full-canvas button (also Tab) — toggleFull defined with the panel system above
-    const tFull=document.createElement('button'); tFull.className='btn'; tFull.id='t-full'; tFull.textContent='⤢ Full canvas';
-    tFull.title='full canvas (Tab)'; bar.insertBefore(tFull, bar.querySelector('#t-right'));
-    tFull.onclick=toggleFull;
+    // full canvas via Tab (no button — it was a trap with no visible way back).
+    // 1/2/3 toggle individual panels; Tab toggles all; edge handles also work.
     window.addEventListener('keydown',e=>{ if(e.key==='Tab' && e.target.tagName!=='INPUT' && e.target.tagName!=='SELECT'){ e.preventDefault(); toggleFull(); }});
     applyPanels();
 

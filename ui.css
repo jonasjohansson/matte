@@ -162,5 +162,3 @@ select.mini{ background:#1a1a1a; color:var(--ui-fg,#f0f0f0); border:1px solid #3
 .edge-handle[data-panel=settings]{ right:calc(var(--right) - 4px); }
 .edge-handle.off{ background:var(--ui-line); }
 
-/* full-canvas toggle button: don't flex-grow into a giant empty box */
-#ui-controls #t-full{ flex:0 0 auto; }
