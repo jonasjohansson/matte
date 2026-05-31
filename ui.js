@@ -166,7 +166,6 @@
       <div class="sep"></div>
       <div class="grp"><button class="btn" id="ui-sources">sources</button><label class="barchk" title="use the A/B images (off = pure matte)"><input type="checkbox" id="ui-usesrc">use</label><button class="btn" id="ui-presets">presets</button><button class="btn" id="ui-folder">folder</button></div>
       <div class="sep"></div>
-      <div class="grp"><label>display</label><select id="ui-disp"></select></div>
       <div class="grp"><label>invert</label><input type="checkbox" id="ui-inv"></div>
       <div class="grp"><button class="btn" id="ui-preview" title="show B/W matte or the colour result on A/B">preview: matte</button></div>
       <button class="btn ghost" id="t-right" title="settings" style="margin-left:auto">◨</button>`;
@@ -232,7 +231,7 @@
     });
     refreshFolderBtn();
     // full-canvas toggle: hide both rails for a big preview (also via Tab)
-    const tFull=document.createElement('button'); tFull.className='btn ghost'; tFull.id='t-full'; tFull.textContent='⤢';
+    const tFull=document.createElement('button'); tFull.className='btn'; tFull.id='t-full'; tFull.textContent='⤢ Full canvas';
     tFull.title='full canvas (Tab)'; bar.insertBefore(tFull, bar.querySelector('#t-right'));
     const toggleFull=()=>{const on=!document.body.classList.contains('no-left'); document.body.classList.toggle('no-left',on); document.body.classList.toggle('no-right',on);};
     tFull.onclick=toggleFull;
@@ -254,11 +253,7 @@
     selSize.onchange=()=>{const s=SIZES[+selSize.value]; if(s[1]==='custom'){whBox.style.display='flex';return;} E.setSize(s[1][0],s[1][1]); syncSizeUI();};
     wIn.onchange=hIn.onchange=()=>{E.setSize(+wIn.value,+hIn.value); selSize.value=SIZES.length-1;};
 
-    // ── display preview ──
-    const selDisp=bar.querySelector('#ui-disp');
-    [['Auto (≤1440p)','1440'],['720p','720'],['1080p','1080'],['4K','3840'],['Full','full']].forEach(([l,v])=>{
-      const o=document.createElement('option');o.value=v;o.textContent=l;selDisp.appendChild(o);});
-    selDisp.value=st.previewScale||'1440'; selDisp.onchange=()=>E.setPreview(selDisp.value);
+    // (display-size control removed — the preview always matches the output aspect)
 
     // ── duration / invert ──
     const durIn=bar.querySelector('#ui-dur'); durIn.value=st.duration;

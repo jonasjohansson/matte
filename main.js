@@ -399,14 +399,17 @@ function resizeCanvas() {
   const maxW = window.innerWidth - sidePanel - padding;
   const maxH = window.innerHeight - padding;
   const { w, h } = computeOutputDims();
-  // Backing store renders at the preview scale (recording forces full res);
-  // CSS still sizes to the full-output fit, so only pixel density drops.
-  const pf = recording ? 1 : previewScaleFactor(w, h);
-  canvas.width = Math.max(2, Math.round(w * pf));
-  canvas.height = Math.max(2, Math.round(h * pf));
+  // The display is purely a preview that always matches the OUTPUT aspect ratio.
+  // CSS size = the output fit on screen; backing store = that size x dpr (sharp),
+  // except while recording, when we render the full output resolution. There is
+  // no separate "display size" to pick — only the output resolution matters.
   const fit = Math.min(maxW / w, maxH / h, 1);
-  canvas.style.width = (w * fit) + 'px';
-  canvas.style.height = (h * fit) + 'px';
+  const dispW = Math.max(2, w * fit), dispH = Math.max(2, h * fit);
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width  = Math.max(2, Math.round(recording ? w : dispW * dpr));
+  canvas.height = Math.max(2, Math.round(recording ? h : dispH * dpr));
+  canvas.style.width = dispW + 'px';
+  canvas.style.height = dispH + 'px';
   canvas.classList.remove('empty');  // sized → visible (images or custom size)
 }
 

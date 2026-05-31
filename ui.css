@@ -156,3 +156,6 @@ select.mini{ background:#1a1a1a; color:var(--ui-fg,#f0f0f0); border:1px solid #3
 #src-host::-webkit-scrollbar{ width:0; height:0; }
 body.no-sources #src-host{ display:none; }
 body.no-sources #stage{ left:var(--left) !important; }
+
+/* full-canvas toggle button: don't flex-grow into a giant empty box */
+#ui-controls #t-full{ flex:0 0 auto; }
