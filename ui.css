@@ -11,6 +11,12 @@
   --ui-text:#f0f0f0; --ui-mut:rgba(240,240,240,.68); --ui-faint:rgba(240,240,240,.5);
   --ui-accent:#f0f0f0; --ui-accent-fg:#0a0a0a; --ui-accent-soft:rgba(240,240,240,.14);
   --ui-rec:#ff5b5b; --ui-glass:rgba(12,12,12,.72);
+  /* group accent hues — SINGLE SOURCE. Used by the controls-rail stripes/
+     headings (CSS below) and, read via getComputedStyle, by the mode-column
+     headers + Recent group + per-mode settings tint (ui.js). */
+  --hue-blue:#7fb4e8; --hue-green:#74d2a6; --hue-purple:#c79fe0;
+  --hue-amber:#e8b27f; --hue-pink:#e890b4; --hue-cyan:#9fd0e0;
+  --hue-recent:#d8d8d8;
   --ui-font:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
   /* type scale */
   --fz-label:9.5px;   /* uppercase section + field labels */
@@ -222,14 +228,14 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
    nth-of-type works because the .uigroup divs are the only div children of
    #ui-controls. Order: Output·Playback·Export·View. */
 #ui-controls .uigroup{ border-left-width:3px; }
-#ui-controls .uigroup:nth-of-type(1){ border-left-color:#4a90d9; }   /* Output   — blue */
-#ui-controls .uigroup:nth-of-type(2){ border-left-color:#46c08a; }   /* Playback — green */
-#ui-controls .uigroup:nth-of-type(3){ border-left-color:#d98b46; }   /* Export   — amber */
-#ui-controls .uigroup:nth-of-type(4){ border-left-color:#9fd0e0; }   /* View     — cyan */
-#ui-controls .uigroup:nth-of-type(1) h5{ color:#7fb4e8; }
-#ui-controls .uigroup:nth-of-type(2) h5{ color:#74d2a6; }
-#ui-controls .uigroup:nth-of-type(3) h5{ color:#e8b27f; }
-#ui-controls .uigroup:nth-of-type(4) h5{ color:#9fd0e0; }
+#ui-controls .uigroup:nth-of-type(1){ border-left-color:var(--hue-blue); }   /* Output */
+#ui-controls .uigroup:nth-of-type(2){ border-left-color:var(--hue-green); }  /* Playback */
+#ui-controls .uigroup:nth-of-type(3){ border-left-color:var(--hue-amber); }  /* Export */
+#ui-controls .uigroup:nth-of-type(4){ border-left-color:var(--hue-cyan); }   /* View */
+#ui-controls .uigroup:nth-of-type(1) h5{ color:var(--hue-blue); }
+#ui-controls .uigroup:nth-of-type(2) h5{ color:var(--hue-green); }
+#ui-controls .uigroup:nth-of-type(3) h5{ color:var(--hue-amber); }
+#ui-controls .uigroup:nth-of-type(4) h5{ color:var(--hue-cyan); }
 /* mode-grid group-header colours are set inline by ui.js (GROUP_COLORS), so a
    mode keeps its hue even as a duplicate chip in the Recent group. */
 #ui-modes .recent-chips{ display:block; }

@@ -90,12 +90,6 @@
     ['Archive',[[10,'adv wet'],[11,'adv gravity'],[12,'adv curl'],[13,'adv brush'],[14,'adv seed'],[18,'edge underdraw'],[19,'painterly flow'],[20,'color dabs'],[21,'density grav'],[23,'formation']]],
   ];
   const MODE_NAME = {}; MODES.forEach(g=>g[1].forEach(([id,n])=>MODE_NAME[id]=n));
-  // per-group accent colour, aligned to MODES order (single source of truth — the
-  // mode column, the settings-panel tint, and the Recent group all read this, so a
-  // mode keeps its colour no matter which group its chip lives in).
-  const GROUP_COLORS = ['#7fb4e8','#74d2a6','#c79fe0','#e8b27f','#e890b4','#9fd0e0','rgba(240,240,240,.5)'];
-  const RECENT_COLOR = '#d8d8d8';
-  const MODE_COLOR = {}; MODES.forEach((g,gi)=>g[1].forEach(([id])=>{ MODE_COLOR[id]=GROUP_COLORS[gi]||'var(--ui-text)'; }));
 
   // mode -> its own param keys
   const MK = {
@@ -149,6 +143,17 @@
 
   function init(E){
     const st=E.state;
+
+    // Group accent colours: single source is the CSS hue palette (:root in
+    // ui.css). Read them here so the mode column, Recent group, and per-mode
+    // settings tint stay consistent with the controls-rail stripes. MODES order
+    // → Reveal·Watercolor·Painterly·Light&burn·Ambient·Special·Archive.
+    const _css = getComputedStyle(document.documentElement);
+    const _hue = n => _css.getPropertyValue(n).trim() || 'var(--ui-text)';
+    const GROUP_COLORS = [_hue('--hue-blue'), _hue('--hue-green'), _hue('--hue-purple'),
+                          _hue('--hue-amber'), _hue('--hue-pink'), _hue('--hue-cyan'), _hue('--ui-faint')];
+    const RECENT_COLOR = _hue('--hue-recent');
+    const MODE_COLOR = {}; MODES.forEach((g,gi)=>g[1].forEach(([id])=>{ MODE_COLOR[id]=GROUP_COLORS[gi]||'var(--ui-text)'; }));
 
     // ── left rail: mode grid (thumbnail tiles) ──
     const left=document.createElement('div'); left.id='ui-modes';
