@@ -168,6 +168,10 @@
     // ── bottom bar ──
     const bar=document.createElement('div'); bar.id='ui-controls';
     bar.innerHTML=`
+      <section id="ui-intro">
+        <h5>How it works</h5>
+        <p><strong>Matte</strong> builds black-and-white transition mattes for video. Pick a <strong>mode</strong> on the right and tune its <strong>settings</strong> here. <strong>Origin</strong> sets where the effect starts; drop <strong>source images</strong> to preview it in colour. <strong>Play</strong> or <strong>scrub</strong> to preview, then <strong>Record</strong> to export. Click any heading to fold its panel.</p>
+      </section>
       <div class="uigroup">
         <h5>Output</h5>
         <div class="grp"><select id="ui-size"></select></div>
@@ -253,6 +257,7 @@
       if(folded.has(key)) group.classList.add('folded');
       head.addEventListener('click',()=>{ const f=group.classList.toggle('folded'); if(f)folded.add(key); else folded.delete(key); saveFold(); });
     }
+    { const intro=bar.querySelector('#ui-intro'), h=intro&&intro.querySelector('h5'); if(h) makeFoldable(intro,h,'ui:intro'); }
     bar.querySelectorAll('.uigroup').forEach(g=>{ const h=g.querySelector('h5'); if(h) makeFoldable(g,h,'ctrl:'+h.textContent.trim()); });
     left.querySelectorAll('.mgroup').forEach(g=>{ const h=g.querySelector('h4'); if(h) makeFoldable(g,h,'mode:'+h.textContent.trim()); });
 
@@ -496,9 +501,10 @@
     }
     function selectMode(id){
       left.querySelectorAll('.chip').forEach(c=>c.classList.toggle('sel',+c.dataset.mode===id));
-      // settings header echoes the mode's group accent (read from the group h4 — CSS stays the source)
+      // tint the whole settings panel with the mode's group accent (read from
+      // the group h4 so the CSS palette stays the single source of truth)
       const chip=left.querySelector('.chip.sel'), grp=chip&&chip.closest('.mgroup');
-      headEl.style.color = grp ? getComputedStyle(grp.querySelector('h4')).color : 'var(--ui-text)';
+      right.style.setProperty('--m', grp ? getComputedStyle(grp.querySelector('h4')).color : 'var(--ui-text)');
       headEl.textContent=(MODE_NAME[id]||('mode '+id)).replace(/(^|[\s-])\w/g,ch=>ch.toUpperCase()); buildParams(id); buildOrigin(id);
     }
 

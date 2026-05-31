@@ -92,8 +92,20 @@
   overflow-y:auto; padding:var(--sp-lg) 14px 22px; background:var(--ui-glass);
   backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
   border-left:1px solid var(--ui-line); font:var(--fz-body)/1.4 var(--ui-font); color:var(--ui-text); }
-#ui-right .modehead{ font-size:var(--fz-title); font-weight:600; color:var(--ui-text);
+#ui-right{ --m:var(--ui-accent); }   /* mode accent, set per-mode by ui.js selectMode */
+#ui-right .modehead{ font-size:var(--fz-title); font-weight:600; color:var(--m);
   letter-spacing:.01em; margin:0 0 var(--sp); }
+
+/* ── tint every control in the settings panel with the current mode colour ── */
+#ui-right .row input[type=range]{ accent-color:var(--m); }
+#ui-right .row.check input{ accent-color:var(--m); }
+#ui-right .psec h4{ color:var(--m); border-bottom-color:color-mix(in srgb, var(--m) 32%, transparent); }
+#ui-right select:focus,#ui-right input:focus{ border-color:var(--m); }
+#ui-right .seg-btn.on{ background:var(--m); border-color:var(--m); color:#0a0a0a; }
+#ui-right .seg-btn:hover{ color:var(--m); }
+#ui-right .btn{ border-color:color-mix(in srgb, var(--m) 26%, var(--ui-line)); }
+#ui-right .btn:hover{ border-color:var(--m); color:var(--m); background:var(--ui-hover); }
+#ui-right .btn.on{ background:var(--m); border-color:var(--m); color:#0a0a0a; }
 
 /* settings tabs */
 #ui-right .tabbar{ display:flex; gap:5px; margin:0 0 var(--sp-lg);
@@ -103,7 +115,7 @@
   padding:6px 4px; font:var(--fz-body)/1 var(--ui-font); letter-spacing:.04em; cursor:pointer;
   transition:color .12s, border-color .12s, background .12s; }
 #ui-right .tab:hover{ color:var(--ui-text); border-color:var(--ui-line-2); }
-#ui-right .tab.on{ background:var(--ui-accent); color:var(--ui-accent-fg); border-color:var(--ui-accent); }
+#ui-right .tab.on{ background:var(--m); color:#0a0a0a; border-color:var(--m); }
 
 /* param sections + rows */
 .psec{ margin-bottom:var(--sp-lg); }
@@ -157,6 +169,15 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 #ui-controls #recwrap{ flex:1 1 100%; }
 #ui-controls .barchk{ margin-left:0; }
 
+
+/* intro / how-it-works (top of controls rail; <section> so it doesn't shift
+   the .uigroup nth-of-type accents) */
+#ui-intro{ background:rgba(255,255,255,.025); border:1px solid var(--ui-line);
+  border-left:3px solid var(--ui-line-2); border-radius:var(--r); padding:10px; }
+#ui-intro h5{ margin:0; color:var(--ui-faint); font-size:var(--fz-label);
+  text-transform:uppercase; letter-spacing:.12em; font-weight:700; }
+#ui-intro p{ margin:0; color:var(--ui-mut); font-size:var(--fz-val); line-height:1.55; }
+#ui-intro strong{ color:var(--ui-text); font-weight:600; }
 
 /* subtle grouped blocks in the controls rail */
 #ui-controls .uigroup{ background:rgba(255,255,255,.025); border:1px solid var(--ui-line);
