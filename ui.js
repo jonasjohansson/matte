@@ -377,53 +377,80 @@
         rs.appendChild(rbar); tMode.appendChild(rs);
       }
       if(MK[m]) tMode.appendChild(section('this mode',MK[m],false));
-      tMode.appendChild(section('Reveal',['originAmount','spread'],!REL.reveal(m)));
+      tMode.appendChild(section('Reveal',['spread'],!REL.reveal(m)));
       tMode.appendChild(section('Movement',['turbulence','flow','undulate','animate'],!REL.movement(m)));
       { const dk = DIRK[m] || (REL.dir(m) ? ['driftAngle','driftAmount','sunX','sunY','streakMove'] : []);
         if (dk.length) tOrigin.appendChild(section('Direction / source', dk, false)); }
       {
-        const ptsRelevant = (m<=32 && m!==31) || m===34 || (m>=33 && m<=47);   // transition + ambient
-        const isPaint = (m===37);
-        const curSrc = isPaint ? 'paint' : (E.originSource ? E.originSource() : 'auto');
-        const showPaint = isPaint || (ptsRelevant && curSrc==='paint');
-        const startKeys = showPaint ? ['paintBrush'] : (curSrc==='points' ? ['pointStagger','pointRandom'] : ['originFromImage']);
-        const sec = section('Start points / paint', startKeys, !(ptsRelevant || isPaint));
-        if (ptsRelevant || isPaint) {
-          if (!isPaint) {
-            const selWrap=document.createElement('div'); selWrap.className='ptsbar';
-            const lbl=document.createElement('span'); lbl.className='hint'; lbl.textContent='start:';
-            const sel=document.createElement('select'); sel.className='mini';
-            [['auto','auto (centre / from A)'],['points','points'],['paint','paint a region']].forEach(([v,t])=>{
-              const o=document.createElement('option'); o.value=v; o.textContent=t; if(v===curSrc)o.selected=true; sel.appendChild(o);
-            });
-            sel.onchange=()=>{ E.setOriginSource(sel.value); buildParams(m); };
-            selWrap.appendChild(lbl); selWrap.appendChild(sel); sec.appendChild(selWrap);
+        // ── Origin: where every effect starts from (shared across all effects). ──
+        // Per-mode validity (from the shader audit): transition modes 1-32 (not
+        // particles 31) honour auto/points/paint + the amount blend; ambient
+        // 33-47 cluster around POINTS only (no auto/paint); ripples 34 & particles
+        // 31 ignore origin entirely → greyed.
+        const SRC = (m===37) ? ['paint']
+                  : (m===34 || m===31) ? []
+                  : (m>=33 && m<=47) ? ['points']
+                  : (m<=32) ? ['auto','points','paint'] : [];
+        const usesAmount = SRC.includes('auto');   // only the mask-blend modes use originAmount
+        const sec = section('Origin', [], SRC.length===0);
+        if (SRC.length===0){
+          const n=document.createElement('div'); n.className='hint'; n.textContent='Not used by this mode.';
+          sec.appendChild(n);
+        } else {
+          const blurb=document.createElement('div'); blurb.className='hint';
+          blurb.textContent='Where the effect starts — shared across all effects.';
+          sec.appendChild(blurb);
+          let cur = (m===37) ? 'paint' : (E.originSource ? E.originSource() : 'auto');
+          if(!SRC.includes(cur)) cur=SRC[0];
+          if(E.originSource && E.originSource()!==cur && m!==37) E.setOriginSource(cur);  // clamp invalid carry-over
+          const NAMES={auto:'Auto',points:'Points',paint:'Paint'};
+          if(SRC.length>1){
+            const lbl=document.createElement('div'); lbl.className='hint'; lbl.textContent='Start from'; sec.appendChild(lbl);
+            const seg=document.createElement('div'); seg.className='seg';
+            SRC.forEach(v=>{ const btn=document.createElement('button'); btn.className='seg-btn'+(v===cur?' on':'');
+              btn.textContent=NAMES[v]; btn.onclick=()=>{ E.setOriginSource(v); buildParams(m); }; seg.appendChild(btn); });
+            sec.appendChild(seg);
           }
-          const pb=document.createElement('div'); pb.className='ptsbar';
-          if (showPaint) {
-            if (!isPaint) {
-              const bd=document.createElement('span'); bd.className='hint'; bd.textContent='over:';
-              const cur=(E.paintBackdrop?E.paintBackdrop():'A');
-              const ba=document.createElement('button'); ba.className='btn sm'; ba.textContent='A'; ba.classList.toggle('on',cur==='A');
-              const bb=document.createElement('button'); bb.className='btn sm'; bb.textContent='B'; bb.classList.toggle('on',cur==='B');
-              ba.onclick=()=>{ E.setPaintBackdrop('A'); ba.classList.add('on'); bb.classList.remove('on'); };
-              bb.onclick=()=>{ E.setPaintBackdrop('B'); bb.classList.add('on'); ba.classList.remove('on'); };
-              pb.appendChild(bd); pb.appendChild(ba); pb.appendChild(bb);
-            }
-            const clr=document.createElement('button'); clr.className='btn sm'; clr.textContent='clear';
-            clr.onclick=()=>{ E.clearPaint(); };
-            pb.appendChild(clr);
-            const hint=document.createElement('span'); hint.className='hint'; hint.textContent='drag on the canvas to paint where it starts';
-            pb.appendChild(hint);
-          } else if (curSrc==='points') {
+          if(usesAmount){ const w=widget('originAmount'); if(w) sec.appendChild(w); }
+          // sub-controls + state line per source
+          let pb=document.createElement('div'); pb.className='ptsbar';
+          if(cur==='auto'){
+            const w=widget('originFromImage'); if(w) sec.appendChild(w);
+            const c2=document.createElement('span'); c2.className='hint'; c2.textContent='Grows from the centre (or image A\u2019s bright area).';
+            pb.appendChild(c2);
+          } else if(cur==='points'){
             const place=document.createElement('button'); place.className='btn sm';
-            const sync=()=>{ const on=E.state.placePoints; place.textContent=on?'✓ click canvas — done':'✛ place points'; place.classList.toggle('on',on); };
+            const sync=()=>{ const on=E.state.placePoints; place.textContent=on?'\u2713 Click canvas \u2014 done':'\u2715 Place points'; place.classList.toggle('on',on); };
             place.onclick=()=>{ E.setPlacePoints(!E.state.placePoints); sync(); };
-            const clr=document.createElement('button'); clr.className='btn sm'; clr.textContent='clear';
-            clr.onclick=()=>{ E.clearPoints(); };
+            const clr=document.createElement('button'); clr.className='btn sm'; clr.textContent='Clear';
+            clr.onclick=()=>{ E.clearPoints(); buildParams(m); };
             pb.appendChild(place); pb.appendChild(clr); sync();
+            const n=(E.state.originPoints||[]).length;
+            const st2=document.createElement('span'); st2.className='hint';
+            st2.textContent = n? (n+' point'+(n>1?'s':'')+' placed (max 8)') : 'Click the canvas to add points (max 8).';
+            pb.appendChild(st2);
+            sec.appendChild(pb);
+            ['pointStagger','pointRandom'].forEach(k=>{ const w=widget(k); if(w) sec.appendChild(w); });
+            pb=null;
+          } else if(cur==='paint'){
+            if(m!==37){
+              const bd=document.createElement('span'); bd.className='hint'; bd.textContent='Show under brush:';
+              const back=(E.paintBackdrop?E.paintBackdrop():'A');
+              const seg=document.createElement('div'); seg.className='seg';
+              ['A','B'].forEach(v=>{ const btn=document.createElement('button'); btn.className='seg-btn'+(back===v?' on':'');
+                btn.textContent=v; btn.onclick=()=>{ E.setPaintBackdrop(v); buildParams(m); }; seg.appendChild(btn); });
+              sec.appendChild(bd); sec.appendChild(seg);
+            }
+            const w=widget('paintBrush'); if(w) sec.appendChild(w);
+            const clr=document.createElement('button'); clr.className='btn sm'; clr.textContent='Clear painted region';
+            clr.onclick=()=>{ E.clearPaint(); buildParams(m); };
+            pb.appendChild(clr);
+            const painted=!!E.state._paintReady;
+            const st2=document.createElement('span'); st2.className='hint';
+            st2.textContent = painted? 'Region painted.' : 'Drag on the canvas to paint where it starts.';
+            pb.appendChild(st2);
           }
-          sec.appendChild(pb);
+          if(pb) sec.appendChild(pb);
         }
         tOrigin.appendChild(sec);
       }

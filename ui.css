@@ -215,6 +215,16 @@ body.ui-hidden #stage{ inset:0 !important; }
   font-size:var(--fz-label); text-transform:uppercase; letter-spacing:.06em; cursor:pointer; }
 .barchk input{ margin:0; accent-color:var(--ui-accent); }
 
+/* segmented control (Origin: start-from / backdrop) */
+.seg{ display:flex; gap:0; margin:2px 0 4px; }
+.seg-btn{ flex:1; background:var(--ui-bg2); color:var(--ui-mut); border:1px solid var(--ui-line);
+  border-right-width:0; padding:0 8px; min-height:26px; cursor:pointer;
+  font:var(--fz-val)/1 var(--ui-font); }
+.seg-btn:first-child{ border-radius:var(--r-sm) 0 0 var(--r-sm); }
+.seg-btn:last-child{ border-radius:0 var(--r-sm) var(--r-sm) 0; border-right-width:1px; }
+.seg-btn:hover{ color:var(--ui-text); }
+.seg-btn.on{ background:var(--ui-accent); color:var(--ui-accent-fg); border-color:var(--ui-accent); }
+
 /* small inline select (start-source, etc.) */
 select.mini{ background:var(--ui-bg2); color:var(--ui-text); border:1px solid var(--ui-line);
   font-size:var(--fz-val); padding:3px 5px; border-radius:var(--r-sm); min-height:0; font-family:inherit; }
