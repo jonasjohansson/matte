@@ -219,13 +219,10 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 #ui-controls .uigroup:nth-of-type(3) h5{ color:#9fd0e0; }
 #ui-controls .uigroup:nth-of-type(4) h5{ color:#c79fe0; }
 #ui-controls .uigroup:nth-of-type(5) h5{ color:#e8b27f; }
-/* mode-grid group headers get a matching hue family */
-#ui-modes .mgroup:nth-of-type(1) h4{ color:#7fb4e8; border-bottom-color:#4a90d955; }
-#ui-modes .mgroup:nth-of-type(2) h4{ color:#74d2a6; border-bottom-color:#46c08a55; }
-#ui-modes .mgroup:nth-of-type(3) h4{ color:#c79fe0; border-bottom-color:#9a6fc855; }
-#ui-modes .mgroup:nth-of-type(4) h4{ color:#e8b27f; border-bottom-color:#d98b4655; }
-#ui-modes .mgroup:nth-of-type(5) h4{ color:#e890b4; border-bottom-color:#d9468b55; }
-#ui-modes .mgroup:nth-of-type(6) h4{ color:#9fd0e0; border-bottom-color:#46b0c855; }
+/* mode-grid group-header colours are set inline by ui.js (GROUP_COLORS), so a
+   mode keeps its hue even as a duplicate chip in the Recent group. */
+#ui-modes .recent-chips{ display:block; }
+#ui-modes .recent-empty{ color:var(--ui-faint); font-size:var(--fz-val); line-height:1.4; padding:2px 0 4px; }
 
 
 /* global show/hide of all rails (H or Tab); handle stays visible */

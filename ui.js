@@ -90,6 +90,12 @@
     ['Archive',[[10,'adv wet'],[11,'adv gravity'],[12,'adv curl'],[13,'adv brush'],[14,'adv seed'],[18,'edge underdraw'],[19,'painterly flow'],[20,'color dabs'],[21,'density grav'],[23,'formation']]],
   ];
   const MODE_NAME = {}; MODES.forEach(g=>g[1].forEach(([id,n])=>MODE_NAME[id]=n));
+  // per-group accent colour, aligned to MODES order (single source of truth — the
+  // mode column, the settings-panel tint, and the Recent group all read this, so a
+  // mode keeps its colour no matter which group its chip lives in).
+  const GROUP_COLORS = ['#7fb4e8','#74d2a6','#c79fe0','#e8b27f','#e890b4','#9fd0e0','rgba(240,240,240,.5)'];
+  const RECENT_COLOR = '#d8d8d8';
+  const MODE_COLOR = {}; MODES.forEach((g,gi)=>g[1].forEach(([id])=>{ MODE_COLOR[id]=GROUP_COLORS[gi]||'var(--ui-text)'; }));
 
   // mode -> its own param keys
   const MK = {
@@ -146,16 +152,36 @@
 
     // ── left rail: mode grid (thumbnail tiles) ──
     const left=document.createElement('div'); left.id='ui-modes';
-    MODES.forEach(([gname,items])=>{
+    const titleCase=s=>s.replace(/(^|[\s-])\w/g,ch=>ch.toUpperCase());
+    function makeChip(id,name){
+      const c=document.createElement('button'); c.className='chip'; c.dataset.mode=id;
+      c.innerHTML=`<span class="nm">${titleCase(name)}</span>`;
+      c.style.backgroundImage=`url(thumbs/m${String(id).padStart(2,'0')}.png)`;
+      c.onclick=()=>{E.setMode(id);selectMode(id);};
+      return c;
+    }
+    // Recent group (top): the most recently EXPORTED modes, newest first. Filled
+    // from localStorage 'matte.exports' (written by main.js on each export) and
+    // refreshed on the 'matte-export' event.
+    const recentG=document.createElement('div'); recentG.className='mgroup mgroup-recent'; recentG.innerHTML='<h4>Recent</h4>';
+    recentG.querySelector('h4').style.color=RECENT_COLOR;
+    const recentBody=document.createElement('div'); recentBody.className='recent-chips';
+    recentG.appendChild(recentBody); left.appendChild(recentG);
+    function renderRecent(){
+      let hist=[]; try{ hist=JSON.parse(localStorage.getItem('matte.exports')||'[]'); }catch(e){}
+      const seen=new Set(), ids=[];
+      for(const h of hist){ if(h&&MODE_NAME[h.mode]!=null&&!seen.has(h.mode)){ seen.add(h.mode); ids.push(h.mode); } if(ids.length>=8) break; }
+      recentBody.innerHTML='';
+      if(!ids.length){ const e=document.createElement('div'); e.className='recent-empty'; e.textContent='Modes you export show up here.'; recentBody.appendChild(e); return; }
+      ids.forEach(id=>{ const c=makeChip(id, MODE_NAME[id]); c.classList.toggle('sel',+id===st.mode); recentBody.appendChild(c); });
+    }
+    renderRecent();
+    window.addEventListener('matte-export', renderRecent);
+    MODES.forEach(([gname,items],gi)=>{
       const g=document.createElement('div'); g.className='mgroup'+(gname==='Archive'?' mgroup-archive':''); g.innerHTML=`<h4>${gname}</h4>`;
-      items.forEach(([id,name])=>{
-        const c=document.createElement('button'); c.className='chip'; c.dataset.mode=id;
-        const url=`thumbs/m${String(id).padStart(2,'0')}.png`;
-        c.innerHTML=`<span class="nm">${name.replace(/(^|[\s-])\w/g,ch=>ch.toUpperCase())}</span>`;
-        c.style.backgroundImage=`url(${url})`;
-        c.onclick=()=>{E.setMode(id);selectMode(id);};
-        g.appendChild(c);
-      });
+      const h4=g.querySelector('h4'); h4.style.color=GROUP_COLORS[gi]||'var(--ui-text)';
+      h4.style.borderBottomColor=`color-mix(in srgb, ${GROUP_COLORS[gi]||'var(--ui-line-2)'} 33%, transparent)`;
+      items.forEach(([id,name])=>g.appendChild(makeChip(id,name)));
       left.appendChild(g);
     });
     // ── right rail: modes gallery + params ──
@@ -179,6 +205,7 @@
         <div class="grp" id="ui-wh"><label for="ui-w">size</label><input type="number" id="ui-w" min="2" aria-label="output width in pixels" title="output width (px)"><span style="color:var(--ui-mut)">×</span><input type="number" id="ui-h" min="2" aria-label="output height in pixels" title="output height (px)"></div>
         <label class="barchk wide" title="lock the width:height ratio while typing"><input type="checkbox" id="ui-lockar">Lock aspect ratio</label>
         <div class="grp"><label for="ui-dur">dur</label><input type="number" id="ui-dur" min="1" max="60" step="1" aria-label="duration in seconds"><span style="color:var(--ui-mut)">s</span></div>
+        <div class="grp"><label for="ui-fps">fps</label><select id="ui-fps" aria-label="output frame rate"></select></div>
       </div>
       <div class="uigroup">
         <h5>Playback</h5>
@@ -322,6 +349,10 @@
     // ── duration / invert ──
     const durIn=bar.querySelector('#ui-dur'); durIn.value=st.duration;
     durIn.onchange=()=>{st.duration=Math.max(.5,Math.min(45,+durIn.value));E.save();};
+    const fpsIn=bar.querySelector('#ui-fps');
+    [24,25,30,50,60].forEach(f=>{const o=document.createElement('option');o.value=f;o.textContent=f+' fps';fpsIn.appendChild(o);});
+    fpsIn.value=st.exportFps||25;
+    fpsIn.onchange=()=>{ st.exportFps=+fpsIn.value; E.save(); };
     const inv=bar.querySelector('#ui-inv'); inv.checked=!!st.matteInvert; inv.onchange=()=>{st.matteInvert=inv.checked;};
     const prev=bar.querySelector('#ui-preview');
     const syncPrev=()=>{ const on=E.matteOutput!==false; prev.textContent='Preview: '+(on?'Matte':'Colour'); prev.classList.toggle('on',!on); };
@@ -501,10 +532,9 @@
     }
     function selectMode(id){
       left.querySelectorAll('.chip').forEach(c=>c.classList.toggle('sel',+c.dataset.mode===id));
-      // tint the whole settings panel with the mode's group accent (read from
-      // the group h4 so the CSS palette stays the single source of truth)
-      const chip=left.querySelector('.chip.sel'), grp=chip&&chip.closest('.mgroup');
-      right.style.setProperty('--m', grp ? getComputedStyle(grp.querySelector('h4')).color : 'var(--ui-text)');
+      // tint the whole settings panel with the mode's group accent (MODE_COLOR is
+      // the single source — correct even for duplicated chips in the Recent group)
+      right.style.setProperty('--m', MODE_COLOR[id] || 'var(--ui-text)');
       headEl.textContent=(MODE_NAME[id]||('mode '+id)).replace(/(^|[\s-])\w/g,ch=>ch.toUpperCase()); buildParams(id); buildOrigin(id);
     }
 

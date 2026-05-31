@@ -2149,6 +2149,16 @@ async function startRecording(opts = {}) {
   finishRecordProgress(`Done ✓ · ${(blob.size / 1024 / 1024).toFixed(1)} MB${where}`, 'done', 3500);
   btnRecord.title = `saved (${(blob.size / 1024 / 1024).toFixed(1)} MB)${where}`;
   setTimeout(() => { btnRecord.title = originalTitle; }, 2500);
+
+  // Export history — so Jonas can see which modes were used. Keep last 50.
+  try {
+    const hist = JSON.parse(localStorage.getItem('matte.exports') || '[]');
+    hist.unshift({ mode: state.mode, fps, w: offW, h: totalH,
+                   dur: Math.round(state.duration), mb: +(blob.size / 1048576).toFixed(1),
+                   file: filename, t: Date.now() });
+    localStorage.setItem('matte.exports', JSON.stringify(hist.slice(0, 50)));
+    window.dispatchEvent(new CustomEvent('matte-export'));
+  } catch (e) { /* private mode / quota — non-fatal */ }
 }
 
 const fStyle = tabFrame.addFolder({ title: 'Style', expanded: true });
