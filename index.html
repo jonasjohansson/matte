@@ -58,12 +58,14 @@
   </div>
 
   <input type="file" id="filepicker" accept="image/*,video/*">
+  <!-- Deps are vendored locally (see vendor/) so the app runs fully offline.
+       To bump a version: re-download the dist into vendor/ and update here. -->
   <script type="importmap">
   {
     "imports": {
-      "tweakpane": "https://esm.sh/tweakpane@4.0.5",
-      "@tweakpane/plugin-essentials": "https://esm.sh/@tweakpane/plugin-essentials@0.2.1?deps=tweakpane@4.0.5",
-      "mp4-muxer": "https://esm.sh/mp4-muxer@5.1.5"
+      "tweakpane": "./vendor/tweakpane-4.0.5.js",
+      "@tweakpane/plugin-essentials": "./vendor/tweakpane-plugin-essentials-0.2.1.js",
+      "mp4-muxer": "./vendor/mp4-muxer-5.1.5.mjs"
     }
   }
   </script>
