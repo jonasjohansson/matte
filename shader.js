@@ -171,6 +171,24 @@ fn fbm(q: vec2f) -> f32 {
 fn luma(c: vec3f) -> f32 { return dot(c, vec3f(0.299, 0.587, 0.114)); }
 
 // ---- ambient/lingering matte generators (loop over t; organic, never white) ----
+fn ambPointBias(uv: vec2f, field: f32) -> f32 {
+  // When 1..8 start-points are placed, concentrate the ambient field near them:
+  // a smooth distance falloff (aspect-correct) multiplies the field, so the
+  // pattern clusters around clicks and fades elsewhere. No points -> unchanged.
+  if (p.originCount == 0u || p.originCount >= 200u) { return field; }
+  let diag = sqrt(p.canvasAspect * p.canvasAspect + 1.0);
+  var nearest = 1.0;
+  for (var i = 0u; i < 8u; i = i + 1u) {
+    if (i >= p.originCount) { break; }
+    var duv = uv - p.originPts[i].xy;
+    duv.x = duv.x * p.canvasAspect;
+    nearest = min(nearest, length(duv) / (0.5 * diag));
+  }
+  // reach scales with ambSize so bigger fields spread wider from each point
+  let reach = mix(0.18, 0.6, p.ambSize);
+  let w = 1.0 - smoothstep(0.0, reach, nearest);   // 1 at a point -> 0 past reach
+  return field * mix(0.06, 1.0, w);
+}
 fn ambBokeh(uv: vec2f) -> f32 {
   let ph = p.t * 6.2831853;
   var auv = uv; auv.x = auv.x * p.canvasAspect;
@@ -1656,6 +1674,7 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
   else if (p.mode == 45u) { ambF = ambSnow(uv); }
   else if (p.mode == 46u) { ambF = ambMarble(uv); }
   else if (p.mode == 47u) { ambF = ambBlooms(uv); }
+  if (ambF >= 0.0 && p.mode != 34u) { ambF = ambPointBias(uv, ambF); }
   if (ambF >= 0.0) {
     // ambRole 0 = dissolve A->B using the field (threshold sweeps high->low over t,
     // so bright parts of the pattern flip to B first); needs both images.
@@ -1663,8 +1682,21 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
     let bothImg = (p.validA == 1u && p.validB == 1u);
     if (p.ambRole < 0.5 && bothImg) {
       let sft = mix(0.05, 0.4, p.ambSoft);
+      var fld = ambF;
+      // origin from placed points: subtract a distance ramp so areas near the
+      // points cross the threshold (reveal B) earlier than far ones.
+      if (p.originCount > 0u && p.originCount < 200u && p.mode != 34u) {
+        let diag = sqrt(p.canvasAspect * p.canvasAspect + 1.0);
+        var nearest = 1.0;
+        for (var i = 0u; i < 8u; i = i + 1u) {
+          if (i >= p.originCount) { break; }
+          var duv = uv - p.originPts[i].xy; duv.x = duv.x * p.canvasAspect;
+          nearest = min(nearest, length(duv) / (0.5 * diag));
+        }
+        fld = clamp(fld + (1.0 - nearest) * 0.6, 0.0, 1.0);
+      }
       let edge = mix(1.0 + sft, -sft, p.t);
-      let m = smoothstep(edge, edge + sft, ambF);
+      let m = smoothstep(edge, edge + sft, fld);
       effMixT = m;
       outc = mix(cA.rgb, cB.rgb, m);
     } else {

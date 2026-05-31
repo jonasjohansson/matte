@@ -2581,7 +2581,7 @@ function drawOriginPoints() {
     samOverlayCtx.fill();
     samOverlayCtx.lineWidth = 2 * dpr; samOverlayCtx.strokeStyle = '#000'; samOverlayCtx.stroke();
   }
-  const _pm = (state.mode <= 32 && state.mode !== 31) || state.mode === 34;
+  const _pm = ((state.mode <= 32 && state.mode !== 31) || state.mode === 34) || (state.mode >= 33 && state.mode <= 47);
   samOverlay.classList.toggle('visible', _pm && (state.placePoints || state.originPoints.length > 0));
 }
 function setPlacePoints(on) {
@@ -2645,7 +2645,7 @@ function syncPaintMode() {
   const on = state.mode === 37 || paintOrigin;
   if (on) { ensurePaintCanvas(); uploadPaintTexture(); drawPaintPreview(); }
   samOverlay.classList.toggle('interactive', on || state.placePoints);
-  const _pm2 = (state.mode <= 32 && state.mode !== 31) || state.mode === 34;
+  const _pm2 = ((state.mode <= 32 && state.mode !== 31) || state.mode === 34) || (state.mode >= 33 && state.mode <= 47);
   samOverlay.classList.toggle('visible', on || (_pm2 && (state.placePoints || state.originPoints.length > 0)));
 }
 function paintAt(e) {

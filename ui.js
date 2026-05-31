@@ -373,7 +373,7 @@
       { const dk = DIRK[m] || (REL.dir(m) ? ['driftAngle','driftAmount','sunX','sunY','streakMove'] : []);
         if (dk.length) tOrigin.appendChild(section('Direction / source', dk, false)); }
       {
-        const ptsRelevant = (m<=32 && m!==31) || m===34;   // transition modes + ripples
+        const ptsRelevant = (m<=32 && m!==31) || m===34 || (m>=33 && m<=47);   // transition + ambient
         const isPaint = (m===37);
         const curSrc = isPaint ? 'paint' : (E.originSource ? E.originSource() : 'auto');
         const showPaint = isPaint || (ptsRelevant && curSrc==='paint');
