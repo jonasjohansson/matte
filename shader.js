@@ -1683,11 +1683,11 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
   else if (p.mode == 47u) { ambF = ambBlooms(uv); }
   if (ambF >= 0.0 && p.mode != 34u) { ambF = ambPointBias(uv, ambF); }
   if (ambF >= 0.0) {
-    // ambRole 0 = dissolve A->B using the field (threshold sweeps high->low over t,
-    // so bright parts of the pattern flip to B first); needs both images.
-    // ambRole 1 (or image-free) = standalone looping field (the ambient matte).
-    let bothImg = (p.validA == 1u && p.validB == 1u);
-    if (p.ambRole < 0.5 && bothImg) {
+    // ambRole 0 = REVEAL: a threshold sweeps high->low over t so the field goes
+    // black (t=0) -> white (t=1), the bright parts of the pattern crossing first.
+    // This is a real B/W transition matte and works WITH OR WITHOUT images (with
+    // A+B it also dissolves A->B). ambRole 1 = standalone looping field.
+    if (p.ambRole < 0.5) {
       let sft = mix(0.05, 0.4, p.ambSoft);
       var fld = ambF;
       // origin from placed points: subtract a distance ramp so areas near the

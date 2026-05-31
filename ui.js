@@ -530,14 +530,20 @@
       paramsEl.appendChild(tabBar); paramsEl.appendChild(tMode); paramsEl.appendChild(tFinish);
       const _amb = (m>=33 && m<=47 && m!==37);
       if(_amb){
-        const rs=section('Ambient role',[],false);
+        const rs=section('Ambient mode',[],false);
         const rbar=document.createElement('div'); rbar.className='ptsbar split';
         const mkR=(label,val)=>{ const b=document.createElement('button'); b.className='btn sm'; b.textContent=label;
           b.classList.toggle('on',(E.state.ambRole||0)==val);
           b.onclick=()=>{ E.state.ambRole=val; E.save(); if(E.restartPlayback)E.restartPlayback(); buildParams(m); };
           return b; };
-        rbar.appendChild(mkR('dissolve A\u2192B',0)); rbar.appendChild(mkR('standalone',1));
-        rs.appendChild(rbar); tMode.appendChild(rs);
+        rbar.appendChild(mkR('reveal',0)); rbar.appendChild(mkR('standalone loop',1));
+        rs.appendChild(rbar);
+        const h=document.createElement('div'); h.className='hint';
+        h.textContent = (E.state.ambRole||0)<0.5
+          ? 'Black\u2192white transition using this pattern (dissolves A\u2192B if images are loaded).'
+          : 'Standalone looping field \u2014 not a black\u2192white transition.';
+        rs.appendChild(h);
+        tMode.appendChild(rs);
       }
       if(MK[m]) tMode.appendChild(section('this mode',MK[m],false));
       tMode.appendChild(section('Reveal',['spread'],!REL.reveal(m)));
