@@ -2420,6 +2420,10 @@ async function samLoadModel() {
     samSetStatus('model already loaded');
     return;
   }
+  if (!navigator.onLine && !sam.lib) {
+    samSetStatus('offline — SAM needs internet to download its model (~25 MB)');
+    return;
+  }
   sam.status = 'loading';
   samSetStatus('loading model (~25 MB on first run) …');
   try {

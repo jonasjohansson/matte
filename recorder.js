@@ -10,9 +10,9 @@ export function codecMaxDim(codecString) {
   return 3840;
 }
 
-export // Try a series of VideoEncoder configs in descending order of profile/level so
+// Try a series of VideoEncoder configs in descending order of profile/level so
 // we pick the highest-headroom one this machine actually supports.
-async function pickEncoderConfig(width, height, framerate, bitrate) {
+export async function pickEncoderConfig(width, height, framerate, bitrate) {
   if (typeof VideoEncoder === 'undefined') return null;
   const candidates = [
     { codec: 'hev1.1.6.L153.B0', muxer: 'hevc' }, // HEVC Main L5.1 — 8K

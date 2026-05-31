@@ -4,8 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Matte — a desktop WebGPU tool for building black-and-white transition mattes for video, with dozens of organic reveal modes, paint/point origins, and video export.">
+  <meta name="theme-color" content="#0c0c0c">
   <title>Matte</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./icon-192.png">
   <link rel="stylesheet" href="./style.css">
   <link rel="stylesheet" href="./ui.css">
 </head>
@@ -71,5 +74,10 @@
   </script>
   <script type="module" src="./main.js"></script>
   <script src="./ui.js"></script>
+  <script>
+    // Register the offline service worker (no-op on unsupported browsers).
+    if ('serviceWorker' in navigator)
+      addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+  </script>
 </body>
 </html>
