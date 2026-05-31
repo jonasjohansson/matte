@@ -178,7 +178,7 @@
       </div>
       <div class="uigroup">
         <h5>Playback</h5>
-        <div class="grp"><button class="btn" id="ui-play">▶ Play</button><button class="btn" id="ui-restart" title="restart from 0">⟳ Restart</button><button class="btn" id="ui-loop">Loop</button></div>
+        <div class="grp transport"><button class="btn ico" id="ui-play" title="play / pause">▶</button><button class="btn ico" id="ui-restart" title="restart from 0">⟳</button><button class="btn ico" id="ui-loop" title="loop playback">↻</button></div>
         <div class="grp" id="scrub-grp"><input type="range" id="ui-scrub" min="0" max="1" step="0.001" value="0" title="scrub the transition (progress)"><span class="val" id="ui-scrub-val">0.00</span></div>
         <div class="grp"><button class="btn" id="ui-preview" title="show B/W matte or the colour result on A/B">Preview: Matte</button></div>
         <label class="barchk wide" title="invert the matte (white↔black)"><input type="checkbox" id="ui-inv">Invert matte</label>
@@ -291,7 +291,7 @@
     let scrubbing=false;
     scrub.addEventListener('input',()=>{ scrubbing=true; E.scrub(+scrub.value); scrubVal.textContent=(+scrub.value).toFixed(2); });
     scrub.addEventListener('change',()=>{ scrubbing=false; });
-    function refreshTransport(){ bPlay.textContent=E.playing?'❚❚ pause':'▶ play'; bPlay.classList.toggle('on',E.playing); bLoop.classList.toggle('on',E.loop);
+    function refreshTransport(){ bPlay.textContent=E.playing?'❚❚':'▶'; bPlay.title=E.playing?'pause':'play'; bPlay.classList.toggle('on',E.playing); bLoop.classList.toggle('on',E.loop);
       if(!scrubbing){ const t=E.state.t||0; scrub.value=t; scrubVal.textContent=t.toFixed(2); } }
     setInterval(refreshTransport,300); refreshTransport();
 
