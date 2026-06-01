@@ -77,6 +77,9 @@
     saltImage:{t:'select',label:'sample image',opts:{'A':0,'B':1}},
     glazeDirection:{t:'select',label:'order',opts:{'darks first':0,'lights first':1}},
     migrationDir:{t:'select',label:'flow',opts:{'along edges':0,'perpendicular':1}},
+    cellCols:['columns',1,16,1], cellRows:['rows',1,24,1], cellJitter:['jitter',0,1,.01],
+    cellGlow:['glow (bulb fill)',0,1,.01], cellOrder:['order (seq\u2192random)',0,1,.01],
+    cellCascade:['cascade (front-load)',0,1,.01], cellSnap:['ignite softness',0,1,.01],
   };
 
   // modes grouped for the grid
@@ -109,7 +112,7 @@
     25:['stageBands','stageOverlap'], 26:['migrationStrength','migrationTurb','migrationDir'],
     27:['burnEdgeWobble','burnCharIntensity','burnCharWidth','burnCharPersistence','burnBrowning','burnBrowningWidth','burnAshSpatter','burnGlowIntensity','burnGlowWidth','burnEmberTrail','burnGlowColor','burnGlowFromB','burnSeedCount','burnBIgnite','burnColorBleed'],
     28:['videoMaskInvert','videoMaskFeather','videoBrightness','videoContrast','videoSaturate'],
-    29:['sedBands','bloomCount','dabsWobble','bloomRim','moldWobble','glazeWarm'],
+    29:['cellCols','cellRows','cellJitter','cellOrder','cellCascade','cellGlow','cellSnap'],
     30:['lightIntensity','lightSpread','lightPeakT','lightFlashWidth','lightColor'],
     32:['texFit','texAmount','texBg'],
     33:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // bokeh
@@ -128,7 +131,7 @@
     47:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // ink blooms
   };
   // per-mode label overrides: mode 29 reuses existing uniforms, relabelled.
-  const MK_LABELS = { 29:{ sedBands:'columns', bloomCount:'rows', dabsWobble:'jitter', bloomRim:'glow (centre-out)', moldWobble:'order (seq\u2192random)', glazeWarm:'cascade' } };
+  const MK_LABELS = {};  // (mode 29 now uses dedicated cell* params with their own labels)
   // per-mode Direction/source keys (only what each ambient field reads).
   const DIRK = {
     33:['driftAngle','driftAmount'], 36:['driftAngle','streakMove'],

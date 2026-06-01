@@ -706,6 +706,18 @@ function writeUniforms() {
   uboF32[94] = state.densitySmear;
   uboF32[95] = state.paperGrain;
 
+  // Lamp Grid (mode 29): its own controls map into spare slots only while active,
+  // so other modes never bleed soft/foreign values into it.
+  if (state.mode === 29) {
+    uboF32[34] = state.cellCols;                    // columns
+    uboU32[29] = Math.max(1, (state.cellRows | 0)); // rows
+    uboF32[92] = state.cellJitter;                  // jitter
+    uboF32[30] = state.cellGlow;                    // glow (centre-out bulb)
+    uboF32[77] = state.cellOrder;                   // order: sequential -> random
+    uboF32[85] = state.cellCascade;                 // cascade (front-load)
+    uboF32[1]  = state.cellSnap;                    // ignite softness (0 = instant pop)
+  }
+
   device.queue.writeBuffer(uniformBuffer, 0, uboHost);
 }
 
@@ -1391,7 +1403,7 @@ fPart.addBinding(state, 'partCenterY', { min: 0, max: 1, step: 0.01, label: 'cen
 // Per-mode default values — used by the "Reset defaults" button in each
 // mode folder to restore that mode's params without touching anything else.
 const MODE_DEFAULTS = {
-  29: { sedBands: 5, bloomCount: 10, dabsWobble: 0.3, bloomRim: 0.12, moldWobble: 0.6, glazeWarm: 0.3, spread: 0.0 },
+  29: { cellCols: 5, cellRows: 10, cellJitter: 0.3, cellGlow: 0.12, cellOrder: 0.6, cellCascade: 0.3, cellSnap: 0.0 },
   1:  { rimWidth: 0.12, rimDark: 0.6 },
   2:  { paperAngle: 0, paperAniso: 4, paperGranulation: 0.5, paperGrowth: 0.5, paperFollow: 0.35, paperPatches: 0.45 },
   3:  { bloomCount: 8, bloomRim: 0.6, bloomRate: 0.55, bloomImageBias: 0.6 },
@@ -2961,6 +2973,7 @@ const PERSIST_KEYS = [
   'gdIntensity', 'gdBeams', 'gdCloud', 'gdPulse',
   'ambCount', 'ambSize', 'ambSoft', 'ambSpeed', 'ambDetail', 'sunX', 'sunY', 'streakMove', 'vignAmount', 'vignFeather', 'vignAnimate', 'vignTexture', 'vignShape', 'ambRole',
   'exportFps', 'exportSizeMode', 'exportPadBottom', 'matteOutput', 'matteInvert', 'projectName',
+  'cellCols', 'cellRows', 'cellJitter', 'cellGlow', 'cellOrder', 'cellCascade', 'cellSnap',
   'slotAFillMode', 'slotAColor', 'slotBFillMode', 'slotBColor', 'keepAOutsideB',
   'partEnable', 'partCount', 'partBurst', 'partSpeed', 'partCurl', 'partTrail',
   'partDrag', 'partGravity', 'partLife', 'partFade', 'partSize', 'partGlow',

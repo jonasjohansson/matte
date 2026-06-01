@@ -1281,7 +1281,7 @@ fn cellsMask(uv: vec2f) -> f32 {
   // point so the transition grows from WITHIN (inside-out) rather than sweeping
   // from the edges. Origin defaults to centre, or is derived from image A's
   // bright focal region. The mode's own texture still breaks up the front.
-  if (p.originAmount > 0.0001) {
+  if (p.originAmount > 0.0001 && p.mode != 29u) {
     let diag = sqrt(p.canvasAspect * p.canvasAspect + 1.0);
     var d = 1.0;
     if (p.originCount == 255u) {
@@ -1313,7 +1313,7 @@ fn cellsMask(uv: vec2f) -> f32 {
   // Turbulence: domain-warped multi-octave noise fractures the reveal front into
   // organic, ink-in-water tendrils instead of a smooth glossy edge. Higher =
   // finer, more chaotic detail.
-  if (p.turbulence > 0.0001) {
+  if (p.turbulence > 0.0001 && p.mode != 29u) {
     let sc = mix(3.0, 10.0, p.turbulence);
     // Aspect-correct so the ink cells stay isotropic (don't stretch) at any
     // canvas aspect ratio — e.g. the wide ELVERKET surfaces.
@@ -1328,7 +1328,7 @@ fn cellsMask(uv: vec2f) -> f32 {
   }
   // Undulate: a slow, large-scale animated wave on the reveal front so any mode
   // breathes / dances over the loop (auroras in the sky), not just a one-way wipe.
-  if (p.undulate > 0.0001) {
+  if (p.undulate > 0.0001 && p.mode != 29u) {
     let fp = p.t * 6.2831853;
     let u2 = vec2f(uv.x * p.canvasAspect, uv.y);
     let wave = fbm(u2 * 1.4 + vec2f(sin(fp) * 0.4, cos(fp * 0.8) * 0.4) + p.seed * 0.2);
