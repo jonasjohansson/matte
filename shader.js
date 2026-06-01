@@ -1215,7 +1215,7 @@ fn cellsMask(uv: vec2f) -> f32 {
   // Stretch t so the per-pixel smoothstep window (mask±spread) is fully
   // traversed for t ∈ [0,1] — without this, pixels with mask near 0 or 1
   // never fully reveal at the timeline's endpoints.
-  let sp = mix(0.05, 0.7, p.spread);
+  let sp = mix(0.012, 0.7, p.spread);  // floor low so edge softness 0 = near-instant pop
   let tCurve = applyCurve(p.t, p.curve);
   let t = tCurve * (1.0 + 2.0 * sp) - sp;
   let env = pow(sin(3.14159265 * clamp(p.t, 0.0, 1.0)), 0.85);
