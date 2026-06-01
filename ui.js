@@ -80,6 +80,7 @@
     cellCols:['columns',1,16,1], cellRows:['rows',1,24,1], cellJitter:['jitter',0,1,.01],
     cellGlow:['glow (bulb fill)',0,1,.01], cellOrder:['order (seq\u2192random)',0,1,.01],
     cellCascade:['cascade (front-load)',0,1,.01], cellSnap:['ignite softness',0,1,.01], cellSpill:['spill (past edges)',0,1,.01],
+    cellIgniteBy:{t:'select',label:'ignite by',opts:{'order':0,'warmth (A)':1,'brightness (A)':2,'saturation (A)':3}},
   };
 
   // modes grouped for the grid
@@ -112,7 +113,7 @@
     25:['stageBands','stageOverlap'], 26:['migrationStrength','migrationTurb','migrationDir'],
     27:['burnEdgeWobble','burnCharIntensity','burnCharWidth','burnCharPersistence','burnBrowning','burnBrowningWidth','burnAshSpatter','burnGlowIntensity','burnGlowWidth','burnEmberTrail','burnGlowColor','burnGlowFromB','burnSeedCount','burnBIgnite','burnColorBleed'],
     28:['videoMaskInvert','videoMaskFeather','videoBrightness','videoContrast','videoSaturate'],
-    29:['cellCols','cellRows','cellJitter','cellOrder','cellCascade','cellGlow','cellSnap','cellSpill'],
+    29:['cellCols','cellRows','cellIgniteBy','cellOrder','cellCascade','cellJitter','cellGlow','cellSnap','cellSpill'],
     30:['lightIntensity','lightSpread','lightPeakT','lightFlashWidth','lightColor'],
     32:['texFit','texAmount','texBg'],
     33:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // bokeh

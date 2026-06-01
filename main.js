@@ -717,6 +717,7 @@ function writeUniforms() {
     uboF32[85] = state.cellCascade;                 // cascade (front-load)
     uboF32[1]  = state.cellSnap;                    // ignite softness (0 = instant pop)
     uboF32[101] = state.cellSpill;                  // spill past cell edges
+    uboF32[105] = state.cellIgniteBy;               // ignite order source (0 rand,1 warm,2 bright,3 sat)
   }
 
   device.queue.writeBuffer(uniformBuffer, 0, uboHost);
@@ -1404,7 +1405,7 @@ fPart.addBinding(state, 'partCenterY', { min: 0, max: 1, step: 0.01, label: 'cen
 // Per-mode default values — used by the "Reset defaults" button in each
 // mode folder to restore that mode's params without touching anything else.
 const MODE_DEFAULTS = {
-  29: { cellCols: 5, cellRows: 10, cellJitter: 0.3, cellGlow: 0.12, cellOrder: 0.6, cellCascade: 0.3, cellSnap: 0.0, cellSpill: 0.0 },
+  29: { cellCols: 5, cellRows: 10, cellJitter: 0.3, cellGlow: 0.12, cellOrder: 0.6, cellCascade: 0.3, cellSnap: 0.0, cellSpill: 0.0, cellIgniteBy: 0 },
   1:  { rimWidth: 0.12, rimDark: 0.6 },
   2:  { paperAngle: 0, paperAniso: 4, paperGranulation: 0.5, paperGrowth: 0.5, paperFollow: 0.35, paperPatches: 0.45 },
   3:  { bloomCount: 8, bloomRim: 0.6, bloomRate: 0.55, bloomImageBias: 0.6 },
@@ -2974,7 +2975,7 @@ const PERSIST_KEYS = [
   'gdIntensity', 'gdBeams', 'gdCloud', 'gdPulse',
   'ambCount', 'ambSize', 'ambSoft', 'ambSpeed', 'ambDetail', 'sunX', 'sunY', 'streakMove', 'vignAmount', 'vignFeather', 'vignAnimate', 'vignTexture', 'vignShape', 'ambRole',
   'exportFps', 'exportSizeMode', 'exportPadBottom', 'matteOutput', 'matteInvert', 'projectName',
-  'cellCols', 'cellRows', 'cellJitter', 'cellGlow', 'cellOrder', 'cellCascade', 'cellSnap', 'cellSpill',
+  'cellCols', 'cellRows', 'cellJitter', 'cellGlow', 'cellOrder', 'cellCascade', 'cellSnap', 'cellSpill', 'cellIgniteBy',
   'slotAFillMode', 'slotAColor', 'slotBFillMode', 'slotBColor', 'keepAOutsideB',
   'partEnable', 'partCount', 'partBurst', 'partSpeed', 'partCurl', 'partTrail',
   'partDrag', 'partGravity', 'partLife', 'partFade', 'partSize', 'partGlow',

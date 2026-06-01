@@ -1135,10 +1135,28 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
 
 // ---- main shader ------------------------------------------------------------
 
-fn cellIgnite(gx: f32, gy: f32, cols: f32, total: f32) -> f32 {
+fn cellIgnite(gx: f32, gy: f32, cols: f32, rows: f32, total: f32) -> f32 {
+  // ignite ORDER. p.stageOverlap selects: 0 = random/sequential, 1 = warmth,
+  // 2 = brightness, 3 = saturation (sampled from image A at the cell centre).
+  let by = round(p.stageOverlap);
+  if (by >= 0.5 && p.validA == 1u) {
+    let cu = vec2f((gx + 0.5) / cols, (gy + 0.5) / rows);
+    let c = sampleFit(texA, cu, p.scaleA, p.offsetA, p.validA, p.slotAColor).rgb;
+    var prop = 0.0;
+    if (by < 1.5) {
+      prop = clamp(0.5 + (c.r - c.b) * 0.6, 0.0, 1.0);                    // warmth (warm = high)
+    } else if (by < 2.5) {
+      prop = clamp(dot(c, vec3f(0.299, 0.587, 0.114)), 0.0, 1.0);        // brightness
+    } else {
+      let mx = max(c.r, max(c.g, c.b)); let mn = min(c.r, min(c.g, c.b));
+      prop = select(0.0, (mx - mn) / mx, mx > 0.001);                    // saturation
+    }
+    let jit = (hash21(vec2f(gx + 5.1, gy + 9.3) + p.seed) - 0.5) * 0.12 * clamp(p.moldWobble, 0.0, 1.0);
+    return clamp(1.0 - prop + jit, 0.0, 1.0);                            // high property -> earlier
+  }
   let h = hash21(vec2f(gx + 1.7, gy + 3.3) + p.seed * 1.31);
   let seq = (gx + gy * cols + 0.5) / total;
-  var ig = mix(seq, h, clamp(p.moldWobble, 0.0, 1.0));               // order: sequential -> random
+  var ig = mix(seq, h, clamp(p.moldWobble, 0.0, 1.0));                   // order: sequential -> random
   return pow(clamp(ig, 0.0, 1.0), mix(1.0, 2.6, clamp(p.glazeWarm, 0.0, 1.0)));  // cascade bias
 }
 fn cellsMask(uv: vec2f) -> f32 {
@@ -1156,29 +1174,28 @@ fn cellsMask(uv: vec2f) -> f32 {
   let gx = floor(fx);
   let gy = floor(fy);
   let total = max(1.0, cols * rows);
-  var ignite = cellIgnite(gx, gy, cols, total);
-  // spill: a lit (earlier) neighbour bleeds past the shared edge into this cell
-  // so the glow isn't hard-clipped to the cell rectangle.
+  var ignite = cellIgnite(gx, gy, cols, rows, total);
   let spill = clamp(p.bloomWobble, 0.0, 1.0);
   if (spill > 0.001) {
-    let sub = vec2f(fx - gx - 0.5, fy - gy - 0.5);   // -0.5..0.5 within the cell
+    let sub = vec2f(fx - gx - 0.5, fy - gy - 0.5);
     for (var oy = -1; oy < 2; oy = oy + 1) {
       for (var ox = -1; ox < 2; ox = ox + 1) {
         if (ox == 0 && oy == 0) { continue; }
         let nx = gx + f32(ox);
         let ny = gy + f32(oy);
         if (nx < 0.0 || ny < 0.0 || nx >= cols || ny >= rows) { continue; }
-        let nig = cellIgnite(nx, ny, cols, total);
-        let d = length(sub - vec2f(f32(ox), f32(oy)));            // dist to neighbour centre (cell units)
+        let nig = cellIgnite(nx, ny, cols, rows, total);
+        let d = length(sub - vec2f(f32(ox), f32(oy)));
         let w = clamp(1.0 - (d - 0.5) / max(0.05, spill * 0.9), 0.0, 1.0);
-        ignite = min(ignite, mix(1.0, nig, w));                  // lit neighbour pulls our ignite earlier
+        ignite = min(ignite, mix(1.0, nig, w));
       }
     }
   }
   let cuv = vec2f(fx - gx - 0.5, fy - gy - 0.5);
-  ignite = ignite + length(cuv) * 1.414 * clamp(p.bloomRim, 0.0, 1.0) * 0.2;  // lamp: centre lights first
+  ignite = ignite + length(cuv) * 1.414 * clamp(p.bloomRim, 0.0, 1.0) * 0.2;
   return clamp(ignite, 0.0, 1.0);
 }
+
 
 
 @fragment fn fs(in: VSOut) -> @location(0) vec4f {
