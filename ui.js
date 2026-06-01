@@ -21,7 +21,7 @@
     // start points / paint
     originFromImage:{t:'check',label:'origin from image A'}, pointStagger:['stagger',0,1,.01],
     pointRandom:['stagger random',0,1,.01], pointSize:['lamp size',0,1,.01], pointPop:['pop (instant on)',0,1,.01],
-    paintBrush:['paint brush',.02,.4,.01],
+    pointFill:{t:'check',label:'fill out (cover by end)'}, paintBrush:['paint brush',.02,.4,.01],
     // direction / source
     driftAngle:['direction',0,1,.01], driftAmount:['amount',0,1,.01],
     sunX:['sun / source x',0,1,.01], sunY:['sun / source y',0,1,.01], streakMove:['movement dir',0,1,.01],
@@ -491,7 +491,7 @@
         st2.textContent = n? (n+' point'+(n>1?'s':'')+' placed (max 16)') : 'Click the canvas to add points (max 16).';
         pb.appendChild(st2);
         originBody.appendChild(pb);
-        ['pointSize','pointPop','pointStagger','pointRandom'].forEach(k=>{ const w=widget(k); if(w) originBody.appendChild(w); });
+        ['pointSize','pointPop','pointStagger','pointRandom','pointFill'].forEach(k=>{ const w=widget(k); if(w) originBody.appendChild(w); });
         pb=null;
       } else if(cur==='paint'){
         if(m!==37){

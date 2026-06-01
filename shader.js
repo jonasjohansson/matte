@@ -85,7 +85,7 @@ struct Params {
   sunY: f32, streakMove: f32, vignAmount: f32, vignFeather: f32,
   vignAnimate: f32, vignTexture: f32, vignShape: f32, ambRole: f32,
   originPts2: array<vec4f, 8>,
-  pointSize: f32, pointPop: f32, ptPad0: f32, ptPad1: f32,
+  pointSize: f32, pointPop: f32, pointFill: f32, ptPad1: f32,
 };
 
 @group(0) @binding(0) var<uniform> p: Params;
@@ -1355,7 +1355,10 @@ fn cellsMask(uv: vec2f) -> f32 {
         // reveal threshold time at this pixel for this lamp: ignites at v.z, fills
         // the disc over the grow time, then ramps slowly outside the disc (so small
         // lamps stay small, but the frame can still fully cover by raising lamp size).
-        let th = v.z + min(local, 1.0) * grow + max(0.0, local - 1.0) * 2.0;
+        var th = v.z + min(local, 1.0) * grow + max(0.0, local - 1.0) * 2.0;
+        // fill out: past the lamp's edge, keep blooming outward (v.z + dist) so the
+        // frame fully covers by t=1 instead of staying as bounded lamps.
+        if (p.pointFill > 0.5) { th = min(th, v.z + dist); }
         d = min(d, clamp(th, 0.0, 1.0));
       }
       dLinear = true;
@@ -1928,7 +1931,7 @@ struct Params {
   sunY: f32, streakMove: f32, vignAmount: f32, vignFeather: f32,
   vignAnimate: f32, vignTexture: f32, vignShape: f32, ambRole: f32,
   originPts2: array<vec4f, 8>,
-  pointSize: f32, pointPop: f32, ptPad0: f32, ptPad1: f32,
+  pointSize: f32, pointPop: f32, pointFill: f32, ptPad1: f32,
 };
 
 @group(0) @binding(0) var<uniform> p: Params;
@@ -2167,7 +2170,7 @@ struct Params {
   sunY: f32, streakMove: f32, vignAmount: f32, vignFeather: f32,
   vignAnimate: f32, vignTexture: f32, vignShape: f32, ambRole: f32,
   originPts2: array<vec4f, 8>,
-  pointSize: f32, pointPop: f32, ptPad0: f32, ptPad1: f32,
+  pointSize: f32, pointPop: f32, pointFill: f32, ptPad1: f32,
 };
 @group(0) @binding(0) var<uniform> p: Params;
 @group(0) @binding(1) var texA: texture_2d<f32>;

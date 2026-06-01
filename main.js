@@ -711,6 +711,7 @@ function writeUniforms() {
   }
   uboF32[268] = state.pointSize;   // lamp radius cap
   uboF32[269] = state.pointPop;    // ignition snap (0 grow .. 1 instant)
+  uboF32[270] = state.pointFill ? 1 : 0;  // fill out: bloom past lamp edge to full coverage
   uboU32[208] = (state.originSource === 'paint' && state._paintReady) ? 255 : nPts;
   uboF32[209] = state.flow;  // turbulence time-drift (animated ink)
   uboF32[210] = state.undulate;  // slow large-scale dance of the reveal front
@@ -1919,6 +1920,7 @@ fPts.addBinding(state, 'pointSize', { min: 0, max: 1, step: 0.01, label: 'lamp s
 fPts.addBinding(state, 'pointPop', { min: 0, max: 1, step: 0.01, label: 'pop (instant on)' });
 fPts.addBinding(state, 'pointStagger', { min: 0, max: 1, step: 0.01, label: 'stagger' });
 fPts.addBinding(state, 'pointRandom', { min: 0, max: 1, step: 0.01, label: 'stagger random' });
+fPts.addBinding(state, 'pointFill', { label: 'fill out (cover by end)' });
 fPts.addBinding(state, 'paintBrush', { min: 0.02, max: 0.4, step: 0.01, label: 'paint brush' });
 fPts.addButton({ title: 'Clear paint' }).on('click', () => { if (typeof clearPaint === 'function') clearPaint(); });
 
@@ -3024,7 +3026,7 @@ const PERSIST_KEYS = [
   'fit', 'bg',
   'customSize', 'matchInput', 'lockAspect', 'outW', 'outH', 'previewScale', 'useSources', 'texAmount', 'texBg', 'texFit',
   'originAmount', 'originX', 'originY', 'originFromImage', 'turbulence', 'flow', 'undulate', 'animate', 'originPoints',
-  'pointStagger', 'pointRandom', 'pointSize', 'pointPop', 'paintBrush',
+  'pointStagger', 'pointRandom', 'pointSize', 'pointPop', 'pointFill', 'paintBrush',
   'auroraDensity', 'auroraHeight', 'auroraSpeed', 'auroraDark', 'auroraWave', 'driftAngle', 'driftAmount',
   'gdIntensity', 'gdBeams', 'gdCloud', 'gdPulse',
   'ambCount', 'ambSize', 'ambSoft', 'ambSpeed', 'ambDetail', 'sunX', 'sunY', 'streakMove', 'vignAmount', 'vignFeather', 'vignAnimate', 'vignTexture', 'vignShape', 'ambRole',
