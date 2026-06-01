@@ -1509,6 +1509,10 @@ const MODE_DEFAULTS = {
     lightIntensity: 1.0, lightSpread: 0.4, lightPeakT: 0.5, lightFlashWidth: 0.1,
     lightColor: '#fff7e6',
   },
+  // radial burst (48) + smoke ring (49) reuse the generic reveal controls; these
+  // are good starting points for each effect's character.
+  48: { originX: 0.5, originY: 0.5, organic: 0.55, edges: 0.4, turbulence: 0.3, flow: 0.5, spread: 0.18, curve: 3, seed: 42 },
+  49: { originX: 0.5, originY: 0.5, organic: 0.45, edges: 0.0, turbulence: 0.6, flow: 0.5, spread: 0.32, curve: 0, seed: 7 },
 };
 function resetModeDefaults(modeId) {
   const d = MODE_DEFAULTS[modeId];
@@ -1565,6 +1569,8 @@ const MODE_OPTIONS = {
   'Video mask (T slot)':                  28,
   'Light & burn — lamp grid':             29,
   'Light bloom — overexposure to reveal': 30,
+  'Light & burn — radial burst':          48,
+  'Light & burn — smoke ring':            49,
   'Texture — reveal by luminance':        32,
   'Ambient — bokeh (looping)':            33,
   'Ambient — water ripples (looping)':    34,

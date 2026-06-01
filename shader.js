@@ -1203,7 +1203,51 @@ fn cellsMask(uv: vec2f) -> f32 {
   return clamp(ignite, 0.0, 1.0);
 }
 
+// mode 48 — radial burst: fine filaments explode outward from a centre point, like
+// a stretched-pixel shockwave / anemone. Streaks are coherent along the radius
+// (so they read as long radial threads) and break up by angle. originX/Y = centre,
+// organic = streak density, edges = how far filaments reach ahead, turbulence =
+// front chaos, flow = churn speed, seed = variation.
+fn radialBurstMask(uv: vec2f) -> f32 {
+  let c = vec2f(p.originX, p.originY);
+  var d = uv - c;
+  d.x = d.x * p.canvasAspect;
+  let diag = 0.5 * sqrt(p.canvasAspect * p.canvasAspect + 1.0);
+  let r = length(d) / diag;                         // 0 at centre .. ~1 at corner
+  let ang = atan2(d.y, d.x);
+  let dir = vec2f(cos(ang), sin(ang));              // periodic -> no angular seam
+  let anim = p.t * p.flow * 0.8 + p.seed * 0.37;
+  let freq = mix(10.0, 60.0, p.organic);            // streak density
+  var streak = fbm(dir * freq + anim * 0.5);
+  streak = streak + 0.4 * fbm(dir * freq * 2.6 + vec2f(0.0, r * 3.0) + anim);  // feathered tips
+  streak = streak / 1.4;
+  let warp = (fbm(uv * mix(3.0, 11.0, p.turbulence) + anim) - 0.5) * p.turbulence * 0.25;
+  let reach = mix(0.15, 0.7, clamp(p.edges * 0.5 + 0.5, 0.0, 1.0));
+  let m = r - (streak - 0.5) * reach + warp;        // streaks pull filaments ahead
+  return clamp(m, 0.0, 1.0);
+}
 
+// mode 49 — smoke ring: a wispy, lobed region grows from a centre, its boundary
+// warped by domain noise into smoky tendrils (the glowing rim is added in the
+// output pass). originX/Y = centre, organic = lobe count, turbulence = smoke
+// wispiness, flow = churn speed, seed = variation.
+fn smokeRingMask(uv: vec2f) -> f32 {
+  let c = vec2f(p.originX, p.originY);
+  var d = uv - c;
+  d.x = d.x * p.canvasAspect;
+  let diag = 0.5 * sqrt(p.canvasAspect * p.canvasAspect + 1.0);
+  var r = length(d) / diag;
+  let ang = atan2(d.y, d.x);
+  let dir = vec2f(cos(ang), sin(ang));
+  let anim = p.t * p.flow * 0.6 + p.seed * 0.2;
+  let lobes = mix(2.0, 9.0, p.organic);
+  let lobeW = (fbm(dir * lobes + anim) - 0.5) * 0.5;          // non-circular, blobby
+  let sc = mix(1.5, 6.0, p.turbulence);
+  let smoke = (fbm(uv * sc + vec2f(anim, anim * 0.5) + p.seed * 0.11) - 0.5);  // wisps
+  let smokeAmt = mix(0.08, 0.5, p.turbulence);
+  r = r + lobeW + smoke * smokeAmt;
+  return clamp(r, 0.0, 1.0);
+}
 
 @fragment fn fs(in: VSOut) -> @location(0) vec4f {
   let uv = in.uv;
@@ -1302,6 +1346,10 @@ fn cellsMask(uv: vec2f) -> f32 {
     // transition reveals along the texture's tones (e.g. a watercolor wash
     // dissolving in by value). Contain-fit so the texture keeps its aspect.
     mask = texFitLuma(uv);
+  } else if (p.mode == 48u) {
+    mask = radialBurstMask(uv);
+  } else if (p.mode == 49u) {
+    mask = smokeRingMask(uv);
   } else if (p.mode == 37u) {
     // Paint: the painted field (in texTexture) drives the reveal. Bright paint =
     // reveals early; the soft brush falloff makes each stroke grow/expand. Stroke
@@ -1763,6 +1811,21 @@ fn cellsMask(uv: vec2f) -> f32 {
       effMixT = 0.0;
     }
   }
+
+  // ---- glowing front rim (modes 48 burst / 49 smoke ring) ----
+  // A bright band tracks the reveal front (where t ~= mask), giving the energetic
+  // glow seen in the reference clips. In colour preview it's a cool luminous rim;
+  // it also lifts the matte a touch ahead of the front so the B/W reads as light.
+  if (p.mode == 48u || p.mode == 49u) {
+    let bandW = sp * 1.6 + 0.025;
+    let band = exp(-pow((t - mask) / bandW, 2.0));        // gaussian around the front
+    let glowVar = 0.55 + 0.55 * fbm(uv * 8.0 + p.seed * 0.2 + p.t * p.flow);
+    let g = clamp(band * glowVar * env, 0.0, 1.5);
+    let glowCol = vec3f(0.55, 0.7, 1.0);                  // cool blue, like the refs
+    outc = clamp(outc + glowCol * g * 0.9, vec3f(0.0), vec3f(1.0));
+    effMixT = clamp(effMixT + g * 0.25, 0.0, 1.0);        // soft leading glow in the matte
+  }
+
   // Ambient/lingering modes output a looping field directly (not a 0->1 reveal).
   var ambF = -1.0;
   if (p.mode == 33u) { ambF = ambBokeh(uv); }

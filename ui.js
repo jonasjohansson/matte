@@ -90,7 +90,7 @@
     ['Reveal',[[0,'smooth'],[1,'pigment rim'],[7,'iris'],[15,'wet edge']]],
     ['Watercolor',[[2,'paper grain'],[3,'backrun blooms'],[4,'wet diffusion'],[5,'tonal sediment'],[6,'salt'],[8,'wet bleed'],[9,'pigment run'],[17,'tonal wash'],[24,'cauliflower bloom'],[25,'wet-stage'],[26,'migration']]],
     ['Painterly',[[16,'stroke-follow'],[22,'mold tendrils']]],
-    ['Light & burn',[[27,'paper scorch'],[29,'lamp grid'],[30,'light bloom']]],
+    ['Light & burn',[[27,'paper scorch'],[29,'lamp grid'],[30,'light bloom'],[48,'radial burst'],[49,'smoke ring']]],
     ['Ambient (loop)',[[33,'bokeh'],[34,'water ripples'],[35,'sun glare'],[36,'light streaks'],[38,'aurora'],[39,'godrays'],[40,'clouds'],[41,'caustics'],[42,'embers'],[43,'mist'],[44,'rain'],[45,'snow'],[46,'marble'],[47,'ink blooms']]],
     ['Special',[[28,'video mask'],[32,'texture-source'],[31,'particles'],[37,'paint']]],
     ['Archive',[[10,'adv wet'],[11,'adv gravity'],[12,'adv curl'],[13,'adv brush'],[14,'adv seed'],[18,'edge underdraw'],[19,'painterly flow'],[20,'color dabs'],[21,'density grav'],[23,'formation']]],
@@ -144,7 +144,7 @@
   };
 
   // relevance of the global groups per mode
-  const isTrans = m => m<=32 && m!==31;            // reveal/movement/advanced apply
+  const isTrans = m => (m<=32 && m!==31) || m>=48; // reveal/movement/advanced apply
   const REL = {
     reveal: m=>isTrans(m), movement: m=>isTrans(m), advanced: m=>isTrans(m),
     points: m=>(m<=32&&m!==31)||m===34, dir: m=>[33,35,36,39,40,41,42,43,44,45,46,47].includes(m), vign: ()=>true,
@@ -455,7 +455,7 @@
       const SRC = (m===37) ? ['paint']
                 : (m===34 || m===31) ? []
                 : (m>=33 && m<=47) ? ['points']
-                : (m<=32) ? ['auto','points','paint'] : [];
+                : (m<=32 || m>=48) ? ['auto','points','paint'] : [];
       const usesAmount = SRC.includes('auto');   // only mask-blend modes use originAmount
       originGroup.classList.toggle('dim', SRC.length===0);
       if (SRC.length===0){
