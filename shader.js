@@ -1162,6 +1162,11 @@ fn cellIgnite(gx: f32, gy: f32, cols: f32, rows: f32, total: f32) -> f32 {
 fn cellsMask(uv: vec2f) -> f32 {
   // Lamp grid (mode 29): a jittered grid of cells, each "igniting" (black->white)
   // at its own staggered time so a collage lights up cell by cell like lamps.
+  // "analysed regions" (ignite by = 4): reveal the CPU-baked per-pixel light-up
+  // map (texRegions.r) instead of a fixed grid.
+  if (round(p.stageOverlap) > 3.5) {
+    return clamp(textureSampleLevel(texRegions, samp, uv, 0.0).r, 0.0, 1.0);
+  }
   let cols = max(1.0, round(p.sedBands));
   let rows = max(1.0, round(f32(p.bloomCount)));
   var guv = uv;

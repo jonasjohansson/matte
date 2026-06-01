@@ -80,7 +80,8 @@
     cellCols:['columns',1,16,1], cellRows:['rows',1,24,1], cellJitter:['jitter',0,1,.01],
     cellGlow:['glow (bulb fill)',0,1,.01], cellOrder:['order (seq\u2192random)',0,1,.01],
     cellCascade:['cascade (front-load)',0,1,.01], cellSnap:['ignite softness',0,1,.01], cellSpill:['spill (past edges)',0,1,.01],
-    cellIgniteBy:{t:'select',label:'ignite by',opts:{'order':0,'warmth (A)':1,'brightness (A)':2,'saturation (A)':3}},
+    cellIgniteBy:{t:'select',label:'ignite by',opts:{'order':0,'warmth (A)':1,'brightness (A)':2,'saturation (A)':3,'analysed (A)':4}},
+    cellAnalyseBy:{t:'select',label:'analyse by',opts:{'random':0,'warmth':1,'brightness':2}},
   };
 
   // modes grouped for the grid
@@ -113,7 +114,7 @@
     25:['stageBands','stageOverlap'], 26:['migrationStrength','migrationTurb','migrationDir'],
     27:['burnEdgeWobble','burnCharIntensity','burnCharWidth','burnCharPersistence','burnBrowning','burnBrowningWidth','burnAshSpatter','burnGlowIntensity','burnGlowWidth','burnEmberTrail','burnGlowColor','burnGlowFromB','burnSeedCount','burnBIgnite','burnColorBleed'],
     28:['videoMaskInvert','videoMaskFeather','videoBrightness','videoContrast','videoSaturate'],
-    29:['cellCols','cellRows','cellIgniteBy','cellOrder','cellCascade','cellJitter','cellGlow','cellSnap','cellSpill'],
+    29:['cellCols','cellRows','cellIgniteBy','cellAnalyseBy','cellOrder','cellCascade','cellJitter','cellGlow','cellSnap','cellSpill'],
     30:['lightIntensity','lightSpread','lightPeakT','lightFlashWidth','lightColor'],
     32:['texFit','texAmount','texBg'],
     33:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // bokeh
@@ -552,6 +553,21 @@
         paramsEl.appendChild(rs);
       }
       if(MK[m]) paramsEl.appendChild(section('this mode',MK[m],false,MK_LABELS[m]));
+      if(m===29){
+        const ab=document.createElement('div'); ab.className='ptsbar split';
+        const an=document.createElement('button'); an.className='btn sm';
+        an.textContent='⚡ Analyse A → regions';
+        an.title='segment image A into colour regions and light them in sequence (set ignite by → analysed)';
+        an.onclick=()=>{ const by=['random','warmth','brightness'][E.state.cellAnalyseBy||0];
+          const n=E.analyseCells(by);
+          if(n){ E.state.cellIgniteBy=4; if(E.restartPlayback)E.restartPlayback(); buildParams(m); }
+          else { alert('Load an image into slot A first (⊞ Source images), then Analyse.'); } };
+        ab.appendChild(an); paramsEl.appendChild(ab);
+        const h=document.createElement('div'); h.className='hint sec-note';
+        h.textContent='Set ignite by → analysed (A) to light the detected regions. Re-run Analyse after changing A or the analyse order.';
+        paramsEl.appendChild(h);
+      }
+
       paramsEl.appendChild(section('Reveal',['spread'],!REL.reveal(m)));
       paramsEl.appendChild(section('Movement',['turbulence','flow','undulate','animate'],!REL.movement(m)));
       { const dk = DIRK[m] || (REL.dir(m) ? ['driftAngle','driftAmount','sunX','sunY','streakMove'] : []);

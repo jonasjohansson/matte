@@ -254,6 +254,53 @@ function clearColourise() {
   if (colourLut) { colourLut.destroy(); colourLut = null; }
 }
 
+// ── Lamp Grid (mode 29) "analysed regions" — segment image A into colour
+// regions on the CPU and bake a per-pixel light-up-time map into texRegions,
+// so the mode lights real collage parts in sequence (not a fixed grid). Re-run
+// via the Analyse button / on demand. by = 'warmth' | 'brightness' | 'random'.
+function analyseCellRegions(by) {
+  if (!state.imgA) { console.warn('[cells] no image in slot A to analyse'); return false; }
+  const img = state.imgA;
+  const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+  const W = Math.max(8, Math.min(220, Math.round(iw)));
+  const H = Math.max(4, Math.round(ih * (W / iw)));
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const cx = cv.getContext('2d', { willReadFrequently: true });
+  cx.drawImage(img, 0, 0, W, H);
+  const px = cx.getImageData(0, 0, W, H).data;
+  const NP = W * H;
+  const parent = new Int32Array(NP); for (let i = 0; i < NP; i++) parent[i] = i;
+  const find = (a) => { while (parent[a] !== a) { parent[a] = parent[parent[a]]; a = parent[a]; } return a; };
+  const uni = (a, b) => { a = find(a); b = find(b); if (a !== b) parent[a] = b; };
+  const THRESH = 42;  // colour-distance to merge neighbours into one region (tuneable)
+  const near = (i, j) => { const a = i*4, b = j*4;
+    return Math.abs(px[a]-px[b]) + Math.abs(px[a+1]-px[b+1]) + Math.abs(px[a+2]-px[b+2]) < THRESH; };
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = y*W + x;
+    if (x+1 < W && near(i, i+1)) uni(i, i+1);
+    if (y+1 < H && near(i, i+W)) uni(i, i+W);
+  }
+  const roots = new Map();
+  for (let i = 0; i < NP; i++) { const r = find(i); let o = roots.get(r);
+    if (!o) { o = { r:0, g:0, b:0, n:0 }; roots.set(r, o); }
+    const a = i*4; o.r += px[a]; o.g += px[a+1]; o.b += px[a+2]; o.n++; }
+  const regs = [...roots.entries()].map(([root, o]) => {
+    const r = o.r/o.n, g = o.g/o.n, b = o.b/o.n;
+    return { root, warmth: r - b, bright: 0.299*r + 0.587*g + 0.114*b, rnd: Math.random() }; });
+  const keyFn = by === 'warmth' ? (z => -z.warmth) : by === 'brightness' ? (z => -z.bright) : (z => z.rnd);
+  regs.sort((A, B) => keyFn(A) - keyFn(B));
+  const N = regs.length;
+  const timeOf = new Map(); regs.forEach((z, idx) => timeOf.set(z.root, N > 1 ? idx/(N-1) : 0));
+  const data = new Uint8Array(NP * 4);
+  for (let i = 0; i < NP; i++) { const t = timeOf.get(find(i)) || 0; data[i*4] = Math.round(t*255); data[i*4+3] = 255; }
+  if (texRegions && texRegions !== placeholderTexRegions) texRegions.destroy();
+  const tex = device.createTexture({ label: 'tex-cell-regions', size: [W, H, 1], format: 'rgba8unorm',
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+  device.queue.writeTexture({ texture: tex }, data, { bytesPerRow: W*4 }, [W, H, 1]);
+  texRegions = tex; bindGroup = makeBindGroup();
+  console.log(`[cells] analysed A: ${W}x${H}, ${N} regions, order=${by}`);
+  return N;
+}
+
 // ============================================================================
 // Particle layer (GPU compute sim + additive instanced draw)
 // ----------------------------------------------------------------------------
@@ -2975,7 +3022,7 @@ const PERSIST_KEYS = [
   'gdIntensity', 'gdBeams', 'gdCloud', 'gdPulse',
   'ambCount', 'ambSize', 'ambSoft', 'ambSpeed', 'ambDetail', 'sunX', 'sunY', 'streakMove', 'vignAmount', 'vignFeather', 'vignAnimate', 'vignTexture', 'vignShape', 'ambRole',
   'exportFps', 'exportSizeMode', 'exportPadBottom', 'matteOutput', 'matteInvert', 'projectName',
-  'cellCols', 'cellRows', 'cellJitter', 'cellGlow', 'cellOrder', 'cellCascade', 'cellSnap', 'cellSpill', 'cellIgniteBy',
+  'cellCols', 'cellRows', 'cellJitter', 'cellGlow', 'cellOrder', 'cellCascade', 'cellSnap', 'cellSpill', 'cellIgniteBy', 'cellAnalyseBy',
   'slotAFillMode', 'slotAColor', 'slotBFillMode', 'slotBColor', 'keepAOutsideB',
   'partEnable', 'partCount', 'partBurst', 'partSpeed', 'partCurl', 'partTrail',
   'partDrag', 'partGravity', 'partLife', 'partFade', 'partSize', 'partGlow',
@@ -3081,6 +3128,7 @@ window.__engine = {
   loadTexture(file) { if (file) loadTextureFile(file); },
   // colourise (gradient map, preview only)
   loadColourise, clearColourise,
+  analyseCells(by) { return analyseCellRegions(by || 'random'); },
   get colourise() { return !!state.colourise; },
   // ── output folder ──
   hasFolderAPI: HAS_FS_ACCESS,
