@@ -1493,7 +1493,10 @@ fn cellsMask(uv: vec2f) -> f32 {
     cB_eff   = sampleFit(texB, uv + dispBase * p.videoDisplaceB, p.scaleB, p.offsetB, p.validB, p.slotBColor).rgb;
   }
 
-  var outc = mix(colA_eff, cB_eff, mixT);
+  // Invert matte also reverses the A->B reveal direction in colour preview, so
+  // the effect can REVEAL A (image appears) instead of dissolving it away.
+  let mixV = select(mixT, 1.0 - mixT, p.matteInvert == 1u);
+  var outc = mix(colA_eff, cB_eff, mixV);
 
   // Tonal glaze warm tint (mode 17): pull glaze color slightly toward warm
   // pigment as it dries — a faint chromatic "settling" you see in real paint.

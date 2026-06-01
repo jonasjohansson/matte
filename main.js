@@ -1559,6 +1559,7 @@ const MODE_OPTIONS = {
   'Strong watercolor — pigment migration':26,
   'Burn — paper scorch from edges':       27,
   'Video mask (T slot)':                  28,
+  'Light & burn — lamp grid':             29,
   'Light bloom — overexposure to reveal': 30,
   'Texture — reveal by luminance':        32,
   'Ambient — bokeh (looping)':            33,
