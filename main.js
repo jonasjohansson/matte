@@ -272,7 +272,8 @@ function analyseCellRegions(by) {
   const parent = new Int32Array(NP); for (let i = 0; i < NP; i++) parent[i] = i;
   const find = (a) => { while (parent[a] !== a) { parent[a] = parent[parent[a]]; a = parent[a]; } return a; };
   const uni = (a, b) => { a = find(a); b = find(b); if (a !== b) parent[a] = b; };
-  const THRESH = 42;  // colour-distance to merge neighbours into one region (tuneable)
+  const cz = Math.min(1, Math.max(0, state.cellCoarseness == null ? 0.5 : state.cellCoarseness));
+  const THRESH = Math.round(20 + 230 * cz);  // colour-distance to merge neighbours (coarseness)
   const near = (i, j) => { const a = i*4, b = j*4;
     return Math.abs(px[a]-px[b]) + Math.abs(px[a+1]-px[b+1]) + Math.abs(px[a+2]-px[b+2]) < THRESH; };
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = y*W + x;
@@ -1452,7 +1453,7 @@ fPart.addBinding(state, 'partCenterY', { min: 0, max: 1, step: 0.01, label: 'cen
 // Per-mode default values — used by the "Reset defaults" button in each
 // mode folder to restore that mode's params without touching anything else.
 const MODE_DEFAULTS = {
-  29: { cellCols: 5, cellRows: 10, cellJitter: 0.3, cellGlow: 0.12, cellOrder: 0.6, cellCascade: 0.3, cellSnap: 0.0, cellSpill: 0.0, cellIgniteBy: 0 },
+  29: { cellCols: 5, cellRows: 10, cellJitter: 0.3, cellGlow: 0.12, cellOrder: 0.6, cellCascade: 0.3, cellSnap: 0.0, cellSpill: 0.0, cellIgniteBy: 0, cellCoarseness: 0.5 },
   1:  { rimWidth: 0.12, rimDark: 0.6 },
   2:  { paperAngle: 0, paperAniso: 4, paperGranulation: 0.5, paperGrowth: 0.5, paperFollow: 0.35, paperPatches: 0.45 },
   3:  { bloomCount: 8, bloomRim: 0.6, bloomRate: 0.55, bloomImageBias: 0.6 },
@@ -3022,7 +3023,7 @@ const PERSIST_KEYS = [
   'gdIntensity', 'gdBeams', 'gdCloud', 'gdPulse',
   'ambCount', 'ambSize', 'ambSoft', 'ambSpeed', 'ambDetail', 'sunX', 'sunY', 'streakMove', 'vignAmount', 'vignFeather', 'vignAnimate', 'vignTexture', 'vignShape', 'ambRole',
   'exportFps', 'exportSizeMode', 'exportPadBottom', 'matteOutput', 'matteInvert', 'projectName',
-  'cellCols', 'cellRows', 'cellJitter', 'cellGlow', 'cellOrder', 'cellCascade', 'cellSnap', 'cellSpill', 'cellIgniteBy', 'cellAnalyseBy',
+  'cellCols', 'cellRows', 'cellJitter', 'cellGlow', 'cellOrder', 'cellCascade', 'cellSnap', 'cellSpill', 'cellIgniteBy', 'cellAnalyseBy', 'cellCoarseness',
   'slotAFillMode', 'slotAColor', 'slotBFillMode', 'slotBColor', 'keepAOutsideB',
   'partEnable', 'partCount', 'partBurst', 'partSpeed', 'partCurl', 'partTrail',
   'partDrag', 'partGravity', 'partLife', 'partFade', 'partSize', 'partGlow',
