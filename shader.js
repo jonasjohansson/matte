@@ -1135,6 +1135,12 @@ fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
 
 // ---- main shader ------------------------------------------------------------
 
+fn cellIgnite(gx: f32, gy: f32, cols: f32, total: f32) -> f32 {
+  let h = hash21(vec2f(gx + 1.7, gy + 3.3) + p.seed * 1.31);
+  let seq = (gx + gy * cols + 0.5) / total;
+  var ig = mix(seq, h, clamp(p.moldWobble, 0.0, 1.0));               // order: sequential -> random
+  return pow(clamp(ig, 0.0, 1.0), mix(1.0, 2.6, clamp(p.glazeWarm, 0.0, 1.0)));  // cascade bias
+}
 fn cellsMask(uv: vec2f) -> f32 {
   // Lamp grid (mode 29): a jittered grid of cells, each "igniting" (black->white)
   // at its own staggered time so a collage lights up cell by cell like lamps.
@@ -1145,18 +1151,35 @@ fn cellsMask(uv: vec2f) -> f32 {
     let w = fbm(vec2f(uv.x * cols, uv.y * rows) + p.seed * 0.07);
     guv = uv + (w - 0.5) * p.dabsWobble * 0.12;
   }
-  let gx = floor(clamp(guv.x, 0.0, 0.9999) * cols);
-  let gy = floor(clamp(guv.y, 0.0, 0.9999) * rows);
+  let fx = clamp(guv.x, 0.0, 0.9999) * cols;
+  let fy = clamp(guv.y, 0.0, 0.9999) * rows;
+  let gx = floor(fx);
+  let gy = floor(fy);
   let total = max(1.0, cols * rows);
-  let cellId = gx + gy * cols;
-  let h = hash21(vec2f(gx + 1.7, gy + 3.3) + p.seed * 1.31);
-  let seq = (cellId + 0.5) / total;
-  var ignite = mix(seq, h, clamp(p.moldWobble, 0.0, 1.0));            // order: sequential -> random
-  ignite = pow(clamp(ignite, 0.0, 1.0), mix(1.0, 2.6, clamp(p.glazeWarm, 0.0, 1.0)));  // cascade bias
-  let cuv = fract(vec2f(guv.x * cols, guv.y * rows)) - vec2f(0.5, 0.5);
+  var ignite = cellIgnite(gx, gy, cols, total);
+  // spill: a lit (earlier) neighbour bleeds past the shared edge into this cell
+  // so the glow isn't hard-clipped to the cell rectangle.
+  let spill = clamp(p.bloomWobble, 0.0, 1.0);
+  if (spill > 0.001) {
+    let sub = vec2f(fx - gx - 0.5, fy - gy - 0.5);   // -0.5..0.5 within the cell
+    for (var oy = -1; oy < 2; oy = oy + 1) {
+      for (var ox = -1; ox < 2; ox = ox + 1) {
+        if (ox == 0 && oy == 0) { continue; }
+        let nx = gx + f32(ox);
+        let ny = gy + f32(oy);
+        if (nx < 0.0 || ny < 0.0 || nx >= cols || ny >= rows) { continue; }
+        let nig = cellIgnite(nx, ny, cols, total);
+        let d = length(sub - vec2f(f32(ox), f32(oy)));            // dist to neighbour centre (cell units)
+        let w = clamp(1.0 - (d - 0.5) / max(0.05, spill * 0.9), 0.0, 1.0);
+        ignite = min(ignite, mix(1.0, nig, w));                  // lit neighbour pulls our ignite earlier
+      }
+    }
+  }
+  let cuv = vec2f(fx - gx - 0.5, fy - gy - 0.5);
   ignite = ignite + length(cuv) * 1.414 * clamp(p.bloomRim, 0.0, 1.0) * 0.2;  // lamp: centre lights first
   return clamp(ignite, 0.0, 1.0);
 }
+
 
 @fragment fn fs(in: VSOut) -> @location(0) vec4f {
   let uv = in.uv;

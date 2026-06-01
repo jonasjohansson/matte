@@ -14,7 +14,7 @@ export const state = {
   duration: 15.0,
   projectName: '',   // optional export-filename prefix, e.g. "DML" → "DML_…"
   // Lamp Grid (mode 29) — dedicated controls (don't bleed from other modes)
-  cellCols: 5, cellRows: 10, cellJitter: 0.3, cellGlow: 0.12, cellOrder: 0.6, cellCascade: 0.3, cellSnap: 0.0,
+  cellCols: 5, cellRows: 10, cellJitter: 0.3, cellGlow: 0.12, cellOrder: 0.6, cellCascade: 0.3, cellSnap: 0.0, cellSpill: 0.0,
   // texture input (grunge / watercolor paper) — modulates the reveal + bg tint
   texImg: null, texAmount: 0.0, texBg: 0.0, texAspect: 1.0, texFit: 2,  // fit: 0 stretch,1 contain,2 cover (default cover = fill)
   // origin: transitions grow from within (inside-out). Default centre; auto-set
