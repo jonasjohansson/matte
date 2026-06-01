@@ -84,6 +84,8 @@ struct Params {
   ambSoft: f32, ambSpeed: f32, ambDetail: f32, sunX: f32,
   sunY: f32, streakMove: f32, vignAmount: f32, vignFeather: f32,
   vignAnimate: f32, vignTexture: f32, vignShape: f32, ambRole: f32,
+  originPts2: array<vec4f, 8>,
+  pointSize: f32, pointPop: f32, ptPad0: f32, ptPad1: f32,
 };
 
 @group(0) @binding(0) var<uniform> p: Params;
@@ -1329,20 +1331,34 @@ fn cellsMask(uv: vec2f) -> f32 {
   if (p.originAmount > 0.0001 && p.mode != 29u) {
     let diag = sqrt(p.canvasAspect * p.canvasAspect + 1.0);
     var d = 1.0;
+    var dLinear = false;   // points use a linear field (no area front-load)
     if (p.originCount == 255u) {
       // paint-origin: the painted texture (texTexture) marks where it starts
       let pl = texFitLuma(uv);
       d = clamp(1.0 - pl, 0.0, 1.0);
     } else if (p.originCount > 0u) {
-      // grow from the nearest placed emission point (multiple blooms)
-      for (var i = 0u; i < 8u; i = i + 1u) {
+      // Lamps: each placed point lights a bounded soft disc that "pops" on at its
+      // stagger time. pointSize caps each lamp's radius (small = tight lamps that
+      // don't fill the frame); pointPop sets how fast it reaches full size after
+      // igniting (1 = instant pop, 0 = gradual grow). Edge softness (spread) then
+      // softens the rim spatially — so you get an instant-on lamp with a soft glow.
+      let rad  = mix(0.04, 1.5, p.pointSize * p.pointSize);  // lamp radius (curved: low = tiny lamps, high = full coverage)
+      let grow = mix(0.55, 0.0, p.pointPop);            // fill duration after ignition
+      for (var i = 0u; i < 16u; i = i + 1u) {
         if (i >= p.originCount) { break; }
-        let v = p.originPts[i];          // xy = point, z = start time (stagger)
-        var duv = uv - v.xy;
+        var v: vec4f;
+        if (i < 8u) { v = p.originPts[i]; } else { v = p.originPts2[i - 8u]; }
+        var duv = uv - v.xy;             // xy = point, z = start time (stagger)
         duv.x = duv.x * p.canvasAspect;
-        let dist = length(duv) / (0.5 * diag);
-        d = min(d, clamp(dist + v.z, 0.0, 1.0));
+        let dist  = length(duv) / (0.5 * diag);
+        let local = dist / max(rad, 0.001);            // 0 at centre, 1 at lamp edge
+        // reveal threshold time at this pixel for this lamp: ignites at v.z, fills
+        // the disc over the grow time, then ramps slowly outside the disc (so small
+        // lamps stay small, but the frame can still fully cover by raising lamp size).
+        let th = v.z + min(local, 1.0) * grow + max(0.0, local - 1.0) * 2.0;
+        d = min(d, clamp(th, 0.0, 1.0));
       }
+      dLinear = true;
     } else {
       var duv = uv - vec2f(p.originX, p.originY);
       duv.x = duv.x * p.canvasAspect;
@@ -1353,7 +1369,8 @@ fn cellsMask(uv: vec2f) -> f32 {
     // of the frame in the back half (feels like "nothing, then sudden"). Raising
     // d to >1 lowers the mid/outer reveal thresholds so coverage arrives more
     // evenly (exp 2 = exactly area-linear; 1.5 is a gentle middle).
-    mask = mix(mask, pow(clamp(d, 0.0, 1.0), 1.5), p.originAmount);
+    let dShaped = select(pow(clamp(d, 0.0, 1.0), 1.5), clamp(d, 0.0, 1.0), dLinear);
+    mask = mix(mask, dShaped, p.originAmount);
   }
   // Turbulence: domain-warped multi-octave noise fractures the reveal front into
   // organic, ink-in-water tendrils instead of a smooth glossy edge. Higher =
@@ -1910,6 +1927,8 @@ struct Params {
   ambSoft: f32, ambSpeed: f32, ambDetail: f32, sunX: f32,
   sunY: f32, streakMove: f32, vignAmount: f32, vignFeather: f32,
   vignAnimate: f32, vignTexture: f32, vignShape: f32, ambRole: f32,
+  originPts2: array<vec4f, 8>,
+  pointSize: f32, pointPop: f32, ptPad0: f32, ptPad1: f32,
 };
 
 @group(0) @binding(0) var<uniform> p: Params;
@@ -2147,6 +2166,8 @@ struct Params {
   ambSoft: f32, ambSpeed: f32, ambDetail: f32, sunX: f32,
   sunY: f32, streakMove: f32, vignAmount: f32, vignFeather: f32,
   vignAnimate: f32, vignTexture: f32, vignShape: f32, ambRole: f32,
+  originPts2: array<vec4f, 8>,
+  pointSize: f32, pointPop: f32, ptPad0: f32, ptPad1: f32,
 };
 @group(0) @binding(0) var<uniform> p: Params;
 @group(0) @binding(1) var texA: texture_2d<f32>;

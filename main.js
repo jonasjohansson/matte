@@ -149,7 +149,7 @@ function makeDisplayBindGroup(finalState) {
 //   5  seed         13  scaleB.y                                          29 bloomCount     37 saltContrast
 //   6  validA       14  offsetB.x                                         30 bloomRim       38 saltBias
 //   7  validB       15  offsetB.y                                         31 bloomRate      39 saltImage
-const UBO_SIZE = 944;  // + godray (218-221) + ambient count/size/soft/speed (222-225)
+const UBO_SIZE = 1088;  // 272 f32: +originPts2 (236-267) +pointSize/pop (268-269) +pad
 const uniformBuffer = device.createBuffer({
   size: UBO_SIZE,
   usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
@@ -696,18 +696,21 @@ function writeUniforms() {
   uboF32[173] = state.originX;
   uboF32[174] = state.originY;
   uboF32[175] = state.turbulence;
-  // -- 176..207 -- origin points: one vec4 each (x, y, startTime, _), 208 = count
+  // -- 176..207 -- origin points 0..7: one vec4 each (x, y, startTime, _).
+  // -- 236..267 -- origin points 8..15 (originPts2). 208 = count.
   const pts = state.originPoints || [];
-  const nPts = Math.min(8, pts.length);
+  const nPts = Math.min(16, pts.length);
   const stag = state.pointStagger || 0, rnd = state.pointRandom || 0;
   const maxI = Math.max(1, nPts - 1);
   for (let i = 0; i < nPts; i++) {
     const orderFrac = i / maxI;                 // 0..1 in placement order
     const r = (pts[i].r != null) ? pts[i].r : 0; // per-point random
     const startT = Math.min(0.95, Math.max(0, (orderFrac + (r - orderFrac) * rnd) * stag));
-    const o = 176 + i * 4;
+    const o = (i < 8) ? (176 + i * 4) : (236 + (i - 8) * 4);
     uboF32[o] = pts[i].x; uboF32[o + 1] = pts[i].y; uboF32[o + 2] = startT; uboF32[o + 3] = 0;
   }
+  uboF32[268] = state.pointSize;   // lamp radius cap
+  uboF32[269] = state.pointPop;    // ignition snap (0 grow .. 1 instant)
   uboU32[208] = (state.originSource === 'paint' && state._paintReady) ? 255 : nPts;
   uboF32[209] = state.flow;  // turbulence time-drift (animated ink)
   uboF32[210] = state.undulate;  // slow large-scale dance of the reveal front
@@ -1912,6 +1915,8 @@ fPts.addButton({ title: 'Clear points' }).on('click', () => {
 });
 fPts.addBinding(state, 'originFromImage', { label: 'else: from image A' })
   .on('change', () => { if (state.originFromImage && state.imgA) computeOriginFromImage(state.imgA); });
+fPts.addBinding(state, 'pointSize', { min: 0, max: 1, step: 0.01, label: 'lamp size' });
+fPts.addBinding(state, 'pointPop', { min: 0, max: 1, step: 0.01, label: 'pop (instant on)' });
 fPts.addBinding(state, 'pointStagger', { min: 0, max: 1, step: 0.01, label: 'stagger' });
 fPts.addBinding(state, 'pointRandom', { min: 0, max: 1, step: 0.01, label: 'stagger random' });
 fPts.addBinding(state, 'paintBrush', { min: 0.02, max: 0.4, step: 0.01, label: 'paint brush' });
@@ -3019,7 +3024,7 @@ const PERSIST_KEYS = [
   'fit', 'bg',
   'customSize', 'matchInput', 'lockAspect', 'outW', 'outH', 'previewScale', 'useSources', 'texAmount', 'texBg', 'texFit',
   'originAmount', 'originX', 'originY', 'originFromImage', 'turbulence', 'flow', 'undulate', 'animate', 'originPoints',
-  'pointStagger', 'pointRandom', 'paintBrush',
+  'pointStagger', 'pointRandom', 'pointSize', 'pointPop', 'paintBrush',
   'auroraDensity', 'auroraHeight', 'auroraSpeed', 'auroraDark', 'auroraWave', 'driftAngle', 'driftAmount',
   'gdIntensity', 'gdBeams', 'gdCloud', 'gdPulse',
   'ambCount', 'ambSize', 'ambSoft', 'ambSpeed', 'ambDetail', 'sunX', 'sunY', 'streakMove', 'vignAmount', 'vignFeather', 'vignAnimate', 'vignTexture', 'vignShape', 'ambRole',

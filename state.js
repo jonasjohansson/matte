@@ -22,6 +22,7 @@ export const state = {
   originAmount: 0.4, originX: 0.5, originY: 0.5, originFromImage: true,
   originPoints: [], placePoints: false,  // click-placed emission points
   pointStagger: 0.5, pointRandom: 0.7,   // stagger point start times + randomness
+  pointSize: 0.3, pointPop: 0.6,         // lamp radius cap + ignition snap (0 grow .. 1 instant pop)
   paintBrush: 0.12,                      // paint-mode brush radius (fraction of width)
   turbulence: 0.12,  // subtle by default so each mode keeps its own character; dial up for ink
   flow: 0.3,         // animate the turbulence over time (churning/rising)
