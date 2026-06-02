@@ -46,7 +46,7 @@ Desktop-only by design: touch devices get a "needs a desktop + WebGPU" notice
 | `util.js` | pure helpers (`fitInfo`, `hexToRgb`) |
 | `sw.js` / `manifest.json` | offline service worker / PWA manifest |
 | `vendor/` | locally-vendored ESM deps (tweakpane, plugin-essentials, mp4-muxer) |
-| `thumbs/` | baked mode-thumbnail PNGs (`m00.png`…`m47.png`, no `m29`) |
+| `thumbs/` | baked mode-thumbnail PNGs (`m00.png`…`m60.png`) |
 | `defaults/` | bundled default images (seed the library + Reset) |
 | `eval-src/` | local test images — gitignored, not deployed |
 
@@ -79,7 +79,7 @@ Desktop-only by design: touch devices get a "needs a desktop + WebGPU" notice
 
 ## Modes
 
-48 modes (0–47): transition modes (reveal / watercolor / painterly / light&burn)
+61 modes (0–60): transition modes (reveal / watercolor / painterly / light&burn)
 plus 14 ambient looping fields (33–47: bokeh, ripples, glare, streaks, aurora,
 godrays, clouds, caustics, embers, mist, rain, snow, marble, ink-blooms).
 Photo-edge modes that "looked digital" live in a de-emphasised **Archive** group.

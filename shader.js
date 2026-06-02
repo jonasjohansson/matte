@@ -1,15 +1,12 @@
-// WGSL shaders for matte — extracted verbatim from main.js (pure data, no
-// interpolation). The three `struct Params` blocks must stay layout-consistent
-// with writeUniforms() in main.js. Imported by main.js.
+// WGSL shaders for matte. The uniform layout is defined ONCE in PARAMS_STRUCT
+// below and interpolated into all three modules, so they can't drift; that layout
+// must stay in lockstep with the hand-indexed UBO in writeUniforms() (main.js).
+// test/check-shaders.mjs guards both invariants. Imported by main.js.
 
-export const SHADER = /* wgsl */`
-struct VSOut {
-  @builtin(position) pos: vec4f,
-  @location(0) uv: vec2f,
-};
-
-// 208-byte uniform layout (carefully aligned for std140-ish WGSL rules).
-// Offsets are documented in JS-side writeUniforms() at the matching index.
+// Single source of truth for the uniform layout — interpolated into all three
+// WGSL modules below so they can never drift (and matches the hand-indexed UBO in
+// main.js writeUniforms). Keep field order in lockstep with that index table.
+const PARAMS_STRUCT = `
 struct Params {
   // -- 0..31 -- scalars & ints
   t: f32, spread: f32, organic: f32, edges: f32,
@@ -88,7 +85,17 @@ struct Params {
   pointSize: f32, pointPop: f32, pointFill: f32, padTop: f32,
   padBottom: f32, padLeft: f32, padRight: f32, gradeBright: f32,
   gradeContrast: f32, gradeBlack: f32, gradeWhite: f32, gradeGamma: f32,
+};`;
+
+export const SHADER = /* wgsl */`
+struct VSOut {
+  @builtin(position) pos: vec4f,
+  @location(0) uv: vec2f,
 };
+
+// 1120-byte uniform layout (280 f32; carefully aligned for WGSL std140-ish rules).
+// Offsets are documented in JS-side writeUniforms() at the matching index.
+${PARAMS_STRUCT}
 
 @group(0) @binding(0) var<uniform> p: Params;
 @group(0) @binding(1) var texA: texture_2d<f32>;
@@ -2519,65 +2526,7 @@ fn frostMask(uv: vec2f) -> f32 {
 export const SIM_SHADER = /* wgsl */`
 struct VSOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f };
 
-struct Params {
-  t: f32, spread: f32, organic: f32, edges: f32,
-  maskScale: f32, seed: f32, validA: u32, validB: u32,
-  scaleA: vec2f, offsetA: vec2f, scaleB: vec2f, offsetB: vec2f,
-  bg: vec3f, mode: u32,
-  curve: u32, sedDirection: u32, sedSource: u32, saltSource: u32,
-  rimWidth: f32, rimDark: f32,
-  paperAngle: f32, paperAniso: f32, paperGranulation: f32,
-  bloomCount: u32, bloomRim: f32, bloomRate: f32,
-  diffStrength: f32, diffRadius: f32,
-  sedBands: f32, sedSoftness: f32,
-  saltDensity: f32, saltContrast: f32, saltBias: f32, saltImage: u32,
-  irisFocus: vec2f, irisJitter: f32, irisUniform: u32,
-  bleedFinger: f32, bleedAmount: f32, bleedHalo: f32, runGravity: f32,
-  runDrip: f32, advVariant: u32, advVisc: f32, advRate: f32,
-  advGravity: f32, advGravBias: f32, advGravAngle: f32, advGravStreak: f32,
-  advGravLateral: f32, advCurlStr: f32, advCurlScale: f32, advBrushFollow: f32,
-  advSeedCount: u32, advSeedRadius: f32, canvasAspect: f32, texAspect: f32,
-  weEdgeScale: f32, weEdgeWobble: f32, weDryRing: f32, weBleed: f32,
-  weTendrilCount: u32, weTendrilReach: f32, weTendrilWidth: f32, weTendrilStrength: f32,
-  weDetailBias: f32, moldTendrilsPerSeed: u32, weReverse: u32, weBDetailBias: f32,
-  moldWidth: f32, moldWobble: f32, moldSeedCount: u32, moldReach: f32,
-  strokeScale: f32, strokeAniso: f32, glazeBands: f32, glazeSoftness: f32,
-  glazeDirection: u32, glazeWarm: f32, edgeFirstInk: f32, edgeFirstFade: f32,
-  edgeFirstScale: f32, flowAmount: f32, dabsCount: u32, dabsReach: f32,
-  dabsWobble: f32, densityGravity: f32, densitySmear: f32, paperGrain: f32,
-  formStrokeCount: u32, formStrokeSize: f32, formStrokeWobble: f32, texAmount: f32,
-  bloomLightBias: f32, bloomWobble: f32, bloomPaperShow: f32, bloomImageBias: f32,
-  stageBands: f32, stageOverlap: f32, matteOutput: u32, matteInvert: u32,
-  migrationStrength: f32, migrationDir: u32, migrationTurb: f32, texBg: f32,
-  boundsEnable: u32, boundsCx: f32, boundsCy: f32, boundsW: f32,
-  boundsH: f32, boundsSoftness: f32, weBLumaBias: f32, maskShift: f32,
-  slotAColor: vec3f, keepAOutsideB: u32,
-  slotBColor: vec3f, texFit: u32,
-  burnEdgeWobble: f32, burnCharIntensity: f32, burnCharWidth: f32, burnGlowIntensity: f32,
-  burnGlowWidth: f32, burnSeedCount: u32, burnBrowning: f32, burnBrowningWidth: f32,
-  burnAshSpatter: f32, burnCharPersistence: f32, burnEmberTrail: f32, burnBIgnite: f32,
-  burnGlowColor: vec3f, burnGlowFromB: f32,
-  videoMaskInvert: u32, videoMaskFeather: f32, burnColorBleed: f32, videoDisplace: f32,
-  meltCellScale: f32, meltCenterX: f32, meltCenterY: f32, meltInkAmount: f32,
-  meltGlowIntensity: f32, meltCellJitter: f32, videoDisplaceB: f32, videoBrightness: f32,
-  meltGlowColor: vec3f, videoContrast: f32,
-  lightIntensity: f32, lightSpread: f32, lightPeakT: f32, lightFlashWidth: f32,
-  lightColor: vec3f, videoSaturate: f32,
-  paperGrowth: f32, paperFollow: f32, paperPatches: f32, videoDisplaceAmount: f32,
-  originAmount: f32, originX: f32, originY: f32, turbulence: f32,
-  originPts: array<vec4f, 8>,
-  originCount: u32, flow: f32, undulate: f32, auroraDensity: f32,
-  auroraHeight: f32, auroraSpeed: f32, auroraDark: f32, auroraWave: f32,
-  driftAngle: f32, driftAmount: f32, gdIntensity: f32, gdBeams: f32,
-  gdCloud: f32, gdPulse: f32, ambCount: f32, ambSize: f32,
-  ambSoft: f32, ambSpeed: f32, ambDetail: f32, sunX: f32,
-  sunY: f32, streakMove: f32, vignAmount: f32, vignFeather: f32,
-  vignAnimate: f32, vignTexture: f32, vignShape: f32, ambRole: f32,
-  originPts2: array<vec4f, 8>,
-  pointSize: f32, pointPop: f32, pointFill: f32, padTop: f32,
-  padBottom: f32, padLeft: f32, padRight: f32, gradeBright: f32,
-  gradeContrast: f32, gradeBlack: f32, gradeWhite: f32, gradeGamma: f32,
-};
+${PARAMS_STRUCT}
 
 @group(0) @binding(0) var<uniform> p: Params;
 @group(0) @binding(1) var texA: texture_2d<f32>;
@@ -2759,66 +2708,7 @@ fn curlField(uv: vec2f) -> vec2f {
 
 export const INIT_SHADER = /* wgsl */`
 struct VSOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f };
-struct Params {
-  // minimal — we only read fit + bg + validA here. Reuse full struct for layout.
-  t: f32, spread: f32, organic: f32, edges: f32,
-  maskScale: f32, seed: f32, validA: u32, validB: u32,
-  scaleA: vec2f, offsetA: vec2f, scaleB: vec2f, offsetB: vec2f,
-  bg: vec3f, mode: u32,
-  curve: u32, sedDirection: u32, sedSource: u32, saltSource: u32,
-  rimWidth: f32, rimDark: f32,
-  paperAngle: f32, paperAniso: f32, paperGranulation: f32,
-  bloomCount: u32, bloomRim: f32, bloomRate: f32,
-  diffStrength: f32, diffRadius: f32,
-  sedBands: f32, sedSoftness: f32,
-  saltDensity: f32, saltContrast: f32, saltBias: f32, saltImage: u32,
-  irisFocus: vec2f, irisJitter: f32, irisUniform: u32,
-  bleedFinger: f32, bleedAmount: f32, bleedHalo: f32, runGravity: f32,
-  runDrip: f32, advVariant: u32, advVisc: f32, advRate: f32,
-  advGravity: f32, advGravBias: f32, advGravAngle: f32, advGravStreak: f32,
-  advGravLateral: f32, advCurlStr: f32, advCurlScale: f32, advBrushFollow: f32,
-  advSeedCount: u32, advSeedRadius: f32, canvasAspect: f32, texAspect: f32,
-  weEdgeScale: f32, weEdgeWobble: f32, weDryRing: f32, weBleed: f32,
-  weTendrilCount: u32, weTendrilReach: f32, weTendrilWidth: f32, weTendrilStrength: f32,
-  weDetailBias: f32, moldTendrilsPerSeed: u32, weReverse: u32, weBDetailBias: f32,
-  moldWidth: f32, moldWobble: f32, moldSeedCount: u32, moldReach: f32,
-  strokeScale: f32, strokeAniso: f32, glazeBands: f32, glazeSoftness: f32,
-  glazeDirection: u32, glazeWarm: f32, edgeFirstInk: f32, edgeFirstFade: f32,
-  edgeFirstScale: f32, flowAmount: f32, dabsCount: u32, dabsReach: f32,
-  dabsWobble: f32, densityGravity: f32, densitySmear: f32, paperGrain: f32,
-  formStrokeCount: u32, formStrokeSize: f32, formStrokeWobble: f32, texAmount: f32,
-  bloomLightBias: f32, bloomWobble: f32, bloomPaperShow: f32, bloomImageBias: f32,
-  stageBands: f32, stageOverlap: f32, matteOutput: u32, matteInvert: u32,
-  migrationStrength: f32, migrationDir: u32, migrationTurb: f32, texBg: f32,
-  boundsEnable: u32, boundsCx: f32, boundsCy: f32, boundsW: f32,
-  boundsH: f32, boundsSoftness: f32, weBLumaBias: f32, maskShift: f32,
-  slotAColor: vec3f, keepAOutsideB: u32,
-  slotBColor: vec3f, texFit: u32,
-  burnEdgeWobble: f32, burnCharIntensity: f32, burnCharWidth: f32, burnGlowIntensity: f32,
-  burnGlowWidth: f32, burnSeedCount: u32, burnBrowning: f32, burnBrowningWidth: f32,
-  burnAshSpatter: f32, burnCharPersistence: f32, burnEmberTrail: f32, burnBIgnite: f32,
-  burnGlowColor: vec3f, burnGlowFromB: f32,
-  videoMaskInvert: u32, videoMaskFeather: f32, burnColorBleed: f32, videoDisplace: f32,
-  meltCellScale: f32, meltCenterX: f32, meltCenterY: f32, meltInkAmount: f32,
-  meltGlowIntensity: f32, meltCellJitter: f32, videoDisplaceB: f32, videoBrightness: f32,
-  meltGlowColor: vec3f, videoContrast: f32,
-  lightIntensity: f32, lightSpread: f32, lightPeakT: f32, lightFlashWidth: f32,
-  lightColor: vec3f, videoSaturate: f32,
-  paperGrowth: f32, paperFollow: f32, paperPatches: f32, videoDisplaceAmount: f32,
-  originAmount: f32, originX: f32, originY: f32, turbulence: f32,
-  originPts: array<vec4f, 8>,
-  originCount: u32, flow: f32, undulate: f32, auroraDensity: f32,
-  auroraHeight: f32, auroraSpeed: f32, auroraDark: f32, auroraWave: f32,
-  driftAngle: f32, driftAmount: f32, gdIntensity: f32, gdBeams: f32,
-  gdCloud: f32, gdPulse: f32, ambCount: f32, ambSize: f32,
-  ambSoft: f32, ambSpeed: f32, ambDetail: f32, sunX: f32,
-  sunY: f32, streakMove: f32, vignAmount: f32, vignFeather: f32,
-  vignAnimate: f32, vignTexture: f32, vignShape: f32, ambRole: f32,
-  originPts2: array<vec4f, 8>,
-  pointSize: f32, pointPop: f32, pointFill: f32, padTop: f32,
-  padBottom: f32, padLeft: f32, padRight: f32, gradeBright: f32,
-  gradeContrast: f32, gradeBlack: f32, gradeWhite: f32, gradeGamma: f32,
-};
+${PARAMS_STRUCT}
 @group(0) @binding(0) var<uniform> p: Params;
 @group(0) @binding(1) var texA: texture_2d<f32>;
 @group(0) @binding(2) var texB: texture_2d<f32>;

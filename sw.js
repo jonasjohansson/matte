@@ -26,7 +26,11 @@ const PRECACHE = [
 self.addEventListener('install', (e) => {
   e.waitUntil((async () => {
     const cache = await caches.open(VERSION);
-    await cache.addAll(PRECACHE);
+    // Per-asset (not atomic): one missing/renamed thumbnail must not reject the
+    // whole install and silently disable offline support for every user.
+    const results = await Promise.allSettled(PRECACHE.map((u) => cache.add(u)));
+    const failed = results.filter((r) => r.status === 'rejected').length;
+    if (failed) console.warn('[sw] precache: ' + failed + '/' + PRECACHE.length + ' assets failed (offline still works for the rest)');
     await self.skipWaiting();
   })());
 });

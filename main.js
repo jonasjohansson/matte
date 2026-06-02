@@ -29,6 +29,14 @@ if (compInfo.messages.length) {
   for (const m of compInfo.messages) {
     console[m.type === 'error' ? 'error' : 'warn']('[WGSL]', m.type, m.lineNum + ':' + m.linePos, m.message);
   }
+  // Surface the first compile error in the UI — a blank canvas with the reason
+  // only in devtools is the project's classic silent failure.
+  const firstErr = compInfo.messages.find(m => m.type === 'error');
+  if (firstErr) {
+    const el = document.getElementById('gpu-error'), msg = document.getElementById('gpu-error-msg');
+    if (msg) msg.innerHTML = '<b>Shader failed to compile (line ' + firstErr.lineNum + '): ' + firstErr.message + '</b>';
+    if (el) el.classList.add('show');
+  }
 }
 
 // Bind group layout
@@ -499,8 +507,14 @@ function resizeCanvas() {
   const fit = Math.min(maxW / w, maxH / h, 1);
   const dispW = Math.max(2, w * fit), dispH = Math.max(2, h * fit);
   const dpr = window.devicePixelRatio || 1;
-  canvas.width  = Math.max(2, Math.round(recording ? w : dispW * dpr));
-  canvas.height = Math.max(2, Math.round(recording ? h : dispH * dpr));
+  // Backing-store resolution. While recording we render full output res; while
+  // scrubbing we cap the longer edge via the "display" preview-scale control so
+  // the heaviest modes stay smooth on Retina/4K (the cap was previously dead).
+  let bw = recording ? w : dispW * dpr;
+  let bh = recording ? h : dispH * dpr;
+  if (!recording) { const psf = previewScaleFactor(bw, bh); bw *= psf; bh *= psf; }
+  canvas.width  = Math.max(2, Math.round(bw));
+  canvas.height = Math.max(2, Math.round(bh));
   canvas.style.width = dispW + 'px';
   canvas.style.height = dispH + 'px';
   canvas.classList.remove('empty');  // sized → visible (images or custom size)
@@ -1105,6 +1119,10 @@ function loadFromUrl(url, slot) {
     resizeCanvas();
     maybeAutoplay();
   };
+  img.onerror = () => {
+    console.warn('[matte] failed to load image for slot', slot);
+    if (typeof url === 'string' && url.startsWith('blob:')) URL.revokeObjectURL(url);
+  };
   img.src = url;
 }
 function updateSlotPreview(slot, url) {
@@ -1113,7 +1131,12 @@ function updateSlotPreview(slot, url) {
   el.querySelector('.placeholder')?.remove();
   let im = el.querySelector('img');
   if (!im) { im = document.createElement('img'); im.alt = `source image ${slot}`; el.appendChild(im); }
+  // revoke the previous preview blob URL before swapping (avoids a slow leak when
+  // repeatedly swapping sources in a long session).
+  const prev = im.dataset.objurl;
+  if (prev && prev !== url && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
   im.src = url;
+  if (typeof url === 'string' && url.startsWith('blob:')) im.dataset.objurl = url; else delete im.dataset.objurl;
 }
 
 let _autoplayStarted = false;

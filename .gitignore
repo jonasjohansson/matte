@@ -1,6 +1,3 @@
-.DS_Store
 node_modules/
-output/
-*.mp4
-*.log
-eval-src/
+test-results/
+.DS_Store
