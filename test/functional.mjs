@@ -52,8 +52,31 @@ const r = await page.evaluate(async () => {
   E.deletePreset('user:__fn');
   // reset
   E.setMode(50); E.resetMode(50); checks.reset = true;
-  return checks;
+
+  // ── recording entry path ──────────────────────────────────────────────
+  // The pane removal threaded through startRecording (it drives the old
+  // btnRecord stub) and the recording-resolution switch, so guard the
+  // lifecycle. Full encode is out of scope: headless Chromium has no
+  // WebCodecs VideoEncoder, so startRecording takes its graceful no-codec
+  // bail. We assert: it doesn't throw, the `recording` flag is left clean,
+  // resize still works afterwards, and the export filename is derived from
+  // the effect name (the "don't say mode39" guarantee) — not the mode id.
+  E.setMode(2); // a named effect — its filename slug must come from the name
+  const fname = E.exportFilename();
+  const slug = fname.replace(/^transition__/, '').split('__')[0];
+  checks.exportName = fname.startsWith('transition__') && /[a-z]/.test(slug) && !/^mode\d+$/.test(slug);
+  let recErr = '';
+  try { await E.startRecording(); } catch (e) { recErr = e.message || String(e); }
+  checks.recordNoThrow = (recErr === '');
+  checks.recordFlagClean = (E.recording === false);
+  E.resize(); // restore preview size after the record-res switch
+  checks.resizeAfterRecord = true;
+
+  return { ...checks, _recErr: recErr };
 });
+
+if (r._recErr) errs.push('record threw: ' + r._recErr);
+delete r._recErr;
 
 for (const [k, v] of Object.entries(r)) if (!v) fails.push(`assertion failed: ${k}`);
 if (errs.length) fails.push('errors:\n  ' + errs.join('\n  '));

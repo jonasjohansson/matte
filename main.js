@@ -3193,6 +3193,9 @@ window.__engine = {
   get playing() { return state.playing; },
   get loop() { return state.loop; },
   get recording() { return typeof recording !== 'undefined' ? recording : false; },
+  // the filename a record/export would use — effect-name based, not "modeN".
+  // exposed for the UI export-name preview and as a regression guard in tests.
+  exportFilename() { return makeFilenameV2(); },
   // ── per-mode reset / randomize ──
   resetMode(m) {
     if (typeof MODE_DEFAULTS !== 'undefined' && MODE_DEFAULTS[m]) {
