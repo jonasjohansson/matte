@@ -199,11 +199,9 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 #ui-controls .barchk{ margin-left:0; }
 
 
-/* About / how-it-works — plain note at the BOTTOM of the controls rail
-   (<section> so it doesn't shift the .uigroup nth-of-type accents) */
-#ui-intro{ margin-top:4px; padding:12px 2px 2px; border-top:1px solid var(--ui-line); }
-#ui-intro .intro-label{ color:var(--ui-faint); font-size:var(--fz-label);
-  text-transform:uppercase; letter-spacing:.12em; font-weight:700; margin:0 0 8px; }
+/* About / how-it-works — a foldable .uigroup at the BOTTOM of the controls rail,
+   collapsed by default (kept a <section> so it doesn't shift the .uigroup
+   nth-of-type accents). Box + heading come from .uigroup; just style its prose. */
 #ui-intro p{ margin:0; color:var(--ui-mut); font-size:var(--fz-val); line-height:1.55; }
 #ui-intro p + p{ margin-top:8px; }
 #ui-intro strong{ color:var(--ui-text); font-weight:600; }

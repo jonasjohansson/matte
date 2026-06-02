@@ -308,8 +308,8 @@
       <div class="uigroup" id="ui-origin"><h5>Origin</h5><div id="origin-body"></div></div>
       <div class="uigroup" id="ui-vignette"><h5>Vignette</h5><div id="vign-body"></div></div>
       <div class="uigroup" id="ui-grade"><h5>Grade</h5><div id="grade-body"></div></div>
-      <section id="ui-intro">
-        <div class="intro-label">About</div>
+      <section id="ui-intro" class="uigroup">
+        <h5>About</h5>
         <p><strong>Matte</strong> builds black-and-white transition mattes for video — designed to drive luma / track mattes in After Effects. It boots image-free: you're always looking at a matte you can record straight away.</p>
         <p><strong>Modes</strong> (gallery, far right) are the look of the transition — watercolor blooms, paper grain, wet edges, light & burn, plus ambient loops. Open a group to browse; each mode's parameters appear in the <strong>settings</strong> panel beside the gallery. <strong>↺ reset</strong> / <strong>randomize</strong> are pinned at its top.</p>
         <p><strong>Origin</strong> sets where the reveal begins: grow from the centre (or image A's bright area), place up to 8 <strong>points</strong> on the canvas, or <strong>paint</strong> a start region. <strong>Vignette</strong> darkens the edges. Both are global — they apply to every mode.</p>
@@ -359,11 +359,11 @@
     // Defaults (first visit / no saved state): mode column + Export/View start
     // collapsed; Output and Playback stay open. Key is versioned so the new
     // defaults apply once even for users with older saved fold state.
-    const FOLD_KEY='matte.folded.v3';
+    const FOLD_KEY='matte.folded.v4';
     let folded;
     { const stored=localStorage.getItem(FOLD_KEY);
       if(stored!=null){ try{ folded=new Set(JSON.parse(stored)); }catch(e){ folded=null; } }
-      if(!folded){ folded=new Set(['ctrl:View','ctrl:Export','ctrl:Vignette']); MODES.forEach(([g])=>folded.add('mode:'+g)); } }
+      if(!folded){ folded=new Set(['ctrl:View','ctrl:Export','ctrl:Vignette','ctrl:About']); MODES.forEach(([g])=>folded.add('mode:'+g)); } }
     const saveFold=()=>{ try{ localStorage.setItem(FOLD_KEY,JSON.stringify([...folded])); }catch(e){} };
     function makeFoldable(group,head,key,onToggle){
       const body=document.createElement('div'); body.className='fold-body';
