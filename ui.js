@@ -615,15 +615,21 @@
       }
 
       paramsEl.appendChild(section('Reveal',['spread'],!REL.reveal(m)));
-      // mode 50 (fog) repurposes the movement params, so relabel them in context.
-      const moveLabels = m===50 ? {turbulence:'billow',flow:'drift speed',undulate:'sway',animate:'variation'}
-        : m===51 ? {turbulence:'curl',flow:'rise / reach',undulate:'sway',animate:'variation'}
-        : m===55 ? {turbulence:'swirl',flow:'flow',undulate:'sway',animate:'variation'}
-        : m===58 ? {turbulence:'flow / curl',flow:'flow',undulate:'sway',animate:'variation'}
-        : m===56 ? {turbulence:'dapple / foliage',flow:'flow',undulate:'sway',animate:'variation'}
-        : m===60 ? {turbulence:'swirl',flow:'star glow',undulate:'dust lanes',animate:'variation'}
-        : m===54 ? {turbulence:'canopy density',flow:'flow',undulate:'sway',animate:'variation'} : null;
-      paramsEl.appendChild(section('Movement',['turbulence','flow','undulate','animate'],!REL.movement(m),moveLabels));
+      // ambient modes repurpose the movement params and relabel them in context —
+      // only the keys a mode actually reads are shown (others would be dead sliders).
+      const moveLabels = m===50 ? {turbulence:'billow',flow:'drift speed',undulate:'sway'}
+        : m===51 ? {turbulence:'curl',flow:'rise / reach',undulate:'sway'}
+        : m===55 ? {turbulence:'swirl'}
+        : m===58 ? {turbulence:'flow / curl'}
+        : m===56 ? {turbulence:'dapple / foliage'}
+        : m===60 ? {turbulence:'swirl',flow:'star glow',undulate:'dust lanes'}
+        : m===54 ? {turbulence:'canopy density'} : null;
+      // per-mode movement keys: full set for transitions; only the used ones for
+      // ambient modes (the rest are dead for those generators).
+      const AMB_MOVE = {50:['turbulence','flow','undulate'],51:['turbulence','flow','undulate'],
+        60:['turbulence','flow','undulate'],54:['turbulence'],55:['turbulence'],56:['turbulence'],58:['turbulence']};
+      const moveKeys = (!isTrans(m) && AMB_MOVE[m]) ? AMB_MOVE[m] : ['turbulence','flow','undulate','animate'];
+      paramsEl.appendChild(section('Movement',moveKeys,!REL.movement(m),moveLabels));
       { const dk = DIRK[m] || (REL.dir(m) ? ['driftAngle','driftAmount','sunX','sunY','streakMove'] : []);
         const dirLabels = m===50 ? {driftAngle:'comes from',driftAmount:'fog ↔ plume'}
           : m===52 ? {driftAngle:'wind',driftAmount:'light',sunX:'light x',sunY:'light y'} : null;

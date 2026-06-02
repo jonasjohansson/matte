@@ -3051,7 +3051,7 @@ fSamHelp.addBinding(samHelp, 'altClick',   { readonly: true, label: 'alt-click' 
 const SESSION_LS_KEY = 'trans:session';
 // Bump when default values change so stale saved sessions don't mask new
 // defaults (e.g. matte-first, cover texture fit, turbulence, origin).
-const SESSION_VERSION = 20;
+const SESSION_VERSION = 21;
 const PERSIST_KEYS = [
   ...PRESET_KEYS,
   'fit', 'bg',
