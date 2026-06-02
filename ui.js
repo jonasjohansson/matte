@@ -93,9 +93,9 @@
     ['Watercolor',[[2,'paper grain'],[3,'backrun blooms'],[4,'wet diffusion'],[5,'tonal sediment'],[6,'salt'],[8,'wet bleed'],[9,'pigment run'],[17,'tonal wash'],[24,'cauliflower bloom'],[25,'wet-stage'],[26,'migration']]],
     ['Painterly',[[16,'stroke-follow'],[22,'mold tendrils']]],
     ['Light & burn',[[27,'paper scorch'],[29,'lamp grid'],[30,'light bloom'],[48,'radial burst'],[49,'smoke ring']]],
-    ['Ambient (loop)',[[33,'bokeh'],[34,'water ripples'],[35,'sun glare'],[36,'light streaks'],[38,'aurora'],[39,'godrays'],[40,'clouds'],[50,'smoke / fog'],[52,'fog 2 (volumetric)'],[51,'fire / flames'],[41,'caustics'],[42,'embers'],[43,'mist'],[46,'marble'],[47,'ink blooms'],[55,'ink in water'],[56,'sun flare + bokeh'],[54,'sun through trees'],[57,'water shimmer'],[58,'silk flow'],[59,'ink on paper'],[60,'nebula']]],
+    ['Ambient (loop)',[[33,'bokeh'],[34,'water ripples'],[35,'sun glare'],[36,'light streaks'],[38,'aurora'],[39,'godrays'],[50,'smoke / fog'],[52,'fog 2 (volumetric)'],[51,'fire / flames'],[41,'caustics'],[42,'embers'],[46,'marble'],[47,'ink blooms'],[55,'ink in water'],[56,'sun flare + bokeh'],[54,'sun through trees'],[57,'water shimmer'],[58,'silk flow'],[59,'ink on paper'],[60,'nebula']]],
     ['Special',[[28,'video mask'],[32,'texture-source'],[31,'particles'],[37,'paint']]],
-    ['Archive',[[10,'adv wet'],[11,'adv gravity'],[12,'adv curl'],[13,'adv brush'],[14,'adv seed'],[18,'edge underdraw'],[19,'painterly flow'],[20,'color dabs'],[21,'density grav'],[23,'formation'],[44,'rain'],[45,'snow']]],
+    ['Archive',[[10,'adv wet'],[11,'adv gravity'],[12,'adv curl'],[13,'adv brush'],[14,'adv seed'],[18,'edge underdraw'],[19,'painterly flow'],[20,'color dabs'],[21,'density grav'],[23,'formation'],[44,'rain'],[45,'snow'],[40,'clouds'],[43,'mist']]],
   ];
   const MODE_NAME = {}; MODES.forEach(g=>g[1].forEach(([id,n])=>MODE_NAME[id]=n));
   // expose the gallery names so main.js can name exports/recordings by effect.
@@ -188,17 +188,55 @@
     // sentence-case for UI labels: capitalise the first letter only, preserving
     // meaningful internal capitals (A, B, acronyms). Keeps casing consistent.
     const cap=s=>(typeof s==='string'&&s.length)?s.charAt(0).toUpperCase()+s.slice(1):s;
+    // favourites — starred modes, persisted, shown in a pinned group up top.
+    const FAV_KEY='matte.favs';
+    const loadFavs=()=>{ try{ return JSON.parse(localStorage.getItem(FAV_KEY)||'[]'); }catch(e){ return []; } };
+    let favs=loadFavs();
+    const isFav=id=>favs.includes(+id);
+    function toggleFav(id){ id=+id; favs=isFav(id)?favs.filter(x=>x!==id):favs.concat(id);
+      try{ localStorage.setItem(FAV_KEY,JSON.stringify(favs)); }catch(e){}
+      left.querySelectorAll('.chip[data-mode="'+id+'"] .fav').forEach(s=>s.classList.toggle('on',isFav(id)));
+      renderFavs(); }
     function makeChip(id,name){
-      const c=document.createElement('button'); c.className='chip'; c.dataset.mode=id;
+      const c=document.createElement('button'); c.className='chip'; c.dataset.mode=id; c.dataset.name=(name||'').toLowerCase();
       c.style.setProperty('--c', MODE_COLOR[id] || 'var(--ui-accent)');   // group hue for the selected outline
-      c.innerHTML=`<span class="nm">${titleCase(name)}</span>`;
+      const tc=titleCase(name);
+      c.title=tc; c.setAttribute('aria-label',tc); c.setAttribute('aria-pressed', String(+id===st.mode));
+      c.innerHTML=`<span class="nm">${tc}</span><span class="fav${isFav(id)?' on':''}" role="button" aria-label="toggle favourite" title="favourite">★</span>`;
       c.style.backgroundImage=`url(thumbs/m${String(id).padStart(2,'0')}.png)`;
       c.onclick=()=>{E.setMode(id);selectMode(id);};
+      c.querySelector('.fav').onclick=(e)=>{ e.stopPropagation(); toggleFav(id); };
       return c;
     }
-    // Recent group (top): the most recently EXPORTED modes, newest first. Filled
-    // from localStorage 'matte.exports' (written by main.js on each export) and
-    // refreshed on the 'matte-export' event.
+    // search/filter box (pinned at the top of the mode rail).
+    const search=document.createElement('input'); search.id='mode-search'; search.type='search';
+    search.placeholder='Search modes…'; search.setAttribute('aria-label','search modes');
+    left.appendChild(search);
+    search.addEventListener('input',()=>{
+      const q=search.value.trim().toLowerCase();
+      left.classList.toggle('filtering', !!q);
+      if(!q){ left.querySelectorAll('.chip').forEach(c=>c.style.display=''); left.querySelectorAll('.mgroup').forEach(g=>g.style.display=''); renderFavs(); return; }
+      left.querySelectorAll('.mgroup').forEach(g=>{
+        if(g.classList.contains('mgroup-recent')||g.classList.contains('mgroup-fav')){ g.style.display='none'; return; }
+        let any=false;
+        g.querySelectorAll('.chip').forEach(c=>{ const m=(c.dataset.name||'').includes(q); c.style.display=m?'':'none'; if(m)any=true; });
+        g.style.display=any?'':'none';
+      });
+    });
+    // Favourites group: pinned starred modes (above Recent).
+    const favG=document.createElement('div'); favG.className='mgroup mgroup-fav'; favG.innerHTML='<h4>Favourites</h4>';
+    { const fh=favG.querySelector('h4'); fh.style.color='var(--hue-amber)';
+      fh.style.background=`color-mix(in srgb, var(--hue-amber) 16%, color-mix(in srgb, #fff 7%, var(--ui-glass)))`; }
+    const favBody=document.createElement('div'); favBody.className='recent-chips'; favG.appendChild(favBody); left.appendChild(favG);
+    function renderFavs(){
+      favBody.innerHTML='';
+      const valid=favs.filter(id=>MODE_NAME[id]!=null);
+      if(!valid.length){ favG.style.display='none'; return; }
+      favG.style.display='';
+      valid.forEach(id=>{ const c=makeChip(id, MODE_NAME[id]); c.classList.toggle('sel',+id===st.mode); favBody.appendChild(c); });
+    }
+    // Recent group: the most recently EXPORTED modes, newest first. Filled from
+    // localStorage 'matte.exports' (written by main.js on each export).
     const recentG=document.createElement('div'); recentG.className='mgroup mgroup-recent'; recentG.innerHTML='<h4>Recent</h4>';
     { const rh=recentG.querySelector('h4'); rh.style.color=RECENT_COLOR;
       rh.style.background=`color-mix(in srgb, ${RECENT_COLOR} 16%, color-mix(in srgb, #fff 7%, var(--ui-glass)))`; }
@@ -212,7 +250,7 @@
       if(!ids.length){ const e=document.createElement('div'); e.className='recent-empty'; e.textContent='Modes you export show up here.'; recentBody.appendChild(e); return; }
       ids.forEach(id=>{ const c=makeChip(id, MODE_NAME[id]); c.classList.toggle('sel',+id===st.mode); recentBody.appendChild(c); });
     }
-    renderRecent();
+    renderRecent(); renderFavs();
     window.addEventListener('matte-export', renderRecent);
     MODES.forEach(([gname,items],gi)=>{
       const g=document.createElement('div'); g.className='mgroup'+(gname==='Archive'?' mgroup-archive':''); g.innerHTML=`<h4>${gname}</h4>`;
@@ -637,7 +675,7 @@
       paramsEl.appendChild(section('Advanced',['originX','originY','maskScale','curve','seed','maskShift','organic','edges'],!REL.advanced(m)));
     }
     function selectMode(id){
-      left.querySelectorAll('.chip').forEach(c=>c.classList.toggle('sel',+c.dataset.mode===id));
+      left.querySelectorAll('.chip').forEach(c=>{ const on=+c.dataset.mode===id; c.classList.toggle('sel',on); c.setAttribute('aria-pressed',String(on)); });
       // tint the whole settings panel with the mode's group accent (MODE_COLOR is
       // the single source — correct even for duplicated chips in the Recent group)
       right.style.setProperty('--m', MODE_COLOR[id] || 'var(--ui-text)');
