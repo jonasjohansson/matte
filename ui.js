@@ -406,9 +406,18 @@
     const selSize=bar.querySelector('#ui-size');
     SIZES.forEach((s,i)=>{const o=document.createElement('option');o.value=i;o.textContent=s[0];selSize.appendChild(o);});
     const whBox=bar.querySelector('#ui-wh'), wIn=bar.querySelector('#ui-w'), hIn=bar.querySelector('#ui-h');
+    // surface the GPU max-texture clamp so big exports (e.g. a 12000px panorama)
+    // aren't silently downscaled without notice.
+    const MAXTEX=(window.__tool&&window.__tool.device)?window.__tool.device.limits.maxTextureDimension2D:16384;
+    const sizeWarn=document.createElement('div'); sizeWarn.className='hint sec-note'; sizeWarn.style.cssText='display:none;color:var(--ui-rec)';
+    whBox.insertAdjacentElement('afterend', sizeWarn);
     function syncSizeUI(){
       const idx=SIZES.findIndex(s=>Array.isArray(s[1])&&s[1][0]===st.outW&&s[1][1]===st.outH);
       selSize.value=idx>=0?idx:(SIZES.length-1); wIn.value=Math.round(st.outW); hIn.value=Math.round(st.outH);
+      const longest=Math.max(st.outW,st.outH);
+      if(longest>MAXTEX){ const sc=MAXTEX/longest;
+        sizeWarn.textContent=`⚠ exceeds GPU limit (${MAXTEX}px) — renders at ${Math.round(st.outW*sc)}×${Math.round(st.outH*sc)}`;
+        sizeWarn.style.display=''; } else sizeWarn.style.display='none';
     }
     const matchCb=bar.querySelector('#ui-matchin');
     if(matchCb){ matchCb.checked=E.matchInput; matchCb.onchange=()=>{ E.setMatchInput(matchCb.checked); syncSizeUI(); }; }
