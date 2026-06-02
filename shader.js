@@ -85,7 +85,7 @@ struct Params {
   pointSize: f32, pointPop: f32, pointFill: f32, padTop: f32,
   padBottom: f32, padLeft: f32, padRight: f32, gradeBright: f32,
   gradeContrast: f32, gradeBlack: f32, gradeWhite: f32, gradeGamma: f32,
-  forestFootage: f32, _pad0: f32, _pad1: f32, _pad2: f32,
+  forestFootage: f32, foliageDrift: f32, _pad1: f32, _pad2: f32,
 };`;
 
 export const SHADER = /* wgsl */`
@@ -728,12 +728,14 @@ fn worleyF1(p: vec2f) -> f32 {
   }
   return sqrt(minD);
 }
-fn canopyOpen(uv: vec2f, drift: vec2f, scale: f32, detail: f32) -> f32 {
+fn canopyOpen(uv: vec2f, drift: vec2f, scale: f32, detail: f32, texDrift: vec2f) -> f32 {
   // 1 = open sky/gap (light passes), 0 = dense leaf clump (blocked).
   // With real footage loaded in the T-slot (forestFootage), sample its luminance
   // as the canopy — bright = sky gaps the light streams through, dark = leaves.
+  // texDrift gently warps the sample point (foliageDrift control): a bounded sway
+  // for life + a per-layer offset so near/far layers misalign into parallax depth.
   if (p.forestFootage > 0.5) {
-    let l = luma(textureSampleLevel(texT, samp, uv, 0.0).rgb);
+    let l = luma(textureSampleLevel(texT, samp, uv + texDrift, 0.0).rgb);
     return clamp(smoothstep(0.22, 0.7, l), 0.0, 1.0);
   }
   // procedural canopy: worley clump structure, fbm-frayed leafy edges.
@@ -759,9 +761,14 @@ fn ambForestLight(uv: vec2f) -> f32 {
   let wind = vec2f(cos(a), sin(a));
   let scale = mix(4.0, 11.0, 1.0 - p.ambSize);            // bigger size = bigger clumps
   let sway = wind * tt * (0.01 + p.ambSpeed * 0.05) + vec2f(sin(tt * 0.4) * 0.02, cos(tt * 0.3) * 0.02);
+  // footage drift: a bounded (oscillating, loop-safe) sway for the loaded clip so
+  // the leaves feel alive beyond raw playback. layB also gets a small constant
+  // offset so near/far footage layers misalign back into parallax depth.
+  let fdr = p.foliageDrift;
+  let foot = (wind * sin(tt * (0.3 + p.ambSpeed)) + vec2f(sin(tt * 0.7), cos(tt * 0.5)) * 0.4) * 0.02 * fdr;
   // local canopy: two depth layers — light only where BOTH are open (real depth).
-  let layA = canopyOpen(uv, sway, scale, p.ambDetail);
-  let layB = canopyOpen(uv, sway * 1.7 + 4.0, scale * 1.9, p.ambDetail);
+  let layA = canopyOpen(uv, sway, scale, p.ambDetail, foot);
+  let layB = canopyOpen(uv, sway * 1.7 + 4.0, scale * 1.9, p.ambDetail, foot * 1.4 + vec2f(0.03, 0.0) * fdr);
   let openLocal = pow(layA * layB, mix(0.7, 1.8, p.turbulence));   // turbulence = density
   // godrays: short march toward the sun, accumulating how open the canopy is along
   // the way — light only reaches a pixel through gaps between the sun and it.
@@ -769,7 +776,7 @@ fn ambForestLight(uv: vec2f) -> f32 {
   for (var i = 1; i <= 5; i = i + 1) {
     let t = f32(i) / 6.0;
     let sp = mix(uv, vec2f(p.sunX, p.sunY), t * 0.9);
-    shaft = shaft + canopyOpen(sp, sway, scale, p.ambDetail);
+    shaft = shaft + canopyOpen(sp, sway, scale, p.ambDetail, foot);
   }
   shaft = shaft / 5.0;
   let falloff = exp(-dist * mix(1.2, 3.0, p.ambSoft));
@@ -793,7 +800,7 @@ fn ambForestLight(uv: vec2f) -> f32 {
     let od = length(q - c);
     let rad = mix(0.015, 0.07, hash21(vec2f(fi, 5.5))) * mix(0.6, 1.6, p.ambSize);
     let orb = smoothstep(rad, rad * 0.4, od) * 0.5 + exp(-pow((od - rad) / (rad * 0.3), 2.0)) * 0.4;
-    v = v + orb * fade * canopyOpen(c.xy / vec2f(p.canvasAspect, 1.0), sway, scale, p.ambDetail) * 0.7;
+    v = v + orb * fade * canopyOpen(c.xy / vec2f(p.canvasAspect, 1.0), sway, scale, p.ambDetail, foot) * 0.7;
   }
   return clamp(v, 0.0, 1.0);
 }

@@ -28,6 +28,7 @@
     // ambient
     ambCount:['count / density',0,1,.01], ambSize:['size / scale',0,1,.01], ambSoft:['softness',0,1,.01],
     ambSpeed:['speed',0,1,.01], ambDetail:['detail / fidelity',0,1,.01],
+    foliageDrift:['drift / parallax',0,1,.01],
     ambRole:{t:'select',label:'role (with A+B)',opts:{'dissolve A\u2192B':0,'standalone field':1}},
     // vignette
     vignAmount:['amount',0,1,.01], vignFeather:['feather',0,1,.01], vignAnimate:['animate (pulse)',0,1,.01], vignTexture:['edge texture',0,1,.01], vignShape:['shape (ellipse↔rect)',0,1,.01],
@@ -695,7 +696,8 @@
         const has=E.hasFoliageVideo&&E.hasFoliageVideo();
         if(has){ const h=document.createElement('div'); h.className='hint sec-note';
           h.textContent='Real foliage clip loaded — driving the canopy. The god-rays stream through its bright gaps.';
-          fs.appendChild(h); }
+          fs.appendChild(h);
+          const dw=widget('foliageDrift'); if(dw) fs.appendChild(dw); }  // sway/parallax on the footage
         const fb=document.createElement('div'); fb.className='ptsbar split';
         const ld=document.createElement('button'); ld.className='btn sm'; ld.textContent=has?'replace clip…':'load foliage clip…';
         ld.onclick=()=>{ const inp=document.createElement('input'); inp.type='file'; inp.accept='video/*';

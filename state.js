@@ -33,6 +33,7 @@ export const state = {
   driftAngle: 0.25, driftAmount: 0.3,  // wind direction + strength for ambient drift
   gdIntensity: 0.5, gdBeams: 0.5, gdCloud: 0.5, gdPulse: 0.4,  // godray settings
   ambCount: 0.5, ambSize: 0.5, ambSoft: 0.5, ambSpeed: 0.25, ambDetail: 0.5, sunX: 0.5, sunY: 0.3, streakMove: 0.25, vignAmount: 0.0, vignFeather: 0.5, vignAnimate: 0.0, vignTexture: 0.0, vignShape: 0.5, ambRole: 0,  // shared bokeh/ripples/glare/streaks
+  foliageDrift: 0.4,  // mode 54: sway/parallax applied to loaded foliage footage
   // global grade on the final matte: levels (black/white/gamma) + brightness/contrast.
   gradeBright: 0.0, gradeContrast: 0.0, gradeBlack: 0.0, gradeWhite: 1.0, gradeGamma: 1.0,
   // custom transition dimensions (independent of source footage size).

@@ -160,7 +160,7 @@ function makeDisplayBindGroup(finalState) {
 //   5  seed         13  scaleB.y                                          29 bloomCount     37 saltContrast
 //   6  validA       14  offsetB.x                                         30 bloomRim       38 saltBias
 //   7  validB       15  offsetB.y                                         31 bloomRate      39 saltImage
-const UBO_SIZE = 1136;  // 284 f32: ... +grade (275-279) +forestFootage (280) +pad
+const UBO_SIZE = 1136;  // 284 f32: ... +grade (275-279) +forestFootage (280) +foliageDrift (281) +pad
 const uniformBuffer = device.createBuffer({
   size: UBO_SIZE,
   usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
@@ -753,6 +753,7 @@ function writeUniforms() {
   // sun-through-trees (mode 54): use a loaded T-slot video as the real foliage
   // canopy when present (else the procedural canopy).
   uboF32[280] = (state.mode === 54 && state.videoT) ? 1 : 0;
+  uboF32[281] = state.foliageDrift;  // footage sway/parallax amount (mode 54)
   uboU32[208] = (state.originSource === 'paint' && state._paintReady) ? 255 : nPts;
   uboF32[209] = state.flow;  // turbulence time-drift (animated ink)
   uboF32[210] = state.undulate;  // slow large-scale dance of the reveal front
@@ -2488,7 +2489,7 @@ const PRESET_KEYS = [
   // current modes actually use (were missing, so presets couldn't capture them).
   'turbulence', 'flow', 'undulate', 'animate',
   'ambCount', 'ambSize', 'ambSoft', 'ambSpeed', 'ambDetail', 'ambRole',
-  'driftAngle', 'driftAmount', 'sunX', 'sunY', 'streakMove',
+  'driftAngle', 'driftAmount', 'sunX', 'sunY', 'streakMove', 'foliageDrift',
   'auroraDensity', 'auroraHeight', 'auroraSpeed', 'auroraWave', 'auroraDark',
   'gdIntensity', 'gdBeams', 'gdCloud', 'gdPulse',
   'cellCols', 'cellRows', 'cellIgniteBy', 'cellAnalyseBy', 'cellCoarseness',
