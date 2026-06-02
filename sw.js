@@ -9,7 +9,7 @@
 //     by design (too large to bundle; SAM is an optional online enhancement)
 //
 // Bump VERSION whenever the precache list changes to evict the old cache.
-const VERSION = 'matte-v10';
+const VERSION = 'matte-v11';
 
 const PRECACHE = [
   './', './index.html', './manifest.json', './favicon.svg', './icon-192.png', './icon-512.png',

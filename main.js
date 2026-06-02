@@ -587,7 +587,10 @@ function writeUniforms() {
   // -- 60..63 -- seed + canvas aspect
   uboU32[60] = state.advecSeedCount;
   uboF32[61] = state.advecSeedRadius;
-  uboF32[62] = ch > 0 ? cw / ch : 1.0;
+  const padTop = Math.min(0.9, Math.max(0, state.padTop || 0));
+  // canvasAspect uses the FLOOR BAND height (full height minus the top padding) so
+  // the effect renders at the band's true aspect instead of being squished.
+  uboF32[62] = ch > 0 ? cw / (ch * (1 - padTop)) : 1.0;
   uboF32[63] = state.texImg ? (state.texAspect || 1.0) : 1.0;  // texture aspect for contain-fit
   // -- 64..67 -- wet edge (mode 15): rect ingress
   uboF32[64] = state.weEdgeScale;
@@ -712,6 +715,7 @@ function writeUniforms() {
   uboF32[268] = state.pointSize;   // lamp radius cap
   uboF32[269] = state.pointPop;    // ignition snap (0 grow .. 1 instant)
   uboF32[270] = state.pointFill ? 1 : 0;  // fill out: bloom past lamp edge to full coverage
+  uboF32[271] = padTop;  // floor padding: black top fraction, effect fills the band below
   uboU32[208] = (state.originSource === 'paint' && state._paintReady) ? 255 : nPts;
   uboF32[209] = state.flow;  // turbulence time-drift (animated ink)
   uboF32[210] = state.undulate;  // slow large-scale dance of the reveal front
@@ -1991,7 +1995,11 @@ const fx = (v, n = 2) => (Math.round(v * Math.pow(10, n)) / Math.pow(10, n)).toS
 
 function makeFilenameV2() {
   const m = state.mode;
-  const parts = [MODE_NAMES_V2[m] || `mode${m}`];
+  // prefer the gallery name (kept in sync by ui.js), slugified; fall back to the
+  // short v2 names, then mode<id>.
+  const gName = (typeof window !== 'undefined' && window.__modeNames && window.__modeNames[m]) || '';
+  const slug = gName ? gName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') : '';
+  const parts = [slug || MODE_NAMES_V2[m] || `mode${m}`];
   if      (m === 1)  parts.push(`rimW=${fx(state.rimWidth)}`, `dark=${fx(state.rimDark)}`);
   else if (m === 2)  parts.push(`ang=${fx(state.paperAngle)}`, `aniso=${fx(state.paperAniso,1)}`, `gran=${fx(state.paperGranulation)}`);
   else if (m === 3)  parts.push(`n=${state.bloomCount}`, `rate=${fx(state.bloomRate)}`, `rim=${fx(state.bloomRim)}`);
@@ -3030,7 +3038,7 @@ const SESSION_VERSION = 20;
 const PERSIST_KEYS = [
   ...PRESET_KEYS,
   'fit', 'bg',
-  'customSize', 'matchInput', 'lockAspect', 'outW', 'outH', 'previewScale', 'useSources', 'texAmount', 'texBg', 'texFit',
+  'customSize', 'matchInput', 'lockAspect', 'outW', 'outH', 'previewScale', 'padTop', 'useSources', 'texAmount', 'texBg', 'texFit',
   'originAmount', 'originX', 'originY', 'originFromImage', 'turbulence', 'flow', 'undulate', 'animate', 'originPoints',
   'pointStagger', 'pointRandom', 'pointSize', 'pointPop', 'pointFill', 'paintBrush',
   'auroraDensity', 'auroraHeight', 'auroraSpeed', 'auroraDark', 'auroraWave', 'driftAngle', 'driftAmount',

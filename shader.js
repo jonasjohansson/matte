@@ -85,7 +85,7 @@ struct Params {
   sunY: f32, streakMove: f32, vignAmount: f32, vignFeather: f32,
   vignAnimate: f32, vignTexture: f32, vignShape: f32, ambRole: f32,
   originPts2: array<vec4f, 8>,
-  pointSize: f32, pointPop: f32, pointFill: f32, ptPad1: f32,
+  pointSize: f32, pointPop: f32, pointFill: f32, padTop: f32,
 };
 
 @group(0) @binding(0) var<uniform> p: Params;
@@ -311,14 +311,16 @@ fn ambRipples(uv: vec2f) -> f32 {
   let ph = p.t * 6.2831853 * (0.3 + p.ambSpeed * 0.9);   // slower base speed
   var auv = uv; auv.x = auv.x * p.canvasAspect;
   let w = vec2f(fbm(auv * 3.0 + ph * 0.06), fbm(auv * 3.0 + 5.0 - ph * 0.05)) - vec2f(0.5, 0.5);
+  // placed points become ripple sources; with none placed, count sets how many
+  // procedural sources there are.
   let useClicked = p.originCount > 0u && p.originCount < 200u;
-  let nsrc = select(u32(mix(1.0, 6.0, p.ambCount)), min(6u, p.originCount), useClicked);
+  let nsrc = select(u32(mix(1.0, 6.0, p.ambCount) + 0.5), min(6u, p.originCount), useClicked);
   var v = 0.0;
   for (var i = 0u; i < 6u; i = i + 1u) {
     if (i >= nsrc) { break; }
     let fi = f32(i) + 1.0;
     var c = vec2f(hash21(vec2f(fi, 1.3)), hash21(vec2f(fi, 4.8)));
-    if (useClicked) { c = p.originPts[i].xy; }    // placed start point as ripple source
+    if (useClicked) { c = p.originPts[i].xy; }    // placed point as a ripple source
     c.x = c.x * p.canvasAspect;
     let d = length(auv + w * 0.14 - c);
     let freq = mix(26.0, 9.0, p.ambSize) + fi * 3.0;
@@ -647,61 +649,86 @@ fn ambVolFog(uv: vec2f) -> f32 {
   let v = 1.0 - exp(-raw * 1.6);
   return clamp(v, 0.0, 1.0);
 }
-fn lpath(y: f32, seed: f32, segs: f32) -> f32 {
-  // piecewise-LINEAR 1D noise → sharp angular kinks (real bolts zig-zag, they don't
-  // wiggle smoothly). Returns ~-1..1.
-  let yy = y * segs + seed * 7.0;
-  let i = floor(yy); let f = fract(yy);
-  let a = hash21(vec2f(i, seed)) - 0.5;
-  let b = hash21(vec2f(i + 1.0, seed)) - 0.5;
-  return mix(a, b, f) * 2.0;
+fn hash22(p: vec2f) -> vec2f {
+  return fract(sin(vec2f(dot(p, vec2f(127.1, 311.7)), dot(p, vec2f(269.5, 183.3)))) * 43758.5453);
 }
-fn boltX(y: f32, xc: f32, seed: f32, amp: f32, segs: f32) -> f32 {
-  // angular channel: coarse zig-zag + a finer kink octave.
-  return xc + (lpath(y, seed, segs) + lpath(y, seed + 3.0, segs * 2.7) * 0.35) * amp;
-}
-fn ambLightning(uv: vec2f) -> f32 {
-  // Discrete strikes drawn as an ANGULAR channel (piecewise-linear, sharp kinks)
-  // running top→bottom, with branches that fork off the main channel and taper out.
-  // Each slot: the whole tree lights in a main return stroke + two fainter returns,
-  // then darkness. Shape is fixed per strike (no sideways drift).
-  //   ambSpeed = strikes per loop   ambSize = jag amplitude   ambDetail = segments
-  //   ambCount = branches           ambSoft = glow width
-  let strikes = floor(mix(1.0, 5.0, p.ambSpeed) + 0.5);
-  let tl = fract(p.t);
-  let slot = floor(tl * strikes);
-  let local = fract(tl * strikes);
-  let bright = exp(-pow((local - 0.02) / 0.025, 2.0))
-             + exp(-pow((local - 0.11) / 0.03, 2.0)) * 0.7
-             + exp(-pow((local - 0.20) / 0.04, 2.0)) * 0.45;
-  if (bright < 0.004) { return 0.0; }                      // dark gap between strikes
-  let seed = slot * 4.0 + 1.0;
-  let xc = 0.5 + (hash21(vec2f(slot + 1.0, 3.7)) - 0.5) * 0.55;
-  let amp = mix(0.05, 0.26, p.ambSize);
-  let segs = mix(6.0, 16.0, p.ambDetail);
-  let glowW = mix(12.0, 34.0, 1.0 - p.ambSoft);
-  // main channel — thin bright core (sharper toward the bottom) + soft glow.
-  let mdx = abs(uv.x - boltX(uv.y, xc, seed, amp, segs));
-  var v = exp(-mdx * mdx * mix(2600.0, 6500.0, uv.y)) + exp(-mdx * glowW) * 0.28;
-  // branches: each starts ON the main channel at a random height, then diverges
-  // diagonally with its own zig-zag and tapers out over a short run.
-  let nb = u32(mix(1.0, 4.0, p.ambCount) + 0.5);
-  for (var i = 0u; i < 4u; i = i + 1u) {
-    if (i >= nb) { break; }
-    let fi = f32(i) + 1.0;
-    let by = 0.1 + 0.7 * hash21(vec2f(slot * 5.0 + fi, seed));
-    if (uv.y > by) {
-      let bx0 = boltX(by, xc, seed, amp, segs);             // attach to the main channel
-      let dirSign = sign(hash21(vec2f(fi, slot + 2.0)) - 0.5);
-      let slope = 0.25 + 0.35 * hash21(vec2f(fi, 9.0));
-      let dy = uv.y - by;
-      let bx = bx0 + dirSign * dy * slope + lpath(uv.y, seed + fi * 11.0, segs * 1.4) * amp * 0.5;
-      let bdx = abs(uv.x - bx);
-      let bfade = smoothstep(by, by + 0.03, uv.y) * (1.0 - smoothstep(by + 0.18, by + 0.55, uv.y));
-      v = v + (exp(-bdx * bdx * 6500.0) + exp(-bdx * glowW * 1.4) * 0.18) * bfade * 0.6;
+fn worleyF1(p: vec2f) -> f32 {
+  // distance to the nearest cell point: ~0 at leaf-clump centres, larger in the
+  // gaps between clumps. Cells are animated by jittering each point.
+  let n = floor(p); let f = fract(p);
+  var minD = 8.0;
+  for (var j = -1; j <= 1; j = j + 1) {
+    for (var i = -1; i <= 1; i = i + 1) {
+      let g = vec2f(f32(i), f32(j));
+      let o = hash22(n + g);
+      let r = g + o - f;
+      minD = min(minD, dot(r, r));
     }
   }
-  return clamp(v * bright, 0.0, 1.0);
+  return sqrt(minD);
+}
+fn canopyOpen(uv: vec2f, drift: vec2f, scale: f32, detail: f32) -> f32 {
+  // 1 = open sky/gap (light passes), 0 = dense leaf clump (blocked). Worley gives
+  // the clump structure; fbm frays the clump edges into leafy detail.
+  var q = uv; q.x = q.x * p.canvasAspect;
+  let w = worleyF1(q * scale + drift);
+  let leaf = (fbm(q * scale * 3.5 + drift * 2.0) - 0.5) * 0.5;          // frayed clump edges
+  let fine = (fbm(q * scale * 9.0 + drift * 3.0) - 0.5) * 0.24 * detail; // leaf detail
+  return clamp(smoothstep(0.18, 0.44, w + leaf + fine), 0.0, 1.0);
+}
+fn ambForestLight(uv: vec2f) -> f32 {
+  // Sun shining THROUGH a forest canopy: a procedural foliage canopy (worley leaf
+  // clumps with frayed leafy edges, two swaying depth layers) occludes the light;
+  // godray shafts stream from the sun through the gaps; bokeh dapples float in the
+  // bright patches. A backlit "light through trees" matte.
+  //   sunX/sunY = sun   ambSize = leaf scale   ambDetail = leaf/ray detail
+  //   ambSoft = ray softness   ambSpeed = sway   ambCount = bokeh   turbulence = density
+  let tt = p.t * 6.2831853;
+  var q = uv; q.x = q.x * p.canvasAspect;
+  let sun = vec2f(p.sunX * p.canvasAspect, p.sunY);
+  let dd = q - sun;
+  let dist = length(dd);
+  let a = p.driftAngle * 6.2831853;
+  let wind = vec2f(cos(a), sin(a));
+  let scale = mix(4.0, 11.0, 1.0 - p.ambSize);            // bigger size = bigger clumps
+  let sway = wind * tt * (0.01 + p.ambSpeed * 0.05) + vec2f(sin(tt * 0.4) * 0.02, cos(tt * 0.3) * 0.02);
+  // local canopy: two depth layers — light only where BOTH are open (real depth).
+  let layA = canopyOpen(uv, sway, scale, p.ambDetail);
+  let layB = canopyOpen(uv, sway * 1.7 + 4.0, scale * 1.9, p.ambDetail);
+  let openLocal = pow(layA * layB, mix(0.7, 1.8, p.turbulence));   // turbulence = density
+  // godrays: short march toward the sun, accumulating how open the canopy is along
+  // the way — light only reaches a pixel through gaps between the sun and it.
+  var shaft = 0.0;
+  for (var i = 1; i <= 5; i = i + 1) {
+    let t = f32(i) / 6.0;
+    let sp = mix(uv, vec2f(p.sunX, p.sunY), t * 0.9);
+    shaft = shaft + canopyOpen(sp, sway, scale, p.ambDetail);
+  }
+  shaft = shaft / 5.0;
+  let falloff = exp(-dist * mix(1.2, 3.0, p.ambSoft));
+  let core = exp(-dist * mix(5.0, 12.0, 1.0 - p.ambSize));        // bright sun disc
+  // radial god-ray striations — visible beams fanning out from the sun.
+  let ang = atan2(dd.y, dd.x);
+  let rayStr = 0.5 + 0.5 * pow(0.5 + 0.5 * sin(ang * mix(14.0, 40.0, p.ambDetail)
+             + fbm(vec2f(ang * 4.0, dist * 3.0)) * 5.0), 2.2);
+  var v = core * 1.2 + shaft * falloff * rayStr * 1.9 * openLocal + openLocal * 0.1;
+  // bokeh dapples floating in the lit gaps.
+  let count = u32(mix(3.0, 16.0, p.ambCount) + 0.5);
+  for (var i = 0u; i < 16u; i = i + 1u) {
+    if (i >= count) { break; }
+    let fi = f32(i) + 1.0;
+    let sp2 = 0.3 + 0.7 * hash21(vec2f(fi, 2.1));
+    var c = fract(vec2f(hash21(vec2f(fi, 1.3)), hash21(vec2f(fi, 7.7)))
+              + wind * tt * 0.015 * sp2 * (0.3 + p.ambSpeed));
+    let fade = smoothstep(0.0, 0.1, c.x) * smoothstep(1.0, 0.9, c.x)
+             * smoothstep(0.0, 0.1, c.y) * smoothstep(1.0, 0.9, c.y);
+    c.x = c.x * p.canvasAspect;
+    let od = length(q - c);
+    let rad = mix(0.015, 0.07, hash21(vec2f(fi, 5.5))) * mix(0.6, 1.6, p.ambSize);
+    let orb = smoothstep(rad, rad * 0.4, od) * 0.5 + exp(-pow((od - rad) / (rad * 0.3), 2.0)) * 0.4;
+    v = v + orb * fade * canopyOpen(c.xy / vec2f(p.canvasAspect, 1.0), sway, scale, p.ambDetail) * 0.7;
+  }
+  return clamp(v, 0.0, 1.0);
 }
 fn ambInk(uv: vec2f) -> f32 {
   // Ink / dye dispersing in water: curl-noise advection unfurls the dye into
@@ -1758,12 +1785,22 @@ fn frostMask(uv: vec2f) -> f32 {
 }
 
 @fragment fn fs(in: VSOut) -> @location(0) vec4f {
-  let uv = in.uv;
+  var uv = in.uv;
+
+  // Floor padding: black out the top padTop fraction of the frame and remap the
+  // effect to fill the band below — so a video can sit on the floor of a panorama
+  // surface while still being authored at the surface's full dimensions. padMask
+  // is multiplied into every output below (0 = black padding, 1 = floor content).
+  var padMask = 1.0;
+  if (p.padTop > 0.0001) {
+    if (in.uv.y < p.padTop) { padMask = 0.0; }
+    else { uv.y = (in.uv.y - p.padTop) / (1.0 - p.padTop); }
+  }
 
   // Advection family (modes 10..14): the compute pipeline writes a state
   // texture each frame; here we just sample and present it.
   if (p.mode >= 10u && p.mode <= 14u) {
-    return vec4f(textureSampleLevel(advState, samp, uv, 0.0).rgb, 1.0);
+    return vec4f(textureSampleLevel(advState, samp, uv, 0.0).rgb * padMask, 1.0);
   }
 
   // Stretch t so the per-pixel smoothstep window (mask±spread) is fully
@@ -2355,7 +2392,7 @@ fn frostMask(uv: vec2f) -> f32 {
   else if (p.mode == 50u) { ambF = ambSmoke(uv); }
   else if (p.mode == 51u) { ambF = ambFire(uv); }
   else if (p.mode == 52u) { ambF = ambVolFog(uv); }
-  else if (p.mode == 54u) { ambF = ambLightning(uv); }
+  else if (p.mode == 54u) { ambF = ambForestLight(uv); }
   else if (p.mode == 55u) { ambF = ambInk(uv); }
   else if (p.mode == 56u) { ambF = ambSunBokeh(uv); }
   else if (p.mode == 57u) { ambF = ambWaterShimmer(uv); }
@@ -2446,7 +2483,7 @@ fn frostMask(uv: vec2f) -> f32 {
     // gradient-map: texLut is a grayscale ramp by default (⇒ pure B/W matte), or
     // a colour ramp for on-screen colourising (swapped back to gray when recording).
     var col = textureSample(texLut, samp, vec2f(mv, 0.5)).rgb;
-    return vec4f(col * vign, 1.0);
+    return vec4f(col * vign * padMask, 1.0);
   }
 
   // Texture overlay on the composite (image/preview look only — the matte path
@@ -2456,7 +2493,7 @@ fn frostMask(uv: vec2f) -> f32 {
     outc = mix(outc, outc * (0.4 + 1.2 * texL), p.texBg);
   }
   let rgb = clamp(outc * vign, vec3f(0.0), vec3f(1.0));
-  return vec4f(rgb * alpha, alpha);
+  return vec4f(rgb * padMask, alpha * padMask);
 }
 `;
 
@@ -2518,7 +2555,7 @@ struct Params {
   sunY: f32, streakMove: f32, vignAmount: f32, vignFeather: f32,
   vignAnimate: f32, vignTexture: f32, vignShape: f32, ambRole: f32,
   originPts2: array<vec4f, 8>,
-  pointSize: f32, pointPop: f32, pointFill: f32, ptPad1: f32,
+  pointSize: f32, pointPop: f32, pointFill: f32, padTop: f32,
 };
 
 @group(0) @binding(0) var<uniform> p: Params;
@@ -2757,7 +2794,7 @@ struct Params {
   sunY: f32, streakMove: f32, vignAmount: f32, vignFeather: f32,
   vignAnimate: f32, vignTexture: f32, vignShape: f32, ambRole: f32,
   originPts2: array<vec4f, 8>,
-  pointSize: f32, pointPop: f32, pointFill: f32, ptPad1: f32,
+  pointSize: f32, pointPop: f32, pointFill: f32, padTop: f32,
 };
 @group(0) @binding(0) var<uniform> p: Params;
 @group(0) @binding(1) var texA: texture_2d<f32>;

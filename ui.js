@@ -91,11 +91,13 @@
     ['Watercolor',[[2,'paper grain'],[3,'backrun blooms'],[4,'wet diffusion'],[5,'tonal sediment'],[6,'salt'],[8,'wet bleed'],[9,'pigment run'],[17,'tonal wash'],[24,'cauliflower bloom'],[25,'wet-stage'],[26,'migration']]],
     ['Painterly',[[16,'stroke-follow'],[22,'mold tendrils']]],
     ['Light & burn',[[27,'paper scorch'],[29,'lamp grid'],[30,'light bloom'],[48,'radial burst'],[49,'smoke ring']]],
-    ['Ambient (loop)',[[33,'bokeh'],[34,'water ripples'],[35,'sun glare'],[36,'light streaks'],[38,'aurora'],[39,'godrays'],[40,'clouds'],[50,'smoke / fog'],[52,'fog 2 (volumetric)'],[51,'fire / flames'],[41,'caustics'],[42,'embers'],[43,'mist'],[46,'marble'],[47,'ink blooms'],[55,'ink in water'],[54,'lightning'],[56,'sun flare + bokeh'],[57,'water shimmer'],[58,'silk flow'],[59,'ink on paper'],[60,'nebula']]],
+    ['Ambient (loop)',[[33,'bokeh'],[34,'water ripples'],[35,'sun glare'],[36,'light streaks'],[38,'aurora'],[39,'godrays'],[40,'clouds'],[50,'smoke / fog'],[52,'fog 2 (volumetric)'],[51,'fire / flames'],[41,'caustics'],[42,'embers'],[43,'mist'],[46,'marble'],[47,'ink blooms'],[55,'ink in water'],[56,'sun flare + bokeh'],[54,'sun through trees'],[57,'water shimmer'],[58,'silk flow'],[59,'ink on paper'],[60,'nebula']]],
     ['Special',[[28,'video mask'],[32,'texture-source'],[31,'particles'],[37,'paint']]],
     ['Archive',[[10,'adv wet'],[11,'adv gravity'],[12,'adv curl'],[13,'adv brush'],[14,'adv seed'],[18,'edge underdraw'],[19,'painterly flow'],[20,'color dabs'],[21,'density grav'],[23,'formation'],[44,'rain'],[45,'snow']]],
   ];
   const MODE_NAME = {}; MODES.forEach(g=>g[1].forEach(([id,n])=>MODE_NAME[id]=n));
+  // expose the gallery names so main.js can name exports/recordings by effect.
+  window.__modeNames = MODE_NAME;
 
   // mode -> its own param keys
   const MK = {
@@ -135,7 +137,7 @@
     50:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // smoke / fog
     51:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // fire / flames
     52:['ambCount','ambSize','ambSoft','ambSpeed'],                      // fog 2 (volumetric)
-    54:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // lightning
+    54:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // sun through trees
     55:['ambCount','ambSize','ambSoft','ambSpeed'],                      // ink in water
     56:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // sun flare + bokeh
     57:['ambSize','ambSoft','ambSpeed','ambDetail'],                     // water shimmer
@@ -153,13 +155,14 @@
     43:['driftAngle'], 44:['driftAngle'], 45:['driftAngle','driftAmount'], 46:['driftAngle','driftAmount'],
     50:['driftAngle','driftAmount'],
     52:['driftAngle','driftAmount','sunX','sunY'],   // wind + light intensity + light position
+    54:['sunX','sunY','driftAngle'],                 // sun position + canopy sway wind
     56:['sunX','sunY','driftAngle'],                 // sun position + bokeh drift wind
   };
 
   // relevance of the global groups per mode
   const isTrans = m => (m<=32 && m!==31) || m===48 || m===49 || m===53; // reveal/movement/advanced apply
   const REL = {
-    reveal: m=>isTrans(m), movement: m=>isTrans(m)||m===50||m===51||m===55||m===56||m===58||m===60, advanced: m=>isTrans(m),
+    reveal: m=>isTrans(m), movement: m=>isTrans(m)||m===50||m===51||m===54||m===55||m===56||m===58||m===60, advanced: m=>isTrans(m),
     points: m=>(m<=32&&m!==31)||m===34, dir: m=>[33,35,36,39,40,41,42,43,44,45,46,47,50].includes(m), vign: ()=>true,
   };
 
@@ -234,6 +237,7 @@
         <label class="barchk wide" title="lock output to the source image aspect ratio (keeps the chosen resolution)"><input type="checkbox" id="ui-matchin">Match source aspect</label>
         <div class="grp" id="ui-wh"><label for="ui-w">size</label><input type="number" id="ui-w" min="2" aria-label="output width in pixels" title="output width (px)"><span class="unit">×</span><input type="number" id="ui-h" min="2" aria-label="output height in pixels" title="output height (px)"></div>
         <label class="barchk wide" title="lock the width:height ratio while typing"><input type="checkbox" id="ui-lockar">Lock aspect ratio</label>
+        <div class="grp" id="ui-padgrp" title="black padding at the top; the effect fills the floor band below — for projecting onto the floor of a panorama surface at full surface dimensions"><label for="ui-padtop">floor pad ↑</label><input type="range" id="ui-padtop" min="0" max="0.9" step="0.01" aria-label="floor padding fraction at top"><span class="val" id="ui-padval"></span></div>
         <div class="grp"><label for="ui-dur">dur</label><input type="number" id="ui-dur" min="1" max="60" step="1" aria-label="duration in seconds"><span class="unit">s</span></div>
         <div class="grp"><label for="ui-fps">fps</label><select id="ui-fps" aria-label="output frame rate"></select></div>
         <div class="sep"></div>
@@ -371,6 +375,11 @@
     if(lockCb){ lockCb.checked=!!st.lockAspect; lockCb.onchange=()=>{ st.lockAspect=lockCb.checked; if(E.save)E.save(); }; }
     wIn.onchange=()=>{ let w=Math.max(2,+wIn.value), h=Math.max(2,+hIn.value); if(st.lockAspect&&st.outH){ h=Math.max(2,Math.round(w*st.outH/st.outW)); } E.setSize(w,h); syncSizeUI(); };
     hIn.onchange=()=>{ let w=Math.max(2,+wIn.value), h=Math.max(2,+hIn.value); if(st.lockAspect&&st.outW){ w=Math.max(2,Math.round(h*st.outW/st.outH)); } E.setSize(w,h); syncSizeUI(); };
+    // floor padding (top): blacks the top fraction, effect fills the band below.
+    const padIn=bar.querySelector('#ui-padtop'), padVal=bar.querySelector('#ui-padval');
+    if(padIn){ const showPad=()=>{ padVal.textContent=Math.round((st.padTop||0)*100)+'%'; };
+      padIn.value=st.padTop||0; showPad();
+      padIn.oninput=()=>{ st.padTop=+padIn.value; showPad(); if(E.save)E.save(); }; }
 
     // (display-size control removed — the preview always matches the output aspect)
 
@@ -473,7 +482,7 @@
     function buildOrigin(m){
       originBody.innerHTML='';
       const SRC = (m===37) ? ['paint']
-                : (m===34 || m===31) ? []
+                : (m===31) ? []
                 : ((m>=33 && m<=47) || (m>=50 && m<=60 && m!==53)) ? ['points']
                 : (m<=32 || m>=48) ? ['auto','points','paint'] : [];
       const usesAmount = SRC.includes('auto');   // only mask-blend modes use originAmount
@@ -596,7 +605,8 @@
         : m===55 ? {turbulence:'swirl',flow:'flow',undulate:'sway',animate:'variation'}
         : m===58 ? {turbulence:'flow / curl',flow:'flow',undulate:'sway',animate:'variation'}
         : m===56 ? {turbulence:'dapple / foliage',flow:'flow',undulate:'sway',animate:'variation'}
-        : m===60 ? {turbulence:'swirl',flow:'star glow',undulate:'dust lanes',animate:'variation'} : null;
+        : m===60 ? {turbulence:'swirl',flow:'star glow',undulate:'dust lanes',animate:'variation'}
+        : m===54 ? {turbulence:'canopy density',flow:'flow',undulate:'sway',animate:'variation'} : null;
       paramsEl.appendChild(section('Movement',['turbulence','flow','undulate','animate'],!REL.movement(m),moveLabels));
       { const dk = DIRK[m] || (REL.dir(m) ? ['driftAngle','driftAmount','sunX','sunY','streakMove'] : []);
         const dirLabels = m===50 ? {driftAngle:'comes from',driftAmount:'fog ↔ plume'}
