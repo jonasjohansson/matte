@@ -656,15 +656,18 @@
         E.presetOptions().forEach(o=>{ const op=document.createElement('option'); op.value=o.id; op.textContent=o.label; sel.appendChild(op); });
         sel.onchange=()=>{ if(!sel.value) return; E.applyPreset(sel.value); if(E.restartPlayback)E.restartPlayback(); if(E.save)E.save(); selectMode(E.state.mode); };
         lr.appendChild(sel); ps.appendChild(lr);
-        const sr=document.createElement('div'); sr.className='ptsbar split';
+        // name on its own row; save + delete share the next row
+        const nr=document.createElement('div'); nr.className='row';
         const nm=document.createElement('input'); nm.type='text'; nm.placeholder='name this look…'; nm.setAttribute('aria-label','preset name');
         nm.className='preset-name'; nm.onkeydown=(e)=>{ if(e.key==='Enter'&&nm.value.trim()){ E.savePreset(nm.value.trim()); buildParams(m); } };
+        nr.appendChild(nm); ps.appendChild(nr);
+        const sr=document.createElement('div'); sr.className='ptsbar split';
         const sv=document.createElement('button'); sv.className='btn sm'; sv.textContent='save';
         sv.onclick=()=>{ const n=nm.value.trim(); if(n&&E.savePreset(n)) buildParams(m); };
         const del=document.createElement('button'); del.className='btn sm'; del.textContent='delete';
         del.title='delete the selected user preset';
         del.onclick=()=>{ if(sel.value&&sel.value.startsWith('user:')&&E.deletePreset(sel.value)) buildParams(m); };
-        sr.appendChild(nm); sr.appendChild(sv); sr.appendChild(del); ps.appendChild(sr);
+        sr.appendChild(sv); sr.appendChild(del); ps.appendChild(sr);
         paramsEl.appendChild(ps);
       }
       // Single scrolling panel (no tabs): Origin + Vignette live in the controls
