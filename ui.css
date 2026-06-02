@@ -89,6 +89,10 @@ body.ui-hidden #canvas{ box-shadow:none; }
   background:var(--ui-bg2) center/cover no-repeat; filter:grayscale(1);
 }
 .chip:hover{ border-color:var(--ui-line-2); }
+#ui-right .preset-name{ flex:1; min-width:0; -webkit-appearance:none; appearance:none;
+  background:var(--ui-bg2); color:var(--ui-text); border:1px solid var(--ui-line);
+  border-radius:var(--r-sm); padding:0 8px; min-height:var(--ctl-h); font:var(--fz-body) var(--ui-font); }
+#ui-right .preset-name:focus{ outline:none; border-color:var(--m); }
 /* mode search + per-chip favourite star */
 #mode-search{ width:100%; margin:0 0 8px; padding:6px 9px; -webkit-appearance:none; appearance:none;
   background:var(--ui-bg2); color:var(--ui-text); border:1px solid var(--ui-line); border-radius:var(--r-sm);

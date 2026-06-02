@@ -2461,6 +2461,18 @@ const PRESET_KEYS = [
   'boundsEnable', 'boundsCx', 'boundsCy', 'boundsW', 'boundsH', 'boundsSoftness',
   'organic', 'edges', 'spread', 'maskScale', 'maskShift',
   'zoomA', 'panAx', 'panAy', 'zoomB', 'panBx', 'panBy',
+  // movement / ambient / direction / grade / vignette — the look knobs the
+  // current modes actually use (were missing, so presets couldn't capture them).
+  'turbulence', 'flow', 'undulate', 'animate',
+  'ambCount', 'ambSize', 'ambSoft', 'ambSpeed', 'ambDetail', 'ambRole',
+  'driftAngle', 'driftAmount', 'sunX', 'sunY', 'streakMove',
+  'auroraDensity', 'auroraHeight', 'auroraSpeed', 'auroraWave', 'auroraDark',
+  'gdIntensity', 'gdBeams', 'gdCloud', 'gdPulse',
+  'cellCols', 'cellRows', 'cellIgniteBy', 'cellAnalyseBy', 'cellCoarseness',
+  'cellOrder', 'cellCascade', 'cellJitter', 'cellGlow', 'cellSnap', 'cellSpill',
+  'originX', 'originY', 'originAmount', 'pointSize', 'pointPop', 'pointFill',
+  'vignAmount', 'vignFeather', 'vignAnimate', 'vignTexture', 'vignShape',
+  'gradeBright', 'gradeContrast', 'gradeBlack', 'gradeWhite', 'gradeGamma',
 ];
 
 const FACTORY_PRESETS = {
@@ -2520,7 +2532,12 @@ function applyPreset(id) {
   if (!src) return;
   for (const k of PRESET_KEYS) if (k in src) state[k] = src[k];
   if (state.mode >= 10 && state.mode <= 14) advec.needsReset = true;
+  // The legacy Tweakpane mode dropdown's options are stale (stop at mode 49), so
+  // pane.refresh() with a mode >= 50 snaps it back to 0 and writes that to state.
+  // Preserve the intended mode across the refresh.
+  const wantMode = state.mode;
   pane.refresh();
+  state.mode = wantMode;
   updateModeFolders();
 }
 
