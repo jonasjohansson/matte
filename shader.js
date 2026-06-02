@@ -1787,14 +1787,19 @@ fn frostMask(uv: vec2f) -> f32 {
 @fragment fn fs(in: VSOut) -> @location(0) vec4f {
   var uv = in.uv;
 
-  // Floor padding: black out the top padTop fraction of the frame and remap the
-  // effect to fill the band below — so a video can sit on the floor of a panorama
-  // surface while still being authored at the surface's full dimensions. padMask
-  // is multiplied into every output below (0 = black padding, 1 = floor content).
+  // Floor padding: black out a band at the top (padTop > 0) OR the bottom
+  // (padTop < 0) and remap the effect to fill the remaining band — so a video can
+  // sit on the floor (or ceiling) of a panorama surface while still being authored
+  // at the surface's full dimensions. padMask multiplies every output below
+  // (0 = black padding, 1 = content band).
   var padMask = 1.0;
   if (p.padTop > 0.0001) {
     if (in.uv.y < p.padTop) { padMask = 0.0; }
     else { uv.y = (in.uv.y - p.padTop) / (1.0 - p.padTop); }
+  } else if (p.padTop < -0.0001) {
+    let pb = -p.padTop;
+    if (in.uv.y > 1.0 - pb) { padMask = 0.0; }
+    else { uv.y = in.uv.y / (1.0 - pb); }
   }
 
   // Advection family (modes 10..14): the compute pipeline writes a state

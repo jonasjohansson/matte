@@ -36,7 +36,18 @@
 #side{ left:-9999px !important; pointer-events:none; }
 
 /* ── canvas: centre, between the rails ── */
-#stage{ inset:0 !important; padding:0 !important; z-index:0; }
+/* subtle gray checkerboard behind the canvas + a thin frame on the canvas itself,
+   so the output bounds are visible (esp. with floor padding). Both are CSS only —
+   not drawn into the canvas, so they never appear in the export. */
+#stage{ inset:0 !important; padding:0 !important; z-index:0;
+  background-color:var(--ui-bg);
+  background-image:
+    linear-gradient(45deg, rgba(255,255,255,.05) 25%, transparent 25% 75%, rgba(255,255,255,.05) 75%),
+    linear-gradient(45deg, rgba(255,255,255,.05) 25%, transparent 25% 75%, rgba(255,255,255,.05) 75%);
+  background-size:26px 26px; background-position:0 0, 13px 13px; }
+#canvas{ box-shadow:0 0 0 1px rgba(255,255,255,.28), 0 0 0 2px rgba(0,0,0,.55), 0 0 34px rgba(0,0,0,.55); }
+body.ui-hidden #stage{ background-image:none; }
+body.ui-hidden #canvas{ box-shadow:none; }
 
 /* ── shared label / section-heading look ── */
 .ui-heading{ color:var(--ui-mut); font-size:var(--fz-label); text-transform:uppercase;

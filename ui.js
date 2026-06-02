@@ -237,7 +237,7 @@
         <label class="barchk wide" title="lock output to the source image aspect ratio (keeps the chosen resolution)"><input type="checkbox" id="ui-matchin">Match source aspect</label>
         <div class="grp" id="ui-wh"><label for="ui-w">size</label><input type="number" id="ui-w" min="2" aria-label="output width in pixels" title="output width (px)"><span class="unit">×</span><input type="number" id="ui-h" min="2" aria-label="output height in pixels" title="output height (px)"></div>
         <label class="barchk wide" title="lock the width:height ratio while typing"><input type="checkbox" id="ui-lockar">Lock aspect ratio</label>
-        <div class="grp" id="ui-padgrp" title="black padding at the top; the effect fills the floor band below — for projecting onto the floor of a panorama surface at full surface dimensions"><label for="ui-padtop">floor pad ↑</label><input type="range" id="ui-padtop" min="0" max="0.9" step="0.01" aria-label="floor padding fraction at top"><span class="val" id="ui-padval"></span></div>
+        <div class="grp" id="ui-padgrp" title="black padding (pixels) at the top or bottom of the output; the effect fills the band that remains — for projecting onto the floor (or ceiling) of a panorama surface at full surface dimensions"><label>pad ↑↓</label><input type="number" id="ui-padtop" min="0" step="1" title="padding at TOP (px) — content sits below" aria-label="padding top in pixels"><input type="number" id="ui-padbot" min="0" step="1" title="padding at BOTTOM (px) — content sits above" aria-label="padding bottom in pixels"><span class="unit">px</span></div>
         <div class="grp"><label for="ui-dur">dur</label><input type="number" id="ui-dur" min="1" max="60" step="1" aria-label="duration in seconds"><span class="unit">s</span></div>
         <div class="grp"><label for="ui-fps">fps</label><select id="ui-fps" aria-label="output frame rate"></select></div>
         <div class="sep"></div>
@@ -375,11 +375,15 @@
     if(lockCb){ lockCb.checked=!!st.lockAspect; lockCb.onchange=()=>{ st.lockAspect=lockCb.checked; if(E.save)E.save(); }; }
     wIn.onchange=()=>{ let w=Math.max(2,+wIn.value), h=Math.max(2,+hIn.value); if(st.lockAspect&&st.outH){ h=Math.max(2,Math.round(w*st.outH/st.outW)); } E.setSize(w,h); syncSizeUI(); };
     hIn.onchange=()=>{ let w=Math.max(2,+wIn.value), h=Math.max(2,+hIn.value); if(st.lockAspect&&st.outW){ w=Math.max(2,Math.round(h*st.outW/st.outH)); } E.setSize(w,h); syncSizeUI(); };
-    // floor padding (top): blacks the top fraction, effect fills the band below.
-    const padIn=bar.querySelector('#ui-padtop'), padVal=bar.querySelector('#ui-padval');
-    if(padIn){ const showPad=()=>{ padVal.textContent=Math.round((st.padTop||0)*100)+'%'; };
-      padIn.value=st.padTop||0; showPad();
-      padIn.oninput=()=>{ st.padTop=+padIn.value; showPad(); if(E.save)E.save(); }; }
+    // floor padding in output pixels — top OR bottom (mutually exclusive). Stored
+    // as a single signed padTopPx: positive = top padding, negative = bottom.
+    const padTopIn=bar.querySelector('#ui-padtop'), padBotIn=bar.querySelector('#ui-padbot');
+    if(padTopIn){
+      const syncPad=()=>{ const v=st.padTopPx||0; padTopIn.value=Math.max(0,v); padBotIn.value=Math.max(0,-v); };
+      syncPad();
+      padTopIn.onchange=()=>{ st.padTopPx=Math.max(0,Math.round(+padTopIn.value||0)); syncPad(); if(E.save)E.save(); };
+      padBotIn.onchange=()=>{ st.padTopPx=-Math.max(0,Math.round(+padBotIn.value||0)); syncPad(); if(E.save)E.save(); };
+    }
 
     // (display-size control removed — the preview always matches the output aspect)
 

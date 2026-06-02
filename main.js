@@ -587,10 +587,14 @@ function writeUniforms() {
   // -- 60..63 -- seed + canvas aspect
   uboU32[60] = state.advecSeedCount;
   uboF32[61] = state.advecSeedRadius;
-  const padTop = Math.min(0.9, Math.max(0, state.padTop || 0));
-  // canvasAspect uses the FLOOR BAND height (full height minus the top padding) so
+  // floor padding entered in OUTPUT pixels → signed fraction of the frame height
+  // (positive = pad at top, negative = pad at bottom).
+  const _od = computeOutputDims();
+  let padTop = _od.h > 0 ? (state.padTopPx || 0) / _od.h : 0;
+  padTop = Math.max(-0.9, Math.min(0.9, padTop));
+  // canvasAspect uses the CONTENT BAND height (full height minus the padding) so
   // the effect renders at the band's true aspect instead of being squished.
-  uboF32[62] = ch > 0 ? cw / (ch * (1 - padTop)) : 1.0;
+  uboF32[62] = ch > 0 ? cw / (ch * (1 - Math.abs(padTop))) : 1.0;
   uboF32[63] = state.texImg ? (state.texAspect || 1.0) : 1.0;  // texture aspect for contain-fit
   // -- 64..67 -- wet edge (mode 15): rect ingress
   uboF32[64] = state.weEdgeScale;
@@ -3038,7 +3042,7 @@ const SESSION_VERSION = 20;
 const PERSIST_KEYS = [
   ...PRESET_KEYS,
   'fit', 'bg',
-  'customSize', 'matchInput', 'lockAspect', 'outW', 'outH', 'previewScale', 'padTop', 'useSources', 'texAmount', 'texBg', 'texFit',
+  'customSize', 'matchInput', 'lockAspect', 'outW', 'outH', 'previewScale', 'padTopPx', 'useSources', 'texAmount', 'texBg', 'texFit',
   'originAmount', 'originX', 'originY', 'originFromImage', 'turbulence', 'flow', 'undulate', 'animate', 'originPoints',
   'pointStagger', 'pointRandom', 'pointSize', 'pointPop', 'pointFill', 'paintBrush',
   'auroraDensity', 'auroraHeight', 'auroraSpeed', 'auroraDark', 'auroraWave', 'driftAngle', 'driftAmount',

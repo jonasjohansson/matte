@@ -37,7 +37,7 @@ export const state = {
   // Default ON: trans is primarily a matte-video builder, so it boots to a
   // fixed canvas showing the B/W matte without requiring any footage.
   customSize: true, matchInput: false, lockAspect: false, outW: 1920, outH: 1080, previewScale: '1440',  // on-screen preview longer-edge cap (px) or 'full'; recording always full-res
-  padTop: 0.0,  // floor padding: fraction of the frame blacked out at top; effect fills the band below (panorama floor projection)
+  padTopPx: 0,  // floor padding in full output pixels: >0 blacks the TOP band, <0 the BOTTOM; effect fills the rest (panorama floor/ceiling projection)
   // output mode — matte-first (B/W luma for AE) by default; bound in Setup,
   // so these must exist before the pane is built.
   matteOutput: true, matteInvert: false, useSources: true,
