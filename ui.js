@@ -95,7 +95,7 @@
     ['Painterly',[[16,'stroke-follow'],[22,'mold tendrils']]],
     ['Light & burn',[[27,'paper scorch'],[29,'lamp grid'],[30,'light bloom'],[48,'radial burst'],[49,'smoke ring']]],
     ['Ambient (loop)',[[33,'bokeh'],[34,'water ripples'],[35,'sun glare'],[36,'light streaks'],[38,'aurora'],[39,'godrays'],[50,'smoke / fog'],[52,'fog 2 (volumetric)'],[51,'fire / flames'],[41,'caustics'],[61,'caustics 2'],[42,'embers'],[46,'marble'],[47,'ink blooms'],[55,'ink in water'],[56,'sun flare + bokeh'],[54,'sun through trees'],[57,'water shimmer'],[58,'silk flow'],[59,'ink on paper'],[60,'nebula']]],
-    ['Special',[[28,'video mask'],[32,'texture-source'],[31,'particles'],[37,'paint']]],
+    ['Special',[[28,'video mask'],[32,'texture-source'],[31,'particles'],[37,'paint'],[62,'footage matte']]],
     ['Archive',[[10,'adv wet'],[11,'adv gravity'],[12,'adv curl'],[13,'adv brush'],[14,'adv seed'],[18,'edge underdraw'],[19,'painterly flow'],[20,'color dabs'],[21,'density grav'],[23,'formation'],[44,'rain'],[45,'snow'],[40,'clouds'],[43,'mist']]],
   ];
   const MODE_NAME = {}; MODES.forEach(g=>g[1].forEach(([id,n])=>MODE_NAME[id]=n));
@@ -148,9 +148,10 @@
     59:['ambCount','ambSize','ambSoft','ambDetail'],                     // ink on paper
     60:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // nebula
     61:['ambSize','ambSoft','ambSpeed','ambDetail'],                     // caustics 2 (voronoi net)
+    62:['ambSoft','ambSize','ambCount','ambDetail'],                     // footage matte (key/glow/edge)
   };
   // per-mode label overrides: mode 29 reuses existing uniforms, relabelled.
-  const MK_LABELS = {};  // (mode 29 now uses dedicated cell* params with their own labels)
+  const MK_LABELS = { 62:{ambSoft:'key contrast', ambSize:'glow radius', ambCount:'glow strength', ambDetail:'edge detect'} };
   // per-mode Direction/source keys (only what each ambient field reads).
   const DIRK = {
     33:['driftAngle','driftAmount'], 36:['driftAngle','streakMove'],
@@ -691,15 +692,19 @@
         paramsEl.appendChild(rs);
       }
       if(MK[m]) paramsEl.appendChild(section('this mode',MK[m],false,MK_LABELS[m]));
-      if(m===54 && E.loadFoliageVideo){
-        const fs=document.createElement('div'); fs.className='psec'; fs.innerHTML='<h4>Foliage</h4>';
+      // footage-driven modes share one T-slot clip as a spatial mask.
+      const FOOT={ 39:['Footage occluder','Optional: light streams through the clip’s bright gaps — load blinds, leaves, a window, anything. Empty = procedural clouds.','load clip…'],
+                   54:['Foliage','Load a treetop/canopy clip — its bright gaps drive the god-rays. Empty = procedural canopy.','load foliage clip…'],
+                   62:['Footage source','Load any clip to stylise into a B/W matte (key · glow · edge below). Empty = placeholder.','load footage…'] };
+      if(FOOT[m] && E.loadFoliageVideo){
+        const fs=document.createElement('div'); fs.className='psec'; fs.innerHTML=`<h4>${FOOT[m][0]}</h4>`;
         const has=E.hasFoliageVideo&&E.hasFoliageVideo();
-        if(has){ const h=document.createElement('div'); h.className='hint sec-note';
-          h.textContent='Real foliage clip loaded — driving the canopy. The god-rays stream through its bright gaps.';
-          fs.appendChild(h);
-          const dw=widget('foliageDrift'); if(dw) fs.appendChild(dw); }  // sway/parallax on the footage
+        const h=document.createElement('div'); h.className='hint sec-note';
+        h.textContent = has ? 'Clip loaded — driving this mode.' : FOOT[m][1];
+        fs.appendChild(h);
+        if(has && (m===39||m===54)){ const dw=widget('foliageDrift'); if(dw) fs.appendChild(dw); }  // sway/parallax
         const fb=document.createElement('div'); fb.className='ptsbar split';
-        const ld=document.createElement('button'); ld.className='btn sm'; ld.textContent=has?'replace clip…':'load foliage clip…';
+        const ld=document.createElement('button'); ld.className='btn sm'; ld.textContent=has?'replace clip…':FOOT[m][2];
         ld.onclick=()=>{ const inp=document.createElement('input'); inp.type='file'; inp.accept='video/*';
           inp.onchange=()=>{ if(inp.files&&inp.files[0]){ E.loadFoliageVideo(inp.files[0]); if(E.restartPlayback)E.restartPlayback(); setTimeout(()=>buildParams(m),100); } }; inp.click(); };
         fb.appendChild(ld);

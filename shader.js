@@ -85,7 +85,7 @@ struct Params {
   pointSize: f32, pointPop: f32, pointFill: f32, padTop: f32,
   padBottom: f32, padLeft: f32, padRight: f32, gradeBright: f32,
   gradeContrast: f32, gradeBlack: f32, gradeWhite: f32, gradeGamma: f32,
-  forestFootage: f32, foliageDrift: f32, _pad1: f32, _pad2: f32,
+  footageMask: f32, foliageDrift: f32, _pad1: f32, _pad2: f32,
 };`;
 
 export const SHADER = /* wgsl */`
@@ -415,7 +415,57 @@ fn ambGodrays(uv: vec2f) -> f32 {
   let fade  = exp(-dist * 1.0) * mix(0.55, 1.0, foliage);   // brighter near the sun, fading down
   // pulse: the light grows in and out / more & less intense over the loop
   let pulse = mix(1.0, 0.35 + 0.65 * (0.5 + 0.5 * sin(ph + fbm(vec2f(ph * 0.2, 3.0)) * 3.0)), p.gdPulse);
+  // footage occluder: with a clip loaded, light streams through ITS bright gaps
+  // instead of procedural clouds — "light through your footage" (blinds, leaves,
+  // a window, a crowd…). March toward the sun accumulating footage openness so
+  // the beams emanate from the gaps; gdCloud lifts the gap threshold.
+  if (p.footageMask > 0.5) {
+    let drff = (vec2f(sin(ph * 0.7), cos(ph * 0.5))) * 0.02 * p.foliageDrift;
+    var shaft = 0.0;
+    for (var i = 1; i <= 6; i = i + 1) {
+      let tt = f32(i) / 7.0;
+      let sp = mix(uv, sun, tt * 0.9) + drff;
+      shaft = shaft + smoothstep(mix(0.42, 0.12, p.gdCloud), 0.8, luma(textureSampleLevel(texT, samp, sp, 0.0).rgb));
+    }
+    shaft = shaft / 6.0;
+    return clamp((beams * shaft + 0.06) * fade * 2.3 * mix(0.4, 1.6, p.gdIntensity) * pulse, 0.0, 1.0);
+  }
   return clamp((beams * gaps + 0.1) * fade * 2.3 * mix(0.4, 1.6, p.gdIntensity) * pulse, 0.0, 1.0);
+}
+fn ambFootageMatte(uv: vec2f) -> f32 {
+  // Footage -> matte stylizer (mode 62): turn ANY loaded clip into a clean B/W
+  // luma matte for AE. ambSoft = key contrast, ambSize = glow radius,
+  // ambCount = glow strength, ambDetail = edge-detect mix. The global
+  // levels/invert grade applies on top for final trimming.
+  if (p.footageMask < 0.5) {
+    // no clip yet: a dim drifting hatch so the mode reads as "waiting for
+    // footage" and never renders blank.
+    let h = 0.5 + 0.5 * sin((uv.x + uv.y) * 60.0 + p.t * 6.2831853);
+    return 0.08 + 0.10 * h;
+  }
+  let r = mix(0.002, 0.05, p.ambSize);
+  let l = luma(textureSampleLevel(texT, samp, uv, 0.0).rgb);
+  // glow: 8-tap ring blur of luminance -> soft bright halo (bloom)
+  let r2 = r * 0.7071;
+  var glow = luma(textureSampleLevel(texT, samp, uv + vec2f(r, 0.0), 0.0).rgb)
+           + luma(textureSampleLevel(texT, samp, uv - vec2f(r, 0.0), 0.0).rgb)
+           + luma(textureSampleLevel(texT, samp, uv + vec2f(0.0, r), 0.0).rgb)
+           + luma(textureSampleLevel(texT, samp, uv - vec2f(0.0, r), 0.0).rgb)
+           + luma(textureSampleLevel(texT, samp, uv + vec2f(r2, r2), 0.0).rgb)
+           + luma(textureSampleLevel(texT, samp, uv + vec2f(-r2, r2), 0.0).rgb)
+           + luma(textureSampleLevel(texT, samp, uv + vec2f(r2, -r2), 0.0).rgb)
+           + luma(textureSampleLevel(texT, samp, uv + vec2f(-r2, -r2), 0.0).rgb);
+  glow = glow / 8.0;
+  let base = max(l, glow * p.ambCount);                  // bloom adds a bright halo
+  // contrast key around mid: soft gradient -> hard threshold
+  let key = clamp((base - 0.5) * mix(1.0, 8.0, p.ambSoft) + 0.5, 0.0, 1.0);
+  // edge detect (central differences) — optional structural outline
+  let ex = luma(textureSampleLevel(texT, samp, uv + vec2f(r, 0.0), 0.0).rgb)
+         - luma(textureSampleLevel(texT, samp, uv - vec2f(r, 0.0), 0.0).rgb);
+  let ey = luma(textureSampleLevel(texT, samp, uv + vec2f(0.0, r), 0.0).rgb)
+         - luma(textureSampleLevel(texT, samp, uv - vec2f(0.0, r), 0.0).rgb);
+  let edge = clamp(length(vec2f(ex, ey)) * 5.0, 0.0, 1.0);
+  return clamp(mix(key, max(key, edge), p.ambDetail), 0.0, 1.0);
 }
 fn ambClouds(uv: vec2f) -> f32 {
   // drifting volumetric clouds: domain-warped fbm blown along a wind direction.
@@ -730,11 +780,11 @@ fn worleyF1(p: vec2f) -> f32 {
 }
 fn canopyOpen(uv: vec2f, drift: vec2f, scale: f32, detail: f32, texDrift: vec2f) -> f32 {
   // 1 = open sky/gap (light passes), 0 = dense leaf clump (blocked).
-  // With real footage loaded in the T-slot (forestFootage), sample its luminance
+  // With real footage loaded in the T-slot (footageMask), sample its luminance
   // as the canopy — bright = sky gaps the light streams through, dark = leaves.
   // texDrift gently warps the sample point (foliageDrift control): a bounded sway
   // for life + a per-layer offset so near/far layers misalign into parallax depth.
-  if (p.forestFootage > 0.5) {
+  if (p.footageMask > 0.5) {
     let l = luma(textureSampleLevel(texT, samp, uv + texDrift, 0.0).rgb);
     return clamp(smoothstep(0.22, 0.7, l), 0.0, 1.0);
   }
@@ -2481,6 +2531,7 @@ fn frostMask(uv: vec2f) -> f32 {
   else if (p.mode == 59u) { ambF = ambInkPaper(uv); }
   else if (p.mode == 60u) { ambF = ambNebula(uv); }
   else if (p.mode == 61u) { ambF = ambCaustics2(uv); }
+  else if (p.mode == 62u) { ambF = ambFootageMatte(uv); }
   // modes 48/49 act as standalone looping fields when the role toggle is set;
   // otherwise they stay on the normal reveal path above (ambF left at -1).
   else if (p.mode == 48u && p.ambRole >= 0.5) { ambF = radialBurstField(uv); }
@@ -2491,7 +2542,7 @@ fn frostMask(uv: vec2f) -> f32 {
     // black (t=0) -> white (t=1), the bright parts of the pattern crossing first.
     // This is a real B/W transition matte and works WITH OR WITHOUT images (with
     // A+B it also dissolves A->B). ambRole 1 = standalone looping field.
-    if (p.ambRole < 0.5) {
+    if (p.ambRole < 0.5 && p.mode != 62u) {
       let sft = mix(0.05, 0.4, p.ambSoft);
       var fld = ambF;
       // origin from placed points: subtract a distance ramp so areas near the
