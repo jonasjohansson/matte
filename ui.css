@@ -81,7 +81,7 @@
 .chip .nm{ position:absolute; left:0; right:0; bottom:0; padding:4px 6px 5px;
   font-size:var(--fz-body); line-height:1.15;
   background:linear-gradient(transparent, rgba(0,0,0,.85) 60%); color:#fff; }
-.chip.sel{ border-color:var(--ui-accent); box-shadow:0 0 0 1px var(--ui-accent) inset; }
+.chip.sel{ border-color:var(--c, var(--ui-accent)); box-shadow:0 0 0 1px var(--c, var(--ui-accent)) inset; }
 .chip.sel .nm{ background:linear-gradient(transparent, rgba(255,255,255,.92) 60%);
   color:#000; font-weight:600; }
 
@@ -92,11 +92,12 @@
 .mgroup-archive h4::after{ content:" · deprecated"; font-weight:400; letter-spacing:0; }
 
 /* ── settings rail (mode settings; sits left of the globals + modes rails) ── */
-#ui-right{ position:fixed; top:0; bottom:var(--bottom); right:var(--modes); width:var(--right); z-index:300;
-  overflow-y:auto; padding:var(--sp-lg) 14px 22px; background:var(--ui-glass);
+#ui-right{ --m:var(--ui-accent);   /* mode accent, set per-mode by ui.js selectMode */
+  position:fixed; top:0; bottom:var(--bottom); right:var(--modes); width:var(--right); z-index:300;
+  overflow-y:auto; padding:var(--sp-lg) 14px 22px;
+  background:color-mix(in srgb, var(--m) 9%, var(--ui-glass));   /* tinted with the selected mode's hue */
   backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
   border-left:1px solid var(--ui-line); font:var(--fz-body)/1.4 var(--ui-font); color:var(--ui-text); }
-#ui-right{ --m:var(--ui-accent); }   /* mode accent, set per-mode by ui.js selectMode */
 #ui-right .modehead{ font-size:var(--fz-title); font-weight:600; color:var(--m);
   letter-spacing:.01em; margin:0 0 var(--sp); }
 
@@ -139,7 +140,8 @@
 .btn{ background:var(--ui-bg2); color:var(--ui-text); border:1px solid var(--ui-line);
   border-radius:var(--r); padding:0 12px; min-height:var(--ctl-h);
   display:inline-flex; align-items:center; justify-content:center;
-  cursor:pointer; font:var(--fz-body)/1 var(--ui-font); letter-spacing:.02em;
+  cursor:pointer; font:var(--fz-body)/1 var(--ui-font);
+  text-transform:uppercase; letter-spacing:.06em;
   transition:background .12s, border-color .12s, color .12s; }
 .btn:hover{ background:var(--ui-hover); border-color:var(--ui-line-2); }
 .btn.on{ background:var(--ui-accent); color:var(--ui-accent-fg); border-color:var(--ui-accent); }
@@ -180,8 +182,11 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 #ui-intro p + p{ margin-top:8px; }
 #ui-intro strong{ color:var(--ui-text); font-weight:600; }
 
-/* subtle grouped blocks in the controls rail */
-#ui-controls .uigroup{ background:rgba(255,255,255,.025); border:1px solid var(--ui-line);
+/* subtle grouped blocks in the controls rail. Each group carries a hue in --g
+   (set per nth-of-type below); the background is a light translucent wash tinted
+   with the hue so the block reads as its colour without going muddy-black. */
+#ui-controls .uigroup{ --g:var(--ui-line-2);
+  background:color-mix(in srgb, var(--g) 13%, rgba(255,255,255,.06)); border:1px solid var(--ui-line);
   border-radius:var(--r); padding:10px; display:flex; flex-direction:column; gap:7px; }
 #ui-controls .uigroup h5{ margin:0 0 1px; color:var(--ui-faint); font-size:var(--fz-label);
   text-transform:uppercase; letter-spacing:.12em; font-weight:700; }
@@ -209,20 +214,16 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 #ui-controls .transport .ico{ flex:1 1 0; min-width:0; padding:0; font-size:14px; }
 .btn.ico{ min-height:var(--ctl-h); }
 
-/* per-group colour accents — a hue stripe + tinted heading per block.
-   nth-of-type works because the .uigroup divs are the only div children of
-   #ui-controls (#ui-intro is a <section>). Order: Output·Playback·View·Origin·Vignette. */
-#ui-controls .uigroup{ border-left-width:3px; }
-#ui-controls .uigroup:nth-of-type(1){ border-left-color:var(--hue-blue); }   /* Output (+export) */
-#ui-controls .uigroup:nth-of-type(2){ border-left-color:var(--hue-green); }  /* Playback */
-#ui-controls .uigroup:nth-of-type(3){ border-left-color:var(--hue-cyan); }   /* View */
-#ui-controls .uigroup:nth-of-type(4){ border-left-color:var(--hue-purple); } /* Origin */
-#ui-controls .uigroup:nth-of-type(5){ border-left-color:var(--hue-pink); }   /* Vignette */
-#ui-controls .uigroup:nth-of-type(1) h5{ color:var(--hue-blue); }
-#ui-controls .uigroup:nth-of-type(2) h5{ color:var(--hue-green); }
-#ui-controls .uigroup:nth-of-type(3) h5{ color:var(--hue-cyan); }
-#ui-controls .uigroup:nth-of-type(4) h5{ color:var(--hue-purple); }
-#ui-controls .uigroup:nth-of-type(5) h5{ color:var(--hue-pink); }
+/* per-group colour accents — the tinted background + heading carry the hue per
+   block (no left stripe). nth-of-type works because the .uigroup divs are the
+   only div children of #ui-controls (#ui-intro is a <section>).
+   Order: Output·Playback·View·Origin·Vignette. */
+#ui-controls .uigroup:nth-of-type(1){ --g:var(--hue-blue); }   /* Output (+export) */
+#ui-controls .uigroup:nth-of-type(2){ --g:var(--hue-green); }  /* Playback */
+#ui-controls .uigroup:nth-of-type(3){ --g:var(--hue-cyan); }   /* View */
+#ui-controls .uigroup:nth-of-type(4){ --g:var(--hue-purple); } /* Origin */
+#ui-controls .uigroup:nth-of-type(5){ --g:var(--hue-pink); }   /* Vignette */
+#ui-controls .uigroup h5{ color:var(--g); }
 /* mode-grid group-header colours are set inline by ui.js (GROUP_COLORS), so a
    mode keeps its hue even as a duplicate chip in the Recent group. */
 #ui-modes .recent-chips{ display:block; }
@@ -263,6 +264,7 @@ body.ui-hidden #stage{ inset:0 !important; }
 .seg{ display:flex; gap:0; margin:2px 0 4px; }
 .seg-btn{ flex:1; background:var(--ui-bg2); color:var(--ui-mut); border:1px solid var(--ui-line);
   border-right-width:0; padding:0 8px; min-height:26px; cursor:pointer;
+  text-transform:uppercase; letter-spacing:.06em;
   font:var(--fz-val)/1 var(--ui-font); }
 .seg-btn:first-child{ border-radius:var(--r-sm) 0 0 var(--r-sm); }
 .seg-btn:last-child{ border-radius:0 var(--r-sm) var(--r-sm) 0; border-right-width:1px; }

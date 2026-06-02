@@ -172,6 +172,31 @@ fn fbm(q: vec2f) -> f32 {
   return v;
 }
 fn luma(c: vec3f) -> f32 { return dot(c, vec3f(0.299, 0.587, 0.114)); }
+// 3D value noise + fbm, for the raymarched volumetric fog (mode 52). Marching a
+// true 3D field is what gives volumetric depth + self-shadowing vs. stacked 2D.
+fn hash31(q: vec3f) -> f32 {
+  var p3 = fract(q * 0.1031);
+  p3 = p3 + dot(p3, p3.zyx + 31.32);
+  return fract((p3.x + p3.y) * p3.z);
+}
+fn vnoise3(q: vec3f) -> f32 {
+  let i = floor(q);
+  let f = fract(q);
+  let u = f * f * (3.0 - 2.0 * f);
+  let x00 = mix(hash31(i + vec3f(0.0,0.0,0.0)), hash31(i + vec3f(1.0,0.0,0.0)), u.x);
+  let x10 = mix(hash31(i + vec3f(0.0,1.0,0.0)), hash31(i + vec3f(1.0,1.0,0.0)), u.x);
+  let x01 = mix(hash31(i + vec3f(0.0,0.0,1.0)), hash31(i + vec3f(1.0,0.0,1.0)), u.x);
+  let x11 = mix(hash31(i + vec3f(0.0,1.0,1.0)), hash31(i + vec3f(1.0,1.0,1.0)), u.x);
+  return mix(mix(x00, x10, u.y), mix(x01, x11, u.y), u.z);
+}
+fn fbm3(q: vec3f) -> f32 {
+  var v = 0.0; var amp = 0.5; var pp = q;
+  for (var i = 0; i < 4; i = i + 1) {
+    v = v + amp * vnoise3(pp);
+    pp = pp * 2.02; amp = amp * 0.5;
+  }
+  return v;
+}
 
 // ---- ambient/lingering matte generators (loop over t; organic, never white) ----
 fn ambPointBias(uv: vec2f, field: f32) -> f32 {
@@ -455,6 +480,408 @@ fn ambMist(uv: vec2f) -> f32 {
   v = smoothstep(cov, cov + mix(0.05, 0.4, p.ambSoft), v);
   v = v * (1.0 + (fbm(q * sc * 4.0 + ph) - 0.5) * p.ambDetail * 0.4);
   return clamp(v, 0.0, 1.0);
+}
+fn ambSmoke(uv: vec2f) -> f32 {
+  // Volumetric smoke / fog. Real rolling fog comes from PARALLAX: several noise
+  // layers drifting along the wind at different speeds + scales, summed — that
+  // depth-cued sliding is what reads as a fog bank rolling through, vs. one flat
+  // sheet. driftAmount morphs the whole look: 0 = low-lying fog rolling in from a
+  // direction, 1 = a turbulent rising plume.
+  //   driftAngle  = direction the fog comes FROM (denser on that side, thinning
+  //                 across the frame so the bank reads as travelling)
+  //   flow        = how fast it rolls across      turbulence = billow / curl
+  //   undulate    = slow sideways sway            ambSpeed   = in-place churn rate
+  //   ambSize     = scale   ambSoft = edge softness   ambCount = coverage/density
+  let rise = clamp(p.driftAmount, 0.0, 1.0);                 // 0 fog .. 1 plume
+  var q = uv; q.x = q.x * p.canvasAspect;
+  let sc = mix(1.0, 4.0, p.ambSize);
+
+  let a = p.driftAngle * 6.2831853;
+  let windDir = vec2f(cos(a), sin(a));                       // toward driftAngle
+  let perp = vec2f(-windDir.y, windDir.x);
+  let churn = p.t * 6.2831853 * (0.05 + p.ambSpeed * 0.4);   // in-place morph
+  // drift travels across the frame; a plume also lifts upward (y=0 is up).
+  let drift = windDir * (p.t * 6.2831853) * (0.04 + p.flow * 0.5)
+            + vec2f(0.0, (p.t * 6.2831853) * 0.4 * rise);
+
+  // anisotropy: fog = wide horizontal banks, plume = tall vertical columns.
+  var s = q * sc;
+  s.x = s.x * mix(0.45, 1.0, rise);
+  s.y = s.y / mix(1.0, 2.3, rise);
+
+  // slow sway perpendicular to the wind, and a shared billowing warp field whose
+  // strength is driven by the turbulence param (the curl that makes it churn).
+  let und = perp * sin(dot(q, perp) * 2.0 + churn * 1.3) * (p.undulate * 0.5);
+  let warpAmt = mix(0.35, 1.0, p.ambDetail) + p.turbulence * 1.6;
+  let wf = vec2f(fbm(s * 0.6 + churn * 0.12 + 3.0),
+                 fbm(s * 0.6 - churn * 0.09 + 8.0)) - vec2f(0.5);
+  // rotating the warp 90 degrees yields a swirling, divergence-free-ish eddy
+  // field, so the layers curl around vortices instead of sliding straight.
+  let swirl = vec2f(-wf.y, wf.x) * (0.4 + p.turbulence * 1.4);
+
+  // parallax depth layers — the heart of the rolling-fog motion. Each layer is
+  // decorrelated (own scale, drift speed, time phase and swirl share) so the
+  // depth feels independent rather than a rigid stack.
+  var dens = 0.0; var amp = 0.6; var wsum = 0.0;
+  for (var i = 0; i < 3; i = i + 1) {
+    let fi = f32(i);
+    let ls = s * (1.0 + fi * 0.6) + drift * (0.5 + fi * 0.6) + und
+           + wf * warpAmt + swirl * (0.5 + fi * 0.4)
+           + vec2f(fi * 4.7, fi * 2.3) + vec2f(0.0, fi * churn * 0.35);
+    dens = dens + amp * fbm(ls);
+    wsum = wsum + amp; amp = amp * 0.55;
+  }
+  dens = dens / wsum;
+  // erode the edges with a finer octave so boundaries fray into wisps/tendrils
+  // instead of reading as smooth blobs.
+  let detail = fbm(s * 3.4 + drift * 1.6 + churn * 0.25 + 17.0);
+  dens = dens - (1.0 - detail) * mix(0.02, 0.2, p.ambDetail);
+
+  // directional bank: denser toward the source side, thinning downwind, so the
+  // fog clearly comes FROM driftAngle. Disabled for the plume.
+  let along = dot(uv - vec2f(0.5, 0.5), windDir);
+  dens = dens + mix(0.45, 0.0, rise) * along;
+
+  // fog = soft, low-contrast, semi-transparent; plume = denser & punchier.
+  let cov = mix(0.52, 0.18, p.ambCount);
+  let soft = mix(0.18, 0.5, p.ambSoft) * mix(1.7, 1.0, rise);
+  var v = smoothstep(cov - 0.5 * soft, cov + soft, dens);
+  // vertical profile: fog lies low (denser toward the bottom, y=1); plume
+  // dissipates toward the top (y=0).
+  let lowlying = mix(0.6, 1.0, smoothstep(-0.1, 1.0, uv.y));
+  v = v * mix(lowlying, smoothstep(-0.05, 0.8, uv.y), rise);
+  v = v * mix(0.82, 1.0, rise);                             // thin the fog (translucent)
+  return clamp(v, 0.0, 1.0);
+}
+fn ambFire(uv: vec2f) -> f32 {
+  // Rising flames: the smoke field cranked hot — strong upward buoyancy, vertical
+  // tongue stretch, fast flicker, density concentrated at the base and licking up.
+  // Returns 0..1 heat intensity (white-hot matte); pair with a fire gradient LUT
+  // for the black->red->orange->white colour ramp on screen.
+  // Extra movement params (active for mode 51): flow = rise speed / reach,
+  // turbulence = curl/lick strength, undulate = side-to-side sway. ambSoft now
+  // spans crisp tongues all the way to a soft luminous glow.
+  let riseSpd = 0.6 + p.flow * 1.9;
+  let ph = p.t * 6.2831853 * (0.5 + p.ambSpeed * 1.5);
+  var q = uv; q.x = q.x * p.canvasAspect;
+  let sc = mix(1.0, 6.0, p.ambSize);                       // wider scale range
+  let h = uv.y;                                            // 0 top .. 1 bottom (base)
+
+  // Narrow, TALL tongues: high frequency across x (so flames separate into
+  // individual licks) and low frequency in y (tall vertical streaks), advected up.
+  let sway = sin(uv.y * 6.0 + ph * 1.5) * p.undulate * 0.2;
+  var s = vec2f((q.x + sway) * sc * 1.9, q.y * sc * 0.55) + vec2f(0.0, ph * riseSpd);
+  // curl warp + a finer octave so each tongue licks and shimmers organically.
+  let curl = mix(0.3, 2.6, p.turbulence);
+  let w1 = vec2f(fbm(s * 1.2 + vec2f(0.0, ph * 0.5)),
+                 fbm(s * 1.2 + vec2f(4.0, ph * 0.6))) - vec2f(0.5);
+  let sw = s + w1 * curl * mix(0.5, 1.2, p.ambDetail);
+  var flame = fbm(sw) + 0.5 * fbm(sw * 2.3 + vec2f(0.0, ph * 1.3));
+  flame = flame / 1.5;
+
+  // Classic flame shaping: subtract a ramp that GROWS with height, so the turbulent
+  // body thins into sparse, tapering tongues that die out toward the top (bright
+  // licks on black, not a slab). Then re-anchor a thin luminous base where the fire
+  // is rooted at the very bottom.
+  let upB = 1.0 - h;                                       // 0 base .. 1 top
+  var d = flame - upB * mix(0.45, 0.95, 1.0 - p.ambCount);
+  d = d + (1.0 - smoothstep(0.0, 0.32, upB)) * 0.32;       // hot base, softly faded
+  let cov = mix(0.36, 0.2, p.ambCount);
+  let soft = mix(0.015, 0.6, p.ambSoft);                  // MUCH wider: crisp → soft glow
+  var v = smoothstep(cov, cov + soft, d);
+  // organic flicker that scrolls upward like heat (fbm, not a clean wave → no bands)
+  v = v * (0.78 + 0.34 * fbm(q * 5.0 + vec2f(0.0, ph * 2.2)));
+  return clamp(v, 0.0, 1.0);
+}
+fn ambVolFog(uv: vec2f) -> f32 {
+  // FOG 2 — raymarched volumetric fog. For each pixel we march a 3D noise volume
+  // front-to-back, accumulating density with Beer-Lambert extinction (transmittance
+  // T *= exp(-density*dt)). A short secondary march toward a movable light gives
+  // real self-shadowing, so the fog has lit and shadowed FORM, not flat grey.
+  //   ambSize = scale   ambCount = density/thickness   ambSpeed = evolution + drift
+  //   ambDetail = (reserved)   ambSoft = ambient fill   driftAngle = wind direction
+  //   driftAmount = light intensity   sunX/sunY = light position
+  let tt = p.t * 6.2831853;
+  var q = uv; q.x = q.x * p.canvasAspect;
+  let scale = mix(2.6, 7.5, p.ambSize);
+
+  let a = p.driftAngle * 6.2831853;
+  let spd = 0.04 + p.ambSpeed * 0.4;
+  let wind = vec3f(cos(a), sin(a) * 0.35, 0.0) * spd * tt;     // drift across the volume
+  let evo = vec3f(0.0, 0.0, tt * (0.03 + p.ambSpeed * 0.25));  // roll through depth over time
+  let lightDir = normalize(vec3f((p.sunX - 0.5) * 2.0, -(p.sunY - 0.5) * 2.0, 0.7));
+
+  // LOW-LYING: real fog pools near the ground and thins with height. This vertical
+  // profile (dense toward the bottom, y=1 → fading out toward the top) is what
+  // separates ground fog from an isotropic cloud volume.
+  let ground = smoothstep(-0.15, 1.05, uv.y);                 // 0 top .. 1 bottom
+
+  let floorD = mix(0.56, 0.34, p.ambCount);                   // density threshold
+  let ext = mix(2.0, 6.5, p.ambCount);                        // extinction strength
+  let STEPS = 18;
+  let dz = 1.4 / f32(STEPS);
+  var trans = 1.0;                                            // transmittance front->back
+  var lum = 0.0;                                              // accumulated in-scatter
+  for (var i = 0; i < STEPS; i = i + 1) {
+    let z = -0.2 + f32(i) * dz;
+    // strongly anisotropic: wide flat horizontal banks (low x-freq), layered in y.
+    let sp = vec3f(q.x * scale * 0.42, q.y * scale * 0.85, z * scale) + wind + evo;
+    var dens = max(0.0, fbm3(sp) - floorD) * ext;
+    dens = dens * mix(0.1, 1.0, ground);                      // hug the ground
+    if (dens > 0.001) {
+      // cheap self-shadow: two coarse density taps toward the light.
+      var sh = 0.0;
+      sh = sh + max(0.0, fbm3(sp + lightDir * 0.18 * scale) - floorD) * ext * mix(0.1, 1.0, ground);
+      sh = sh + max(0.0, fbm3(sp + lightDir * 0.44 * scale) - floorD) * ext * mix(0.1, 1.0, ground);
+      let lightT = exp(-sh * 0.5);                            // shadowing
+      let dt = dens * dz;
+      lum = lum + trans * (0.1 + 0.9 * lightT) * dt;          // ambient + lit in-scatter
+      trans = trans * exp(-dt);
+    }
+    if (trans < 0.02) { break; }
+  }
+  let opacity = 1.0 - trans;
+  // tone-map: soft exponential rolloff so dense/lit regions stay translucent
+  // (atmospheric) instead of blowing out to a flat white blob.
+  let raw = lum * mix(1.0, 2.2, p.driftAmount) + opacity * mix(0.04, 0.26, p.ambSoft);
+  let v = 1.0 - exp(-raw * 1.6);
+  return clamp(v, 0.0, 1.0);
+}
+fn boltDx(uv: vec2f, xc: f32, sseed: f32, amp: f32, jag: f32) -> f32 {
+  // horizontal distance to a jagged vertical channel: a coarse zig-zag plus a finer
+  // kink octave so the channel has crisp, organic detail (not a smooth wiggle).
+  let coarse = (fbm(vec2f(uv.y * jag + sseed, sseed)) - 0.5) * 2.0;
+  let fine = (fbm(vec2f(uv.y * jag * 3.0 + sseed, sseed + 1.0)) - 0.5) * 0.55;
+  let pathX = xc + (coarse + fine) * amp;
+  return abs(uv.x - pathX);
+}
+fn ambLightning(uv: vec2f) -> f32 {
+  // Discrete strikes. The loop is split into strike slots; in each, a bolt's whole
+  // channel lights at once in a brilliant MAIN return stroke, followed by a couple
+  // of fainter return strokes (distinct flashes, not a strobe), then darkness until
+  // the next strike. The channel shape is fixed per strike (decoupled from the
+  // animated seed) so it does NOT drift sideways.
+  //   ambSpeed = strikes per loop   ambSize = jag amplitude   ambDetail = jaggedness
+  //   ambCount = forked branches    ambSoft = glow width
+  let strikes = floor(mix(1.0, 5.0, p.ambSpeed) + 0.5);
+  let tl = fract(p.t);
+  let slot = floor(tl * strikes);
+  let local = fract(tl * strikes);                         // 0..1 within this strike
+  // brightness: main stroke + two fainter return strokes, each a quick gaussian
+  // flash, then dark — distinct strokes the way real lightning flickers.
+  let bright = exp(-pow((local - 0.02) / 0.025, 2.0))
+             + exp(-pow((local - 0.11) / 0.03, 2.0)) * 0.7
+             + exp(-pow((local - 0.20) / 0.04, 2.0)) * 0.45;
+  if (bright < 0.004) { return 0.0; }                      // dark gap between strikes
+  let sseed = slot * 13.7 + 2.0;                           // stable per strike
+  let xc = 0.5 + (hash21(vec2f(slot + 1.0, 3.7)) - 0.5) * 0.7;
+  let amp = mix(0.04, 0.22, p.ambSize);
+  let jag = mix(5.0, 18.0, p.ambDetail);
+  let glowW = mix(10.0, 30.0, 1.0 - p.ambSoft);            // smaller soft = wider glow
+  let dx = boltDx(uv, xc, sseed, amp, jag);
+  var v = exp(-dx * dx * 3500.0) + exp(-dx * glowW) * 0.3; // whole channel lights at once
+  // forked branches: each splits off at a random height and runs downward, fading.
+  let nb = u32(mix(0.0, 3.0, p.ambCount) + 0.5);
+  for (var i = 0u; i < 3u; i = i + 1u) {
+    if (i >= nb) { break; }
+    let fi = f32(i) + 1.0;
+    let by = 0.15 + 0.6 * hash21(vec2f(slot * 3.0 + fi, sseed));   // branch point height
+    if (uv.y > by) {
+      let bxc = xc + (hash21(vec2f(fi, slot + 1.0)) - 0.5) * 0.28;
+      let bdx = boltDx(uv, bxc, sseed + fi * 5.0, amp * 0.6, jag * 1.3);
+      let bfade = smoothstep(by, by + 0.05, uv.y) * smoothstep(1.0, by + 0.1, uv.y);
+      v = v + (exp(-bdx * bdx * 4500.0) + exp(-bdx * glowW * 1.3) * 0.2) * bfade * 0.7;
+    }
+  }
+  return clamp(v * bright, 0.0, 1.0);
+}
+fn ambInk(uv: vec2f) -> f32 {
+  // Ink / dye dispersing in water: curl-noise advection unfurls the dye into
+  // swirling tendrils, densest near the injection point (origin) and dispersing.
+  //   ambSize = scale/spread   ambCount = density   ambSoft = edge   ambSpeed = flow
+  //   turbulence = swirl strength   originX/Y = injection point
+  // The dispersion plays from the moment the drop lands: over t the stain grows from
+  // a tiny dense blob at the drop point and unfurls into swirling tendrils.
+  let grow = clamp(p.t, 0.0, 1.0);
+  let tt = p.t * 6.2831853;
+  var q = uv; q.x = q.x * p.canvasAspect;
+  let sc = mix(2.0, 7.0, p.ambSize);
+  let evo = tt * (0.05 + p.ambSpeed * 0.4);
+  // iterated curl warp → unfurling tendrils (rotate the warp 90° for swirl). The
+  // swirl strength grows as the drop spreads, so tendrils unfurl as it disperses.
+  let w1 = vec2f(fbm(q * sc * 0.5 + vec2f(0.0, evo)),
+                 fbm(q * sc * 0.5 + vec2f(evo, 4.0))) - vec2f(0.5);
+  let swirl = vec2f(-w1.y, w1.x) * mix(1.0, 4.0, p.turbulence) * (0.3 + grow);
+  let s = q * sc + swirl + w1 * 1.5;
+  var ink = fbm(s) + 0.5 * fbm(s * 2.3 - vec2f(0.0, evo));
+  ink = ink / 1.5;
+  // dispersion front grows out from the drop point over t.
+  let c = vec2f(p.originX, p.originY);
+  var dd = uv - c; dd.x = dd.x * p.canvasAspect;
+  let diag = 0.5 * sqrt(p.canvasAspect * p.canvasAspect + 1.0);
+  let r = length(dd) / diag;
+  let frontR = mix(0.03, 1.3, pow(grow, 0.55));            // tiny drop → full cloud
+  let conc = 1.0 - smoothstep(frontR * 0.3, frontR, r);    // dense centre, fading edge
+  ink = ink * conc + conc * 0.35;
+  let cov = mix(0.55, 0.24, p.ambCount);
+  let soft = mix(0.05, 0.4, p.ambSoft);
+  var v = smoothstep(cov, cov + soft, ink);
+  return clamp(v, 0.0, 1.0);
+}
+fn ambSunBokeh(uv: vec2f) -> f32 {
+  // Solar flare + drifting bokeh: a sun (sunX/sunY) with a soft core glow, an
+  // anamorphic horizontal streak and a radial starburst, plus floating bokeh orbs
+  // (soft discs with a brighter rim) drifting on the wind.
+  //   sunX/sunY = sun position   ambCount = orb count   ambSize = glow/orb size
+  //   ambDetail = streak + ray strength   ambSpeed = orb drift   driftAngle = wind
+  let tt = p.t * 6.2831853;
+  var q = uv; q.x = q.x * p.canvasAspect;
+  let sun = vec2f(p.sunX * p.canvasAspect, p.sunY);
+  let dd = q - sun;
+  let r = length(dd);
+  // direct light: core glow + anamorphic streak + starburst rays.
+  var direct = exp(-r * mix(2.5, 7.0, 1.0 - p.ambSize)) * 1.1;
+  let streak = exp(-abs(dd.y) * mix(40.0, 95.0, 1.0 - p.ambSize)) * exp(-abs(dd.x) * 1.2);
+  direct = direct + streak * mix(0.15, 1.4, p.ambDetail);
+  let ang = atan2(dd.y, dd.x);
+  let rays = pow(0.5 + 0.5 * sin(ang * mix(6.0, 16.0, p.ambDetail) + p.seed), 5.0) * exp(-r * 3.5);
+  direct = direct + rays * 0.5;
+  // dappled canopy: the sun filters through drifting leaves/branches. A two-scale
+  // foliage field (broad branches + fine leaves) gently swaying occludes the direct
+  // light into shifting dapples. turbulence = how dense the canopy is.
+  let a = p.driftAngle * 6.2831853;
+  let dir = vec2f(cos(a), sin(a));
+  let sway = dir * tt * 0.012 + vec2f(sin(tt * 0.5) * 0.02, cos(tt * 0.4) * 0.02);
+  let leafW = vec2f(fbm(q * 3.5 + sway * 3.0), fbm(q * 3.5 + 9.0 - sway * 2.0)) - vec2f(0.5);
+  let canopy = fbm(q * mix(5.0, 13.0, p.ambDetail) + leafW * 1.4 + sway);
+  let dapple = mix(1.0, smoothstep(0.34, 0.62, canopy), p.turbulence);   // gaps let light through
+  var v = direct * dapple;
+  let count = u32(mix(4.0, 20.0, p.ambCount) + 0.5);
+  for (var i = 0u; i < 20u; i = i + 1u) {
+    if (i >= count) { break; }
+    let fi = f32(i) + 1.0;
+    let sp = 0.3 + 0.7 * hash21(vec2f(fi, 2.1));
+    var c = fract(vec2f(hash21(vec2f(fi, 1.3)), hash21(vec2f(fi, 7.7)))
+              + dir * tt * 0.02 * sp * (0.3 + p.ambSpeed));
+    let fade = smoothstep(0.0, 0.1, c.x) * smoothstep(1.0, 0.9, c.x)
+             * smoothstep(0.0, 0.1, c.y) * smoothstep(1.0, 0.9, c.y);
+    c.x = c.x * p.canvasAspect;
+    let od = length(q - c);
+    let rad = mix(0.02, 0.1, hash21(vec2f(fi, 5.5))) * mix(0.6, 1.8, p.ambSize);
+    // ambSoft morphs the orbs: low = sharp-edged catadioptric discs with a tight
+    // bright rim; high = soft, dreamy, gradient orbs.
+    let disc = smoothstep(rad, rad * mix(0.9, 0.2, p.ambSoft), od);
+    let rim = exp(-pow((od - rad) / (rad * mix(0.1, 0.45, p.ambSoft)), 2.0)) * mix(0.7, 0.3, p.ambSoft);
+    v = v + (disc * 0.45 + rim) * fade * (0.4 + 0.6 * hash21(vec2f(fi, 9.1)));
+  }
+  return clamp(v, 0.0, 1.0);
+}
+fn ambWaterShimmer(uv: vec2f) -> f32 {
+  // Sunlit water surface: interfering travelling wavefronts sharpened into caustic
+  // ridges that shimmer and flow. Smooth gradients make a lovely displacement map.
+  //   ambSize = scale   ambSoft = contrast   ambSpeed = speed   ambDetail = glints
+  let tt = p.t * 6.2831853 * (0.03 + p.ambSpeed * 1.4);     // can crawl to near-still
+  var q = uv; q.x = q.x * p.canvasAspect;
+  let sc = mix(3.0, 12.0, p.ambSize);
+  var w = 0.0;
+  for (var i = 0; i < 5; i = i + 1) {
+    let fi = f32(i);
+    let a = fi * 2.4 + p.seed * 0.5;
+    let dir = vec2f(cos(a), sin(a));
+    w = w + sin(dot(q, dir) * sc * (0.6 + 0.18 * fi) + tt * (0.6 + 0.12 * fi)) / (1.0 + 0.3 * fi);
+  }
+  // the smooth interference of the travelling waves IS the shimmer; a little noise
+  // just breaks up the regularity. sin(w·k) turns the wave field into caustic
+  // ridges. Low contrast → clean water surface + displacement map.
+  let warp = vec2f(fbm(q * sc * 0.3 + tt * 0.12), fbm(q * sc * 0.3 + 5.0 - tt * 0.1)) - vec2f(0.5);
+  let caustic = pow(0.5 + 0.5 * sin(w * 1.9 + warp.x * 2.2 + warp.y * 1.6),
+                    mix(0.7, 3.0, p.ambSoft));
+  let glint = pow(caustic, 4.0) * p.ambDetail * 0.7;                     // sparkle
+  return clamp(caustic * 0.85 + glint, 0.0, 1.0);
+}
+fn ambSilk(uv: vec2f) -> f32 {
+  // Flow-field silk: iterated curl-noise advection bends the space into smooth
+  // streamlines, rendered as flowing satin bands with a moving sheen. Gorgeous as
+  // a displacement driver. turbulence = flow/curl strength.
+  //   ambSize = scale   ambDetail = band frequency   ambSoft = band sharpness
+  let tt = p.t * 6.2831853 * (0.25 + p.ambSpeed * 0.6);
+  var q = uv; q.x = q.x * p.canvasAspect;
+  let sc = mix(1.5, 5.0, p.ambSize);
+  var pp = q * sc;
+  for (var i = 0; i < 3; i = i + 1) {
+    let fi = f32(i);
+    let wv = vec2f(fbm(pp + vec2f(0.0, tt * 0.2) + fi),
+                   fbm(pp + vec2f(5.2, 0.0 - tt * 0.15) + fi)) - vec2f(0.5);
+    pp = pp + vec2f(-wv.y, wv.x) * mix(0.35, 1.1, p.turbulence);         // curl advection
+  }
+  // smooth flowing satin bands following the curl field; gentle contrast so it
+  // reads as silk (and works as a smooth displacement driver).
+  let bands = 0.5 + 0.5 * sin(pp.x * mix(2.0, 7.0, p.ambDetail) + pp.y * 0.5);
+  var silk = pow(bands, mix(0.6, 2.0, p.ambSoft));
+  silk = silk * (0.78 + 0.34 * (0.5 + 0.5 * sin(pp.y * 3.0 - tt)));      // moving sheen
+  return clamp(silk, 0.0, 1.0);
+}
+fn ambInkPaper(uv: vec2f) -> f32 {
+  // Ink seeping into watercolour paper. The stain spreads from the drop point over
+  // t (so it plays from the moment the ink lands), its edge frayed by paper fibres
+  // (capillary wicking), pooling into the paper's tooth (granulation) with a darker
+  // pigment rim at the wet front — the hallmarks of ink on aquarelle paper.
+  //   originX/Y = drop point   ambSize = spread scale   ambSoft = wetness/feather
+  //   ambDetail = paper grain   ambCount = pigment density
+  let grow = clamp(p.t, 0.0, 1.0);
+  var q = uv; q.x = q.x * p.canvasAspect;
+  let diag = 0.5 * sqrt(p.canvasAspect * p.canvasAspect + 1.0);
+  let sc = mix(2.0, 6.0, p.ambSize);
+  var dd = uv - vec2f(p.originX, p.originY); dd.x = dd.x * p.canvasAspect;
+  // capillary wicking: the front frays along paper fibres (domain-warped detail).
+  let w = vec2f(fbm(q * sc * 0.7), fbm(q * sc * 0.7 + 5.0)) - vec2f(0.5);
+  let fiber = fbm(q * mix(12.0, 34.0, p.ambDetail) + w * 2.0) - 0.5;
+  let r = length(dd) / diag + fiber * 0.28;
+  let frontR = mix(0.04, 1.2, pow(grow, 0.6));               // stain grows from the drop
+  let soft = mix(0.06, 0.32, p.ambSoft);
+  var ink = 1.0 - smoothstep(frontR - soft, frontR, r);
+  // granulation: pigment settles into the paper's tooth — a coarse mottle plus a
+  // finer grain, so the texture clumps the way watercolour does (not flat noise).
+  let paper = fbm(q * mix(20.0, 50.0, p.ambDetail)) * 0.65 + fbm(q * mix(70.0, 150.0, p.ambDetail)) * 0.35;
+  ink = ink * (0.4 + 0.95 * paper);
+  // pigment rim: darker accumulation at the advancing wet edge (watercolour edge).
+  let band = exp(-pow((r - (frontR - soft * 0.5)) / (soft * 0.6), 2.0));
+  ink = clamp(ink + band * (1.0 - smoothstep(frontR, frontR + soft, r)) * 0.55, 0.0, 1.0);
+  return clamp(ink * mix(0.7, 1.25, p.ambCount), 0.0, 1.0);
+}
+fn ambNebula(uv: vec2f) -> f32 {
+  // Deep-space nebula + starfield: slow domain-warped cosmic dust with bright cores
+  // and dark lanes, overlaid with twinkling stars. Lovely with a colour LUT.
+  //   ambCount = nebula density   ambSize = scale   ambSoft = contrast (dust lanes)
+  //   ambSpeed = drift   ambDetail = star density
+  let tt = p.t * 6.2831853 * (0.04 + p.ambSpeed * 0.2);        // very slow
+  var q = uv; q.x = q.x * p.canvasAspect;
+  let sc = mix(1.4, 4.0, p.ambSize);
+  // iterated warp for billowing gas clouds.
+  let w1 = vec2f(fbm(q * sc * 0.5 + vec2f(0.0, tt * 0.1)),
+                 fbm(q * sc * 0.5 + vec2f(5.0, 0.0 - tt * 0.08))) - vec2f(0.5);
+  let w2 = vec2f(fbm(q * sc + w1 * 1.6), fbm(q * sc + w1 * 1.6 + 7.0)) - vec2f(0.5);
+  var neb = fbm(q * sc + w2 * 2.0);
+  // dark dust lanes: subtract a sharper ridged noise so the gas is threaded with
+  // dark filaments instead of a uniform glow.
+  let lane = pow(clamp(1.0 - abs(2.0 * fbm(q * sc * 1.7 + w2) - 1.0), 0.0, 1.0), 2.0);
+  neb = neb - lane * 0.28;
+  neb = pow(clamp(neb, 0.0, 1.0), mix(1.2, 2.8, p.ambSoft)) * mix(0.55, 1.4, p.ambCount);
+  neb = neb + pow(clamp(neb, 0.0, 1.0), 2.0) * 0.45;          // glowing cores (bloom)
+  // starfield: one candidate star per cell, twinkling; a few bright, many faint.
+  let cell = mix(45.0, 130.0, p.ambDetail);
+  let g = q * cell;
+  let id = floor(g);
+  let rnd = hash21(id);
+  var star = 0.0;
+  if (rnd > 0.78) {
+    let center = vec2f(hash21(id + vec2f(1.3, 0.0)), hash21(id + vec2f(0.0, 2.7)));
+    let sd = length(fract(g) - center);
+    let bright = smoothstep(0.78, 1.0, rnd);                  // rarer = brighter
+    let tw = 0.5 + 0.5 * sin(tt * 40.0 + rnd * 50.0);
+    star = (exp(-sd * sd * 260.0) + exp(-sd * 9.0) * 0.25) * (0.5 + 0.9 * bright) * tw;
+  }
+  return clamp(neb + star, 0.0, 1.0);
 }
 fn ambRain(uv: vec2f) -> f32 {
   // falling rain streaks, slanted by direction; faint haze behind.
@@ -1218,12 +1645,21 @@ fn radialBurstMask(uv: vec2f) -> f32 {
   let dir = vec2f(cos(ang), sin(ang));              // periodic -> no angular seam
   let anim = p.t * p.flow * 0.8 + p.seed * 0.37;
   let freq = mix(10.0, 60.0, p.organic);            // streak density
-  var streak = fbm(dir * freq + anim * 0.5);
-  streak = streak + 0.4 * fbm(dir * freq * 2.6 + vec2f(0.0, r * 3.0) + anim);  // feathered tips
+  // Domain-warp the angular streak field by a radius-dependent offset so filaments
+  // meander and branch along their length instead of reading as straight rays.
+  // (dir keeps it seamless around the circle; r breaks coherence down each thread.)
+  let wf = vec2f(
+    fbm(dir * (freq * 0.35) + vec2f(r * 2.5, anim)),
+    fbm(dir * (freq * 0.35) + vec2f(anim, r * 2.5))
+  ) - vec2f(0.5);
+  let curl = wf * mix(0.6, 3.0, p.turbulence);
+  var streak = fbm(dir * freq + curl + anim * 0.5);
+  streak = streak + 0.4 * fbm(dir * freq * 2.6 + curl * 1.6 + vec2f(0.0, r * 3.0) + anim);  // feathered, branching tips
   streak = streak / 1.4;
   let warp = (fbm(uv * mix(3.0, 11.0, p.turbulence) + anim) - 0.5) * p.turbulence * 0.25;
   let reach = mix(0.15, 0.7, clamp(p.edges * 0.5 + 0.5, 0.0, 1.0));
-  let m = r - (streak - 0.5) * reach + warp;        // streaks pull filaments ahead
+  // Filaments reach further ahead at the tips (scaled by r) -> tapered, frayed front.
+  let m = r - (streak - 0.5) * reach * (0.6 + 0.8 * r) + warp;
   return clamp(m, 0.0, 1.0);
 }
 
@@ -1236,17 +1672,76 @@ fn smokeRingMask(uv: vec2f) -> f32 {
   var d = uv - c;
   d.x = d.x * p.canvasAspect;
   let diag = 0.5 * sqrt(p.canvasAspect * p.canvasAspect + 1.0);
-  var r = length(d) / diag;
   let ang = atan2(d.y, d.x);
   let dir = vec2f(cos(ang), sin(ang));
   let anim = p.t * p.flow * 0.6 + p.seed * 0.2;
+  // Domain-warp field: a slow noise vector that curls the boundary samples into
+  // billowing, rolling tendrils (the signature of smoke vs. a plain blobby edge).
+  let wf = vec2f(
+    fbm(dir * 2.0 + vec2f(0.0, anim)),
+    fbm(dir * 2.0 + vec2f(anim, 4.0))
+  ) - vec2f(0.5);
+  let warpAmt = mix(0.25, 1.1, p.turbulence);
   let lobes = mix(2.0, 9.0, p.organic);
-  let lobeW = (fbm(dir * lobes + anim) - 0.5) * 0.5;          // non-circular, blobby
+  // Two octaves of boundary displacement: a broad lobe shape plus a finer,
+  // domain-warped octave that adds the curling roll.
+  let lobeW = (fbm(dir * lobes + anim) - 0.5) * 0.4
+            + (fbm(dir * lobes * 2.3 + wf * warpAmt + anim * 1.4) - 0.5) * 0.28;
   let sc = mix(1.5, 6.0, p.turbulence);
-  let smoke = (fbm(uv * sc + vec2f(anim, anim * 0.5) + p.seed * 0.11) - 0.5);  // wisps
+  let smoke = (fbm(uv * sc + wf * warpAmt + vec2f(anim, anim * 0.5) + p.seed * 0.11) - 0.5);  // wisps
   let smokeAmt = mix(0.08, 0.5, p.turbulence);
-  r = r + lobeW + smoke * smokeAmt;
+  let r = length(d) / diag + lobeW + smoke * smokeAmt;
   return clamp(r, 0.0, 1.0);
+}
+
+// Standalone variants of modes 48/49 are LOOPING versions of the very same
+// reveal: the identical filament-burst / smoky-lobed shape, breathing in and out
+// over the loop instead of sweeping once. So the standalone reads as the same
+// effect, just continuous. The breathing front never fully closes (keeps a core)
+// nor hard-caps, avoiding a black/white blink at the loop seam.
+fn breatheFront() -> f32 {
+  return mix(0.12, 1.05, 0.5 - 0.5 * cos(p.t * 6.2831853));   // small core .. full
+}
+fn radialBurstField(uv: vec2f) -> f32 {
+  let m = radialBurstMask(uv);
+  let soft = mix(0.04, 0.35, p.spread);
+  let front = breatheFront();
+  return clamp(smoothstep(front + soft, front - soft, m), 0.0, 1.0);
+}
+fn smokeRingField(uv: vec2f) -> f32 {
+  let m = smokeRingMask(uv);
+  let soft = mix(0.04, 0.35, p.spread);
+  let front = breatheFront();
+  return clamp(smoothstep(front + soft, front - soft, m), 0.0, 1.0);
+}
+
+// mode 53 — frost: crystalline ice creeping in from the edges, its growth front
+// broken into feathery, branching ferns by ridged domain-warped noise. Returns a
+// reveal mask (low near the edges → reveals first, high at centre → last).
+// organic = crystal density, edges = sharpness/reach of the ferns, seed = variation.
+fn frostMask(uv: vec2f) -> f32 {
+  var q = uv; q.x = q.x * p.canvasAspect;
+  // distance inward from the nearest canvas edge (0 at edge .. 1 at centre).
+  let edge = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y)) * 2.0;
+  let fr = mix(6.0, 22.0, p.organic);                       // crystal density
+  let off = p.seed * 0.37;
+  // domain warp so the spines wander and branch instead of being straight.
+  let w = vec2f(fbm(q * fr * 0.4 + off), fbm(q * fr * 0.4 + 5.0 + off)) - vec2f(0.5);
+  // ridged noise raised to a high power → THIN, sharp crystalline spines (ice
+  // lines). max() of two scales builds a branching network of tendrils.
+  let n1 = fbm(q * fr + w * 2.0);
+  let spine1 = pow(1.0 - abs(2.0 * n1 - 1.0), 2.5);
+  let n2 = fbm(q * fr * 2.5 + w * 1.2);
+  let spine2 = pow(1.0 - abs(2.0 * n2 - 1.0), 3.0);
+  let crystal = max(spine1, spine2 * 0.7);
+  // Frost as a crystalline DISSOLVE: an evenly-distributed height field reveals
+  // uniformly over t, with the sharp veins and the canvas edges crossing first so
+  // the ice nucleates along crystal tendrils and creeps in from the borders.
+  var hgt = fbm(q * fr * 0.7 + w * 1.5);                    // even base distribution
+  hgt = hgt + crystal * 0.5;                                // veins reveal first
+  hgt = hgt + (1.0 - edge) * mix(0.05, 0.4, clamp(p.edges * 0.5 + 0.5, 0.0, 1.0));  // edge-first
+  let mask = 1.0 - clamp(hgt, 0.0, 1.0);
+  return clamp(mask, 0.0, 1.0);
 }
 
 @fragment fn fs(in: VSOut) -> @location(0) vec4f {
@@ -1350,6 +1845,8 @@ fn smokeRingMask(uv: vec2f) -> f32 {
     mask = radialBurstMask(uv);
   } else if (p.mode == 49u) {
     mask = smokeRingMask(uv);
+  } else if (p.mode == 53u) {
+    mask = frostMask(uv);
   } else if (p.mode == 37u) {
     // Paint: the painted field (in texTexture) drives the reveal. Bright paint =
     // reveals early; the soft brush falloff makes each stroke grow/expand. Stroke
@@ -1816,7 +2313,7 @@ fn smokeRingMask(uv: vec2f) -> f32 {
   // A bright band tracks the reveal front (where t ~= mask), giving the energetic
   // glow seen in the reference clips. In colour preview it's a cool luminous rim;
   // it also lifts the matte a touch ahead of the front so the B/W reads as light.
-  if (p.mode == 48u || p.mode == 49u) {
+  if ((p.mode == 48u || p.mode == 49u) && p.ambRole < 0.5) {
     let bandW = sp * 1.6 + 0.025;
     let band = exp(-pow((t - mask) / bandW, 2.0));        // gaussian around the front
     let glowVar = 0.55 + 0.55 * fbm(uv * 8.0 + p.seed * 0.2 + p.t * p.flow);
@@ -1842,6 +2339,20 @@ fn smokeRingMask(uv: vec2f) -> f32 {
   else if (p.mode == 45u) { ambF = ambSnow(uv); }
   else if (p.mode == 46u) { ambF = ambMarble(uv); }
   else if (p.mode == 47u) { ambF = ambBlooms(uv); }
+  else if (p.mode == 50u) { ambF = ambSmoke(uv); }
+  else if (p.mode == 51u) { ambF = ambFire(uv); }
+  else if (p.mode == 52u) { ambF = ambVolFog(uv); }
+  else if (p.mode == 54u) { ambF = ambLightning(uv); }
+  else if (p.mode == 55u) { ambF = ambInk(uv); }
+  else if (p.mode == 56u) { ambF = ambSunBokeh(uv); }
+  else if (p.mode == 57u) { ambF = ambWaterShimmer(uv); }
+  else if (p.mode == 58u) { ambF = ambSilk(uv); }
+  else if (p.mode == 59u) { ambF = ambInkPaper(uv); }
+  else if (p.mode == 60u) { ambF = ambNebula(uv); }
+  // modes 48/49 act as standalone looping fields when the role toggle is set;
+  // otherwise they stay on the normal reveal path above (ambF left at -1).
+  else if (p.mode == 48u && p.ambRole >= 0.5) { ambF = radialBurstField(uv); }
+  else if (p.mode == 49u && p.ambRole >= 0.5) { ambF = smokeRingField(uv); }
   if (ambF >= 0.0 && p.mode != 34u) { ambF = ambPointBias(uv, ambF); }
   if (ambF >= 0.0) {
     // ambRole 0 = REVEAL: a threshold sweeps high->low over t so the field goes

@@ -87,13 +87,13 @@
 
   // modes grouped for the grid
   const MODES = [
-    ['Reveal',[[0,'smooth'],[1,'pigment rim'],[7,'iris'],[15,'wet edge']]],
+    ['Reveal',[[0,'smooth'],[1,'pigment rim'],[7,'iris'],[15,'wet edge'],[53,'frost']]],
     ['Watercolor',[[2,'paper grain'],[3,'backrun blooms'],[4,'wet diffusion'],[5,'tonal sediment'],[6,'salt'],[8,'wet bleed'],[9,'pigment run'],[17,'tonal wash'],[24,'cauliflower bloom'],[25,'wet-stage'],[26,'migration']]],
     ['Painterly',[[16,'stroke-follow'],[22,'mold tendrils']]],
     ['Light & burn',[[27,'paper scorch'],[29,'lamp grid'],[30,'light bloom'],[48,'radial burst'],[49,'smoke ring']]],
-    ['Ambient (loop)',[[33,'bokeh'],[34,'water ripples'],[35,'sun glare'],[36,'light streaks'],[38,'aurora'],[39,'godrays'],[40,'clouds'],[41,'caustics'],[42,'embers'],[43,'mist'],[44,'rain'],[45,'snow'],[46,'marble'],[47,'ink blooms']]],
+    ['Ambient (loop)',[[33,'bokeh'],[34,'water ripples'],[35,'sun glare'],[36,'light streaks'],[38,'aurora'],[39,'godrays'],[40,'clouds'],[50,'smoke / fog'],[52,'fog 2 (volumetric)'],[51,'fire / flames'],[41,'caustics'],[42,'embers'],[43,'mist'],[46,'marble'],[47,'ink blooms'],[55,'ink in water'],[54,'lightning'],[56,'sun flare + bokeh'],[57,'water shimmer'],[58,'silk flow'],[59,'ink on paper'],[60,'nebula']]],
     ['Special',[[28,'video mask'],[32,'texture-source'],[31,'particles'],[37,'paint']]],
-    ['Archive',[[10,'adv wet'],[11,'adv gravity'],[12,'adv curl'],[13,'adv brush'],[14,'adv seed'],[18,'edge underdraw'],[19,'painterly flow'],[20,'color dabs'],[21,'density grav'],[23,'formation']]],
+    ['Archive',[[10,'adv wet'],[11,'adv gravity'],[12,'adv curl'],[13,'adv brush'],[14,'adv seed'],[18,'edge underdraw'],[19,'painterly flow'],[20,'color dabs'],[21,'density grav'],[23,'formation'],[44,'rain'],[45,'snow']]],
   ];
   const MODE_NAME = {}; MODES.forEach(g=>g[1].forEach(([id,n])=>MODE_NAME[id]=n));
 
@@ -132,6 +132,16 @@
     45:['ambCount','ambSize','ambSpeed'],                               // snow
     46:['ambSize','ambSoft','ambSpeed','ambDetail'],                     // marble
     47:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // ink blooms
+    50:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // smoke / fog
+    51:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // fire / flames
+    52:['ambCount','ambSize','ambSoft','ambSpeed'],                      // fog 2 (volumetric)
+    54:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // lightning
+    55:['ambCount','ambSize','ambSoft','ambSpeed'],                      // ink in water
+    56:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // sun flare + bokeh
+    57:['ambSize','ambSoft','ambSpeed','ambDetail'],                     // water shimmer
+    58:['ambSize','ambSoft','ambSpeed','ambDetail'],                     // silk flow
+    59:['ambCount','ambSize','ambSoft','ambDetail'],                     // ink on paper
+    60:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // nebula
   };
   // per-mode label overrides: mode 29 reuses existing uniforms, relabelled.
   const MK_LABELS = {};  // (mode 29 now uses dedicated cell* params with their own labels)
@@ -141,13 +151,16 @@
     35:['sunX','sunY'], 39:['driftAmount','sunX','sunY'],
     40:['driftAngle'], 41:['driftAngle','driftAmount'], 42:['driftAngle','driftAmount'],
     43:['driftAngle'], 44:['driftAngle'], 45:['driftAngle','driftAmount'], 46:['driftAngle','driftAmount'],
+    50:['driftAngle','driftAmount'],
+    52:['driftAngle','driftAmount','sunX','sunY'],   // wind + light intensity + light position
+    56:['sunX','sunY','driftAngle'],                 // sun position + bokeh drift wind
   };
 
   // relevance of the global groups per mode
-  const isTrans = m => (m<=32 && m!==31) || m>=48; // reveal/movement/advanced apply
+  const isTrans = m => (m<=32 && m!==31) || m===48 || m===49 || m===53; // reveal/movement/advanced apply
   const REL = {
-    reveal: m=>isTrans(m), movement: m=>isTrans(m), advanced: m=>isTrans(m),
-    points: m=>(m<=32&&m!==31)||m===34, dir: m=>[33,35,36,39,40,41,42,43,44,45,46,47].includes(m), vign: ()=>true,
+    reveal: m=>isTrans(m), movement: m=>isTrans(m)||m===50||m===51||m===55||m===56||m===58, advanced: m=>isTrans(m),
+    points: m=>(m<=32&&m!==31)||m===34, dir: m=>[33,35,36,39,40,41,42,43,44,45,46,47,50].includes(m), vign: ()=>true,
   };
 
   function init(E){
@@ -167,8 +180,12 @@
     // ── left rail: mode grid (thumbnail tiles) ──
     const left=document.createElement('div'); left.id='ui-modes';
     const titleCase=s=>s.replace(/(^|[\s-])\w/g,ch=>ch.toUpperCase());
+    // sentence-case for UI labels: capitalise the first letter only, preserving
+    // meaningful internal capitals (A, B, acronyms). Keeps casing consistent.
+    const cap=s=>(typeof s==='string'&&s.length)?s.charAt(0).toUpperCase()+s.slice(1):s;
     function makeChip(id,name){
       const c=document.createElement('button'); c.className='chip'; c.dataset.mode=id;
+      c.style.setProperty('--c', MODE_COLOR[id] || 'var(--ui-accent)');   // group hue for the selected outline
       c.innerHTML=`<span class="nm">${titleCase(name)}</span>`;
       c.style.backgroundImage=`url(thumbs/m${String(id).padStart(2,'0')}.png)`;
       c.onclick=()=>{E.setMode(id);selectMode(id);};
@@ -178,7 +195,8 @@
     // from localStorage 'matte.exports' (written by main.js on each export) and
     // refreshed on the 'matte-export' event.
     const recentG=document.createElement('div'); recentG.className='mgroup mgroup-recent'; recentG.innerHTML='<h4>Recent</h4>';
-    recentG.querySelector('h4').style.color=RECENT_COLOR;
+    { const rh=recentG.querySelector('h4'); rh.style.color=RECENT_COLOR;
+      rh.style.background=`color-mix(in srgb, ${RECENT_COLOR} 16%, color-mix(in srgb, #fff 7%, var(--ui-glass)))`; }
     const recentBody=document.createElement('div'); recentBody.className='recent-chips';
     recentG.appendChild(recentBody); left.appendChild(recentG);
     function renderRecent(){
@@ -193,8 +211,10 @@
     window.addEventListener('matte-export', renderRecent);
     MODES.forEach(([gname,items],gi)=>{
       const g=document.createElement('div'); g.className='mgroup'+(gname==='Archive'?' mgroup-archive':''); g.innerHTML=`<h4>${gname}</h4>`;
-      const h4=g.querySelector('h4'); h4.style.color=GROUP_COLORS[gi]||'var(--ui-text)';
-      h4.style.borderBottomColor=`color-mix(in srgb, ${GROUP_COLORS[gi]||'var(--ui-line-2)'} 33%, transparent)`;
+      const h4=g.querySelector('h4'); const gc=GROUP_COLORS[gi]||'var(--ui-text)';
+      h4.style.color=gc;
+      h4.style.borderBottomColor=`color-mix(in srgb, ${gc} 33%, transparent)`;
+      h4.style.background=`color-mix(in srgb, ${gc} 16%, color-mix(in srgb, #fff 7%, var(--ui-glass)))`;
       items.forEach(([id,name])=>g.appendChild(makeChip(id,name)));
       left.appendChild(g);
     });
@@ -239,7 +259,7 @@
       <section id="ui-intro">
         <div class="intro-label">About</div>
         <p><strong>Matte</strong> builds black-and-white transition mattes for video — designed to drive luma / track mattes in After Effects. It boots image-free: you're always looking at a matte you can record straight away.</p>
-        <p><strong>Modes</strong> (gallery, far right) are the look of the transition — watercolor blooms, paper grain, wet edges, light & burn, plus ambient loops. Open a group to browse; each mode's parameters appear in the <strong>settings</strong> panel beside the gallery. <strong>↺ reset</strong> / <strong>🎲 randomize</strong> are pinned at its top.</p>
+        <p><strong>Modes</strong> (gallery, far right) are the look of the transition — watercolor blooms, paper grain, wet edges, light & burn, plus ambient loops. Open a group to browse; each mode's parameters appear in the <strong>settings</strong> panel beside the gallery. <strong>↺ reset</strong> / <strong>randomize</strong> are pinned at its top.</p>
         <p><strong>Origin</strong> sets where the reveal begins: grow from the centre (or image A's bright area), place up to 8 <strong>points</strong> on the canvas, or <strong>paint</strong> a start region. <strong>Vignette</strong> darkens the edges. Both are global — they apply to every mode.</p>
         <p><strong>Source images:</strong> open the <strong>⊞</strong> panel (View) and drag images onto A / B (and an optional video into T). Toggle <strong>Use source images</strong> to preview the matte applied to a real A→B dissolve in colour; leave it off for the pure B/W matte that gets recorded.</p>
         <p><strong>Output:</strong> choose a resolution (or type W×H), duration, fps and an optional <strong>project</strong> name (prefixed to filenames). <strong>▶ play</strong> / scrub to preview, then <strong>● Record</strong> — each export is auto-numbered and saved to your chosen folder, or downloaded. The encoder is probed first so you always get the largest size that actually works on your machine.</p>
@@ -420,27 +440,27 @@
       const spec=P[key]; if(!spec) return null;
       const row=document.createElement('div'); row.className='row';
       if(spec.t==='check'){ row.classList.add('check');
-        row.innerHTML=`<label><input type="checkbox"> ${ov||spec.label}</label>`;
+        row.innerHTML=`<label><input type="checkbox"> ${cap(ov||spec.label)}</label>`;
         const cb=row.querySelector('input'); cb.checked=!!st[key]; cb.onchange=()=>{st[key]=cb.checked;}; return row;
       }
       if(spec.t==='color'){
-        row.innerHTML=`<span class="lab">${ov||spec.label}</span><input type="color" aria-label="${spec.label}">`;
+        row.innerHTML=`<span class="lab">${cap(ov||spec.label)}</span><input type="color" aria-label="${spec.label}">`;
         const ci=row.querySelector('input'); ci.value=st[key]||'#ffffff'; ci.oninput=()=>{st[key]=ci.value;}; return row;
       }
       if(spec.t==='select'){
-        row.innerHTML=`<span class="lab">${ov||spec.label}</span><select aria-label="${spec.label}"></select>`;
+        row.innerHTML=`<span class="lab">${cap(ov||spec.label)}</span><select aria-label="${spec.label}"></select>`;
         const se=row.querySelector('select');
-        Object.entries(spec.opts).forEach(([l,v])=>{const o=document.createElement('option');o.value=v;o.textContent=l;se.appendChild(o);});
+        Object.entries(spec.opts).forEach(([l,v])=>{const o=document.createElement('option');o.value=v;o.textContent=cap(l);se.appendChild(o);});
         se.value=st[key]; se.onchange=()=>{st[key]=isNaN(+se.value)?se.value:+se.value;}; return row;
       }
       const [label,mn,mx,stp]=spec; const dec=(stp+'').includes('.')?(stp+'').split('.')[1].length:0;
-      row.innerHTML=`<span class="lab">${ov||label}</span><input type="range" min="${mn}" max="${mx}" step="${stp}" aria-label="${label}"><span class="val"></span>`;
+      row.innerHTML=`<span class="lab">${cap(ov||label)}</span><input type="range" min="${mn}" max="${mx}" step="${stp}" aria-label="${label}"><span class="val"></span>`;
       const r=row.querySelector('input'), v=row.querySelector('.val');
       r.value=st[key]; v.textContent=(+st[key]).toFixed(dec);
       r.oninput=()=>{st[key]=+r.value; v.textContent=(+r.value).toFixed(dec);}; return row;
     }
     function section(title,keys,dim,labels){
-      const s=document.createElement('div'); s.className='psec'+(dim?' dim':''); s.innerHTML=`<h4>${title}</h4>`;
+      const s=document.createElement('div'); s.className='psec'+(dim?' dim':''); s.innerHTML=`<h4>${cap(title)}</h4>`;
       keys.forEach(k=>{const w=widget(k, labels&&labels[k]); if(w)s.appendChild(w);}); return s;
     }
 
@@ -454,7 +474,7 @@
       originBody.innerHTML='';
       const SRC = (m===37) ? ['paint']
                 : (m===34 || m===31) ? []
-                : (m>=33 && m<=47) ? ['points']
+                : ((m>=33 && m<=47) || (m>=50 && m<=60 && m!==53)) ? ['points']
                 : (m<=32 || m>=48) ? ['auto','points','paint'] : [];
       const usesAmount = SRC.includes('auto');   // only mask-blend modes use originAmount
       originGroup.classList.toggle('dim', SRC.length===0);
@@ -530,27 +550,27 @@
         const fb=document.createElement('div'); fb.className='ptsbar split params-tools';
         const rs=document.createElement('button'); rs.className='btn sm'; rs.textContent='↺ reset mode';
         rs.onclick=()=>{ E.resetMode(m); buildParams(m); };
-        const rnd=document.createElement('button'); rnd.className='btn sm'; rnd.textContent='🎲 randomize';
+        const rnd=document.createElement('button'); rnd.className='btn sm'; rnd.textContent='randomize';
         rnd.onclick=()=>{ E.randomizeMode(m); buildParams(m); };
         fb.appendChild(rs); fb.appendChild(rnd); paramsEl.appendChild(fb);
       }
       // Single scrolling panel (no tabs): Origin + Vignette live in the controls
       // rail, so all that's left here is the mode's own params + Advanced.
-      const _amb = (m>=33 && m<=47 && m!==37);
+      const _amb = ((m>=33 && m<=47) || (m>=50 && m<=60 && m!==53) || m===48 || m===49) && m!==37;
       if(_amb){
-        const rs=section('Ambient mode',[],false);
+        const rs=section('Mode role',[],false);
         const rbar=document.createElement('div'); rbar.className='ptsbar split';
-        const mkR=(label,val)=>{ const b=document.createElement('button'); b.className='btn sm'; b.textContent=label;
+        const mkR=(label,val)=>{ const b=document.createElement('button'); b.className='btn sm'; b.textContent=cap(label);
           b.classList.toggle('on',(E.state.ambRole||0)==val);
           b.onclick=()=>{ E.state.ambRole=val; E.save(); if(E.restartPlayback)E.restartPlayback(); buildParams(m); };
           return b; };
-        rbar.appendChild(mkR('reveal',0)); rbar.appendChild(mkR('standalone loop',1));
+        rbar.appendChild(mkR('reveal',0)); rbar.appendChild(mkR('loop',1));
         rs.appendChild(rbar);
-        const h=document.createElement('div'); h.className='hint sec-note';
-        h.textContent = (E.state.ambRole||0)<0.5
-          ? 'Black\u2192white transition using this pattern (dissolves A\u2192B if images are loaded).'
-          : 'Standalone looping field \u2014 not a black\u2192white transition.';
-        rs.appendChild(h);
+        if((E.state.ambRole||0)<0.5){
+          const h=document.createElement('div'); h.className='hint sec-note';
+          h.textContent='Black\u2192white transition using this pattern (dissolves A\u2192B if images are loaded).';
+          rs.appendChild(h);
+        }
         paramsEl.appendChild(rs);
       }
       if(MK[m]) paramsEl.appendChild(section('this mode',MK[m],false,MK_LABELS[m]));
@@ -570,9 +590,17 @@
       }
 
       paramsEl.appendChild(section('Reveal',['spread'],!REL.reveal(m)));
-      paramsEl.appendChild(section('Movement',['turbulence','flow','undulate','animate'],!REL.movement(m)));
+      // mode 50 (fog) repurposes the movement params, so relabel them in context.
+      const moveLabels = m===50 ? {turbulence:'billow',flow:'drift speed',undulate:'sway',animate:'variation'}
+        : m===51 ? {turbulence:'curl',flow:'rise / reach',undulate:'sway',animate:'variation'}
+        : m===55 ? {turbulence:'swirl',flow:'flow',undulate:'sway',animate:'variation'}
+        : m===58 ? {turbulence:'flow / curl',flow:'flow',undulate:'sway',animate:'variation'}
+        : m===56 ? {turbulence:'dapple / foliage',flow:'flow',undulate:'sway',animate:'variation'} : null;
+      paramsEl.appendChild(section('Movement',['turbulence','flow','undulate','animate'],!REL.movement(m),moveLabels));
       { const dk = DIRK[m] || (REL.dir(m) ? ['driftAngle','driftAmount','sunX','sunY','streakMove'] : []);
-        if (dk.length) paramsEl.appendChild(section('Direction / source', dk, false)); }
+        const dirLabels = m===50 ? {driftAngle:'comes from',driftAmount:'fog ↔ plume'}
+          : m===52 ? {driftAngle:'wind',driftAmount:'light',sunX:'light x',sunY:'light y'} : null;
+        if (dk.length) paramsEl.appendChild(section('Direction / source', dk, false, dirLabels)); }
       paramsEl.appendChild(section('Advanced',['originX','originY','maskScale','curve','seed','maskShift','organic','edges'],!REL.advanced(m)));
     }
     function selectMode(id){
