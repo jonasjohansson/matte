@@ -693,10 +693,9 @@
       if(m===54 && E.loadFoliageVideo){
         const fs=document.createElement('div'); fs.className='psec'; fs.innerHTML='<h4>Foliage</h4>';
         const has=E.hasFoliageVideo&&E.hasFoliageVideo();
-        const h=document.createElement('div'); h.className='hint sec-note';
-        h.textContent=has?'Real foliage clip loaded — driving the canopy. The god-rays stream through its bright gaps.'
-                         :'Procedural canopy. Load a real foliage/treetop clip to drive it with footage.';
-        fs.appendChild(h);
+        if(has){ const h=document.createElement('div'); h.className='hint sec-note';
+          h.textContent='Real foliage clip loaded — driving the canopy. The god-rays stream through its bright gaps.';
+          fs.appendChild(h); }
         const fb=document.createElement('div'); fb.className='ptsbar split';
         const ld=document.createElement('button'); ld.className='btn sm'; ld.textContent=has?'replace clip…':'load foliage clip…';
         ld.onclick=()=>{ const inp=document.createElement('input'); inp.type='file'; inp.accept='video/*';
