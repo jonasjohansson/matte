@@ -86,6 +86,8 @@ struct Params {
   vignAnimate: f32, vignTexture: f32, vignShape: f32, ambRole: f32,
   originPts2: array<vec4f, 8>,
   pointSize: f32, pointPop: f32, pointFill: f32, padTop: f32,
+  padBottom: f32, padLeft: f32, padRight: f32, gradeBright: f32,
+  gradeContrast: f32, gradeBlack: f32, gradeWhite: f32, gradeGamma: f32,
 };
 
 @group(0) @binding(0) var<uniform> p: Params;
@@ -172,6 +174,14 @@ fn fbm(q: vec2f) -> f32 {
   return v;
 }
 fn luma(c: vec3f) -> f32 { return dot(c, vec3f(0.299, 0.587, 0.114)); }
+// Global grade applied to the final matte value: levels (black/white/gamma) then
+// brightness + contrast. Identity at defaults (black 0, white 1, gamma 1, others 0).
+fn grade1(x: f32) -> f32 {
+  var v = clamp((x - p.gradeBlack) / max(0.001, p.gradeWhite - p.gradeBlack), 0.0, 1.0);
+  v = pow(v, 1.0 / max(0.05, p.gradeGamma));
+  v = (v - 0.5) * (1.0 + p.gradeContrast) + 0.5 + p.gradeBright;
+  return clamp(v, 0.0, 1.0);
+}
 // 3D value noise + fbm, for the raymarched volumetric fog (mode 52). Marching a
 // true 3D field is what gives volumetric depth + self-shadowing vs. stacked 2D.
 fn hash31(q: vec3f) -> f32 {
@@ -1787,19 +1797,21 @@ fn frostMask(uv: vec2f) -> f32 {
 @fragment fn fs(in: VSOut) -> @location(0) vec4f {
   var uv = in.uv;
 
-  // Floor padding: black out a band at the top (padTop > 0) OR the bottom
-  // (padTop < 0) and remap the effect to fill the remaining band — so a video can
-  // sit on the floor (or ceiling) of a panorama surface while still being authored
-  // at the surface's full dimensions. padMask multiplies every output below
-  // (0 = black padding, 1 = content band).
+  // Surface padding: black out independent bands on each side (top/bottom/left/
+  // right) and remap the effect to fill the remaining content rectangle — so an
+  // effect can occupy just one region of a projection surface (e.g. the floor of an
+  // unfolded room) while still exporting at the full surface dimensions. padMask
+  // multiplies every output below (0 = black padding, 1 = content rect).
   var padMask = 1.0;
-  if (p.padTop > 0.0001) {
-    if (in.uv.y < p.padTop) { padMask = 0.0; }
-    else { uv.y = (in.uv.y - p.padTop) / (1.0 - p.padTop); }
-  } else if (p.padTop < -0.0001) {
-    let pb = -p.padTop;
-    if (in.uv.y > 1.0 - pb) { padMask = 0.0; }
-    else { uv.y = in.uv.y / (1.0 - pb); }
+  let bandH = 1.0 - p.padTop - p.padBottom;
+  let bandW = 1.0 - p.padLeft - p.padRight;
+  if (in.uv.y < p.padTop || in.uv.y > 1.0 - p.padBottom
+   || in.uv.x < p.padLeft || in.uv.x > 1.0 - p.padRight
+   || bandH < 0.001 || bandW < 0.001) {
+    padMask = 0.0;
+  } else {
+    uv.y = (in.uv.y - p.padTop) / bandH;
+    uv.x = (in.uv.x - p.padLeft) / bandW;
   }
 
   // Advection family (modes 10..14): the compute pipeline writes a state
@@ -2485,6 +2497,7 @@ fn frostMask(uv: vec2f) -> f32 {
   if (p.matteOutput == 1u) {
     var mv = clamp(effMixT, 0.0, 1.0);
     if (p.matteInvert == 1u) { mv = 1.0 - mv; }
+    mv = grade1(mv);                                        // global grade (levels/bright/contrast)
     // gradient-map: texLut is a grayscale ramp by default (⇒ pure B/W matte), or
     // a colour ramp for on-screen colourising (swapped back to gray when recording).
     var col = textureSample(texLut, samp, vec2f(mv, 0.5)).rgb;
@@ -2498,7 +2511,8 @@ fn frostMask(uv: vec2f) -> f32 {
     outc = mix(outc, outc * (0.4 + 1.2 * texL), p.texBg);
   }
   let rgb = clamp(outc * vign, vec3f(0.0), vec3f(1.0));
-  return vec4f(rgb * padMask, alpha * padMask);
+  let graded = vec3f(grade1(rgb.r), grade1(rgb.g), grade1(rgb.b));
+  return vec4f(graded * padMask, alpha * padMask);
 }
 `;
 
@@ -2561,6 +2575,8 @@ struct Params {
   vignAnimate: f32, vignTexture: f32, vignShape: f32, ambRole: f32,
   originPts2: array<vec4f, 8>,
   pointSize: f32, pointPop: f32, pointFill: f32, padTop: f32,
+  padBottom: f32, padLeft: f32, padRight: f32, gradeBright: f32,
+  gradeContrast: f32, gradeBlack: f32, gradeWhite: f32, gradeGamma: f32,
 };
 
 @group(0) @binding(0) var<uniform> p: Params;
@@ -2800,6 +2816,8 @@ struct Params {
   vignAnimate: f32, vignTexture: f32, vignShape: f32, ambRole: f32,
   originPts2: array<vec4f, 8>,
   pointSize: f32, pointPop: f32, pointFill: f32, padTop: f32,
+  padBottom: f32, padLeft: f32, padRight: f32, gradeBright: f32,
+  gradeContrast: f32, gradeBlack: f32, gradeWhite: f32, gradeGamma: f32,
 };
 @group(0) @binding(0) var<uniform> p: Params;
 @group(0) @binding(1) var texA: texture_2d<f32>;

@@ -149,7 +149,7 @@ function makeDisplayBindGroup(finalState) {
 //   5  seed         13  scaleB.y                                          29 bloomCount     37 saltContrast
 //   6  validA       14  offsetB.x                                         30 bloomRim       38 saltBias
 //   7  validB       15  offsetB.y                                         31 bloomRate      39 saltImage
-const UBO_SIZE = 1088;  // 272 f32: +originPts2 (236-267) +pointSize/pop (268-269) +pad
+const UBO_SIZE = 1120;  // 280 f32: ... +pad{Top,Bottom,Left,Right} (271-274) +grade{Bright,Contrast,Black,White,Gamma} (275-279)
 const uniformBuffer = device.createBuffer({
   size: UBO_SIZE,
   usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
@@ -587,14 +587,19 @@ function writeUniforms() {
   // -- 60..63 -- seed + canvas aspect
   uboU32[60] = state.advecSeedCount;
   uboF32[61] = state.advecSeedRadius;
-  // floor padding entered in OUTPUT pixels → signed fraction of the frame height
-  // (positive = pad at top, negative = pad at bottom).
+  // surface padding entered in OUTPUT pixels → independent fractions per side.
+  // The effect fills the remaining content rectangle.
   const _od = computeOutputDims();
-  let padTop = _od.h > 0 ? (state.padTopPx || 0) / _od.h : 0;
-  padTop = Math.max(-0.9, Math.min(0.9, padTop));
-  // canvasAspect uses the CONTENT BAND height (full height minus the padding) so
-  // the effect renders at the band's true aspect instead of being squished.
-  uboF32[62] = ch > 0 ? cw / (ch * (1 - Math.abs(padTop))) : 1.0;
+  const _clp = v => Math.max(0, Math.min(0.95, v));
+  const padTop    = _od.h > 0 ? _clp((state.padTopPx    || 0) / _od.h) : 0;
+  const padBottom = _od.h > 0 ? _clp((state.padBottomPx || 0) / _od.h) : 0;
+  const padLeft   = _od.w > 0 ? _clp((state.padLeftPx   || 0) / _od.w) : 0;
+  const padRight  = _od.w > 0 ? _clp((state.padRightPx  || 0) / _od.w) : 0;
+  // canvasAspect uses the CONTENT RECT dimensions (full minus padding) so the
+  // effect renders at the rect's true aspect instead of being squished.
+  const bandW = cw * Math.max(0.02, 1 - padLeft - padRight);
+  const bandH = ch * Math.max(0.02, 1 - padTop - padBottom);
+  uboF32[62] = bandH > 0 ? bandW / bandH : 1.0;
   uboF32[63] = state.texImg ? (state.texAspect || 1.0) : 1.0;  // texture aspect for contain-fit
   // -- 64..67 -- wet edge (mode 15): rect ingress
   uboF32[64] = state.weEdgeScale;
@@ -719,7 +724,15 @@ function writeUniforms() {
   uboF32[268] = state.pointSize;   // lamp radius cap
   uboF32[269] = state.pointPop;    // ignition snap (0 grow .. 1 instant)
   uboF32[270] = state.pointFill ? 1 : 0;  // fill out: bloom past lamp edge to full coverage
-  uboF32[271] = padTop;  // floor padding: black top fraction, effect fills the band below
+  uboF32[271] = padTop;     // surface padding fractions per side
+  uboF32[272] = padBottom;
+  uboF32[273] = padLeft;
+  uboF32[274] = padRight;
+  uboF32[275] = state.gradeBright || 0;     // global grade (applied to the matte)
+  uboF32[276] = state.gradeContrast || 0;
+  uboF32[277] = state.gradeBlack || 0;
+  uboF32[278] = (state.gradeWhite == null ? 1 : state.gradeWhite);
+  uboF32[279] = (state.gradeGamma == null ? 1 : state.gradeGamma);
   uboU32[208] = (state.originSource === 'paint' && state._paintReady) ? 255 : nPts;
   uboF32[209] = state.flow;  // turbulence time-drift (animated ink)
   uboF32[210] = state.undulate;  // slow large-scale dance of the reveal front
@@ -3042,12 +3055,13 @@ const SESSION_VERSION = 20;
 const PERSIST_KEYS = [
   ...PRESET_KEYS,
   'fit', 'bg',
-  'customSize', 'matchInput', 'lockAspect', 'outW', 'outH', 'previewScale', 'padTopPx', 'useSources', 'texAmount', 'texBg', 'texFit',
+  'customSize', 'matchInput', 'lockAspect', 'outW', 'outH', 'previewScale', 'padTopPx', 'padBottomPx', 'padLeftPx', 'padRightPx', 'useSources', 'texAmount', 'texBg', 'texFit',
   'originAmount', 'originX', 'originY', 'originFromImage', 'turbulence', 'flow', 'undulate', 'animate', 'originPoints',
   'pointStagger', 'pointRandom', 'pointSize', 'pointPop', 'pointFill', 'paintBrush',
   'auroraDensity', 'auroraHeight', 'auroraSpeed', 'auroraDark', 'auroraWave', 'driftAngle', 'driftAmount',
   'gdIntensity', 'gdBeams', 'gdCloud', 'gdPulse',
   'ambCount', 'ambSize', 'ambSoft', 'ambSpeed', 'ambDetail', 'sunX', 'sunY', 'streakMove', 'vignAmount', 'vignFeather', 'vignAnimate', 'vignTexture', 'vignShape', 'ambRole',
+  'gradeBright', 'gradeContrast', 'gradeBlack', 'gradeWhite', 'gradeGamma',
   'exportFps', 'exportSizeMode', 'exportPadBottom', 'matteOutput', 'matteInvert', 'projectName',
   'cellCols', 'cellRows', 'cellJitter', 'cellGlow', 'cellOrder', 'cellCascade', 'cellSnap', 'cellSpill', 'cellIgniteBy', 'cellAnalyseBy', 'cellCoarseness',
   'slotAFillMode', 'slotAColor', 'slotBFillMode', 'slotBColor', 'keepAOutsideB',

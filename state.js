@@ -33,11 +33,15 @@ export const state = {
   driftAngle: 0.25, driftAmount: 0.3,  // wind direction + strength for ambient drift
   gdIntensity: 0.5, gdBeams: 0.5, gdCloud: 0.5, gdPulse: 0.4,  // godray settings
   ambCount: 0.5, ambSize: 0.5, ambSoft: 0.5, ambSpeed: 0.25, ambDetail: 0.5, sunX: 0.5, sunY: 0.3, streakMove: 0.25, vignAmount: 0.0, vignFeather: 0.5, vignAnimate: 0.0, vignTexture: 0.0, vignShape: 0.5, ambRole: 0,  // shared bokeh/ripples/glare/streaks
+  // global grade on the final matte: levels (black/white/gamma) + brightness/contrast.
+  gradeBright: 0.0, gradeContrast: 0.0, gradeBlack: 0.0, gradeWhite: 1.0, gradeGamma: 1.0,
   // custom transition dimensions (independent of source footage size).
   // Default ON: trans is primarily a matte-video builder, so it boots to a
   // fixed canvas showing the B/W matte without requiring any footage.
   customSize: true, matchInput: false, lockAspect: false, outW: 1920, outH: 1080, previewScale: '1440',  // on-screen preview longer-edge cap (px) or 'full'; recording always full-res
-  padTopPx: 0,  // floor padding in full output pixels: >0 blacks the TOP band, <0 the BOTTOM; effect fills the rest (panorama floor/ceiling projection)
+  // surface padding in full output pixels per side: blacks a band on each edge,
+  // effect fills the remaining content rectangle (project onto part of a surface).
+  padTopPx: 0, padBottomPx: 0, padLeftPx: 0, padRightPx: 0,
   // output mode — matte-first (B/W luma for AE) by default; bound in Setup,
   // so these must exist before the pane is built.
   matteOutput: true, matteInvert: false, useSources: true,

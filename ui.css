@@ -234,6 +234,7 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 #ui-controls .uigroup:nth-of-type(3){ --g:var(--hue-cyan); }   /* View */
 #ui-controls .uigroup:nth-of-type(4){ --g:var(--hue-purple); } /* Origin */
 #ui-controls .uigroup:nth-of-type(5){ --g:var(--hue-pink); }   /* Vignette */
+#ui-controls .uigroup:nth-of-type(6){ --g:var(--hue-amber); }  /* Grade */
 #ui-controls .uigroup h5{ color:var(--g); }
 /* mode-grid group-header colours are set inline by ui.js (GROUP_COLORS), so a
    mode keeps its hue even as a duplicate chip in the Recent group. */

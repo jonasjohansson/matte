@@ -31,6 +31,8 @@
     ambRole:{t:'select',label:'role (with A+B)',opts:{'dissolve A\u2192B':0,'standalone field':1}},
     // vignette
     vignAmount:['amount',0,1,.01], vignFeather:['feather',0,1,.01], vignAnimate:['animate (pulse)',0,1,.01], vignTexture:['edge texture',0,1,.01], vignShape:['shape (ellipse↔rect)',0,1,.01],
+    // global grade (post-process on the matte)
+    gradeBright:['brightness',-1,1,.01], gradeContrast:['contrast',-1,1,.01], gradeBlack:['black point',0,1,.01], gradeWhite:['white point',0,1,.01], gradeGamma:['gamma',.1,3,.01],
     // mode-specific
     rimWidth:['rim width',0,.4,.005], rimDark:['rim dark',0,1,.01],
     paperAngle:['fiber angle',0,1,.005], paperAniso:['anisotropy',1,10,.1], paperGranulation:['granulation',0,1,.01],
@@ -237,7 +239,8 @@
         <label class="barchk wide" title="lock output to the source image aspect ratio (keeps the chosen resolution)"><input type="checkbox" id="ui-matchin">Match source aspect</label>
         <div class="grp" id="ui-wh"><label for="ui-w">size</label><input type="number" id="ui-w" min="2" aria-label="output width in pixels" title="output width (px)"><span class="unit">×</span><input type="number" id="ui-h" min="2" aria-label="output height in pixels" title="output height (px)"></div>
         <label class="barchk wide" title="lock the width:height ratio while typing"><input type="checkbox" id="ui-lockar">Lock aspect ratio</label>
-        <div class="grp" id="ui-padgrp" title="black padding (pixels) at the top or bottom of the output; the effect fills the band that remains — for projecting onto the floor (or ceiling) of a panorama surface at full surface dimensions"><label>pad ↑↓</label><input type="number" id="ui-padtop" min="0" step="1" title="padding at TOP (px) — content sits below" aria-label="padding top in pixels"><input type="number" id="ui-padbot" min="0" step="1" title="padding at BOTTOM (px) — content sits above" aria-label="padding bottom in pixels"><span class="unit">px</span></div>
+        <div class="grp" id="ui-padgrp" title="black padding (full output pixels) on each side; the effect fills the content rectangle that remains — for projecting onto part of a surface (e.g. just the floor) while exporting the full surface dimensions"><label>pad T·B</label><input type="number" id="ui-padtop" min="0" step="1" title="padding TOP (px)" aria-label="padding top in pixels"><input type="number" id="ui-padbot" min="0" step="1" title="padding BOTTOM (px)" aria-label="padding bottom in pixels"><span class="unit">px</span></div>
+        <div class="grp" id="ui-padgrp2" title="left / right black padding (full output pixels)"><label>pad L·R</label><input type="number" id="ui-padleft" min="0" step="1" title="padding LEFT (px)" aria-label="padding left in pixels"><input type="number" id="ui-padright" min="0" step="1" title="padding RIGHT (px)" aria-label="padding right in pixels"><span class="unit">px</span></div>
         <div class="grp"><label for="ui-dur">dur</label><input type="number" id="ui-dur" min="1" max="60" step="1" aria-label="duration in seconds"><span class="unit">s</span></div>
         <div class="grp"><label for="ui-fps">fps</label><select id="ui-fps" aria-label="output frame rate"></select></div>
         <div class="sep"></div>
@@ -260,6 +263,7 @@
       </div>
       <div class="uigroup" id="ui-origin"><h5>Origin</h5><div id="origin-body"></div></div>
       <div class="uigroup" id="ui-vignette"><h5>Vignette</h5><div id="vign-body"></div></div>
+      <div class="uigroup" id="ui-grade"><h5>Grade</h5><div id="grade-body"></div></div>
       <section id="ui-intro">
         <div class="intro-label">About</div>
         <p><strong>Matte</strong> builds black-and-white transition mattes for video — designed to drive luma / track mattes in After Effects. It boots image-free: you're always looking at a matte you can record straight away.</p>
@@ -375,14 +379,12 @@
     if(lockCb){ lockCb.checked=!!st.lockAspect; lockCb.onchange=()=>{ st.lockAspect=lockCb.checked; if(E.save)E.save(); }; }
     wIn.onchange=()=>{ let w=Math.max(2,+wIn.value), h=Math.max(2,+hIn.value); if(st.lockAspect&&st.outH){ h=Math.max(2,Math.round(w*st.outH/st.outW)); } E.setSize(w,h); syncSizeUI(); };
     hIn.onchange=()=>{ let w=Math.max(2,+wIn.value), h=Math.max(2,+hIn.value); if(st.lockAspect&&st.outW){ w=Math.max(2,Math.round(h*st.outW/st.outH)); } E.setSize(w,h); syncSizeUI(); };
-    // floor padding in output pixels — top OR bottom (mutually exclusive). Stored
-    // as a single signed padTopPx: positive = top padding, negative = bottom.
-    const padTopIn=bar.querySelector('#ui-padtop'), padBotIn=bar.querySelector('#ui-padbot');
-    if(padTopIn){
-      const syncPad=()=>{ const v=st.padTopPx||0; padTopIn.value=Math.max(0,v); padBotIn.value=Math.max(0,-v); };
-      syncPad();
-      padTopIn.onchange=()=>{ st.padTopPx=Math.max(0,Math.round(+padTopIn.value||0)); syncPad(); if(E.save)E.save(); };
-      padBotIn.onchange=()=>{ st.padTopPx=-Math.max(0,Math.round(+padBotIn.value||0)); syncPad(); if(E.save)E.save(); };
+    // surface padding in output pixels — independent per side.
+    const padEls={padTopPx:'#ui-padtop',padBottomPx:'#ui-padbot',padLeftPx:'#ui-padleft',padRightPx:'#ui-padright'};
+    for(const [key,sel] of Object.entries(padEls)){
+      const el=bar.querySelector(sel); if(!el) continue;
+      el.value=st[key]||0;
+      el.onchange=()=>{ st[key]=Math.max(0,Math.round(+el.value||0)); el.value=st[key]; if(E.save)E.save(); };
     }
 
     // (display-size control removed — the preview always matches the output aspect)
@@ -556,6 +558,16 @@
       vr.onclick=()=>{ if(E.resetVignette)E.resetVignette(); buildVignette(); };
       vb.appendChild(vr); vignBody.appendChild(vb);
     }
+    // global grade on the matte (levels + brightness/contrast).
+    const gradeBody=bar.querySelector('#grade-body');
+    function buildGrade(){
+      if(!gradeBody) return; gradeBody.innerHTML='';
+      ['gradeBlack','gradeWhite','gradeGamma','gradeBright','gradeContrast'].forEach(k=>{ const w=widget(k); if(w) gradeBody.appendChild(w); });
+      const gb=document.createElement('div'); gb.className='ptsbar split';
+      const gr=document.createElement('button'); gr.className='btn sm'; gr.textContent='↺ reset grade';
+      gr.onclick=()=>{ st.gradeBright=0; st.gradeContrast=0; st.gradeBlack=0; st.gradeWhite=1; st.gradeGamma=1; if(E.save)E.save(); buildGrade(); };
+      gb.appendChild(gr); gradeBody.appendChild(gb);
+    }
 
     function buildParams(m){
       paramsEl.innerHTML='';
@@ -626,7 +638,7 @@
       headEl.textContent=(MODE_NAME[id]||('mode '+id)).replace(/(^|[\s-])\w/g,ch=>ch.toUpperCase()); buildParams(id); buildOrigin(id);
     }
 
-    buildVignette(); syncSizeUI(); selectMode(st.mode);
+    buildVignette(); buildGrade(); syncSizeUI(); selectMode(st.mode);
     setInterval(syncSizeUI, 1500);
   }
 })();
