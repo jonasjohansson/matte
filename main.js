@@ -157,7 +157,7 @@ function makeDisplayBindGroup(finalState) {
 //   5  seed         13  scaleB.y                                          29 bloomCount     37 saltContrast
 //   6  validA       14  offsetB.x                                         30 bloomRim       38 saltBias
 //   7  validB       15  offsetB.y                                         31 bloomRate      39 saltImage
-const UBO_SIZE = 1120;  // 280 f32: ... +pad{Top,Bottom,Left,Right} (271-274) +grade{Bright,Contrast,Black,White,Gamma} (275-279)
+const UBO_SIZE = 1136;  // 284 f32: ... +grade (275-279) +forestFootage (280) +pad
 const uniformBuffer = device.createBuffer({
   size: UBO_SIZE,
   usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
@@ -747,6 +747,9 @@ function writeUniforms() {
   uboF32[277] = state.gradeBlack || 0;
   uboF32[278] = (state.gradeWhite == null ? 1 : state.gradeWhite);
   uboF32[279] = (state.gradeGamma == null ? 1 : state.gradeGamma);
+  // sun-through-trees (mode 54): use a loaded T-slot video as the real foliage
+  // canopy when present (else the procedural canopy).
+  uboF32[280] = (state.mode === 54 && state.videoT) ? 1 : 0;
   uboU32[208] = (state.originSource === 'paint' && state._paintReady) ? 255 : nPts;
   uboF32[209] = state.flow;  // turbulence time-drift (animated ink)
   uboF32[210] = state.undulate;  // slow large-scale dance of the reveal front
@@ -3207,6 +3210,10 @@ window.__engine = {
   // ── sources / texture ──
   loadFile, clearTexture,
   loadTexture(file) { if (file) loadTextureFile(file); },
+  // foliage footage for sun-through-trees (mode 54): a T-slot video drives the canopy.
+  loadFoliageVideo(file) { if (file) loadVideoToT(file); },
+  clearFoliageVideo() { if (state.videoT) { try { state.videoT.pause(); } catch {} state.videoT = null; } },
+  hasFoliageVideo() { return !!state.videoT; },
   // colourise (gradient map, preview only)
   loadColourise, clearColourise,
   analyseCells(by) { return analyseCellRegions(by || 'random'); },

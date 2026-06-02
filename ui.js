@@ -666,6 +666,22 @@
         paramsEl.appendChild(rs);
       }
       if(MK[m]) paramsEl.appendChild(section('this mode',MK[m],false,MK_LABELS[m]));
+      if(m===54 && E.loadFoliageVideo){
+        const fs=document.createElement('div'); fs.className='psec'; fs.innerHTML='<h4>Foliage</h4>';
+        const has=E.hasFoliageVideo&&E.hasFoliageVideo();
+        const h=document.createElement('div'); h.className='hint sec-note';
+        h.textContent=has?'Real foliage clip loaded — driving the canopy. The god-rays stream through its bright gaps.'
+                         :'Procedural canopy. Load a real foliage/treetop clip to drive it with footage.';
+        fs.appendChild(h);
+        const fb=document.createElement('div'); fb.className='ptsbar split';
+        const ld=document.createElement('button'); ld.className='btn sm'; ld.textContent=has?'replace clip…':'load foliage clip…';
+        ld.onclick=()=>{ const inp=document.createElement('input'); inp.type='file'; inp.accept='video/*';
+          inp.onchange=()=>{ if(inp.files&&inp.files[0]){ E.loadFoliageVideo(inp.files[0]); if(E.restartPlayback)E.restartPlayback(); setTimeout(()=>buildParams(m),100); } }; inp.click(); };
+        fb.appendChild(ld);
+        if(has){ const cl=document.createElement('button'); cl.className='btn sm'; cl.textContent='clear';
+          cl.onclick=()=>{ E.clearFoliageVideo(); buildParams(m); }; fb.appendChild(cl); }
+        fs.appendChild(fb); paramsEl.appendChild(fs);
+      }
       if(m===29){
         const ab=document.createElement('div'); ab.className='ptsbar split';
         const an=document.createElement('button'); an.className='btn sm';

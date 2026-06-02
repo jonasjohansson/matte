@@ -85,6 +85,7 @@ struct Params {
   pointSize: f32, pointPop: f32, pointFill: f32, padTop: f32,
   padBottom: f32, padLeft: f32, padRight: f32, gradeBright: f32,
   gradeContrast: f32, gradeBlack: f32, gradeWhite: f32, gradeGamma: f32,
+  forestFootage: f32, _pad0: f32, _pad1: f32, _pad2: f32,
 };`;
 
 export const SHADER = /* wgsl */`
@@ -685,8 +686,14 @@ fn worleyF1(p: vec2f) -> f32 {
   return sqrt(minD);
 }
 fn canopyOpen(uv: vec2f, drift: vec2f, scale: f32, detail: f32) -> f32 {
-  // 1 = open sky/gap (light passes), 0 = dense leaf clump (blocked). Worley gives
-  // the clump structure; fbm frays the clump edges into leafy detail.
+  // 1 = open sky/gap (light passes), 0 = dense leaf clump (blocked).
+  // With real footage loaded in the T-slot (forestFootage), sample its luminance
+  // as the canopy — bright = sky gaps the light streams through, dark = leaves.
+  if (p.forestFootage > 0.5) {
+    let l = luma(textureSampleLevel(texT, samp, uv, 0.0).rgb);
+    return clamp(smoothstep(0.22, 0.7, l), 0.0, 1.0);
+  }
+  // procedural canopy: worley clump structure, fbm-frayed leafy edges.
   var q = uv; q.x = q.x * p.canvasAspect;
   let w = worleyF1(q * scale + drift);
   let leaf = (fbm(q * scale * 3.5 + drift * 2.0) - 0.5) * 0.5;          // frayed clump edges
