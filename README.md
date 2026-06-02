@@ -18,7 +18,7 @@ python3 -m http.server 8123
 # open http://localhost:8123/index.html  (Chrome/Edge 113+, Safari 18+)
 ```
 
-Deps (`tweakpane`, `@tweakpane/plugin-essentials`, `mp4-muxer`) are **vendored
+Dep (`mp4-muxer`) is **vendored
 locally** in `vendor/` and resolved by the importmap in `index.html` — no CDN, so
 the app runs **fully offline**. A service worker (`sw.js`) precaches the whole
 shell on first load. The only online-only feature is SAM segmentation, which
@@ -35,7 +35,7 @@ Desktop-only by design: touch devices get a "needs a desktop + WebGPU" notice
 | `index.html` | entry point + importmap + `<script>` tags + service-worker registration |
 | `core.js` | WebGPU bootstrap — exports the `device`/`ctx`/`canvas`/`adapter`/`presentationFormat` singletons (top-level await) |
 | `state.js` | the single mutable `state` object (pure data defaults) |
-| `main.js` | engine: render loop, uniform packing, sources/library, paint/points, recording/export, SAM segmentation, the hidden Tweakpane registry, and the `window.__engine` API |
+| `main.js` | engine: render loop, uniform packing, sources/library, paint/points, recording/export, SAM segmentation and the `window.__engine` API |
 | `shader.js` | the three WGSL shader strings (display / advection-sim / init) — pure data |
 | `particles.js` | the GPU particle mode (31): compute + draw passes |
 | `ui.js` | the visible custom UI — rails L→R: controls · canvas · settings · **globals (Origin+Vignette)** · modes; drives the engine via `window.__engine` |
@@ -45,7 +45,7 @@ Desktop-only by design: touch devices get a "needs a desktop + WebGPU" notice
 | `output.js` | File System Access "save here" folder; owns the dir handle |
 | `util.js` | pure helpers (`fitInfo`, `hexToRgb`) |
 | `sw.js` / `manifest.json` | offline service worker / PWA manifest |
-| `vendor/` | locally-vendored ESM deps (tweakpane, plugin-essentials, mp4-muxer) |
+| `vendor/` | locally-vendored ESM dep (mp4-muxer) |
 | `thumbs/` | baked mode-thumbnail PNGs (`m00.png`…`m60.png`) |
 | `defaults/` | bundled default images (seed the library + Reset) |
 | `eval-src/` | local test images — gitignored, not deployed |
@@ -65,9 +65,14 @@ Desktop-only by design: touch devices get a "needs a desktop + WebGPU" notice
   without growing the UBO, reuse a u32 with a sentinel (e.g. `originCount==255`
   means "paint-origin").
 
-- **Tweakpane is hidden, not removed.** It lives off-screen (`#side`) as a
-  side-effect registry — notably the folder-based `randomizeMode` path. The
-  visible UI is `ui.js`. Don't delete the Tweakpane setup.
+- **The legacy Tweakpane UI is retired.** Its `.addBinding`/`.addFolder` calls
+  now run against an inert chainable stub in `main.js`, and the two Tweakpane
+  deps are gone. `ui.js` is the only real UI; randomize, presets and the rest are
+  self-contained there / on `window.__engine`. (The ~300 historical binding lines
+  are harmless no-ops and can be pruned mechanically when convenient.)
+- **Tests:** `npm test` runs `test/check-shaders.mjs` (no-browser WGSL/struct
+  guard) + `test/smoke.mjs` (renders every mode) + `test/functional.mjs`
+  (randomize/presets/mode-switch). CI runs them on push/PR.
 
 - **`window.__engine`** is the bridge: `ui.js` only talks to the engine through
   it. Add new UI behaviour as an `__engine` method, not by reaching into globals.

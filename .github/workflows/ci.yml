@@ -22,3 +22,5 @@ jobs:
       # WGSL/pipeline error or blank render.
       - name: Smoke test (all modes)
         run: node test/smoke.mjs
+      - name: Functional test (randomize/presets/mode-switch)
+        run: node test/functional.mjs

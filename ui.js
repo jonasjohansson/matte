@@ -160,6 +160,9 @@
     54:['sunX','sunY','driftAngle'],                 // sun position + canopy sway wind
     56:['sunX','sunY','driftAngle'],                 // sun position + bokeh drift wind
   };
+  // which Movement params each ambient mode actually reads (others are hidden).
+  const AMB_MOVE = {50:['turbulence','flow','undulate'],51:['turbulence','flow','undulate'],
+    60:['turbulence','flow','undulate'],54:['turbulence'],55:['turbulence'],56:['turbulence'],58:['turbulence']};
 
   // relevance of the global groups per mode
   const isTrans = m => (m<=32 && m!==31) || m===48 || m===49 || m===53; // reveal/movement/advanced apply
@@ -605,6 +608,23 @@
       vr.onclick=()=>{ if(E.resetVignette)E.resetVignette(); buildVignette(); };
       vb.appendChild(vr); vignBody.appendChild(vb);
     }
+    // Randomise a mode's LOOK params within their declared ranges (self-contained,
+    // reads the P spec — no dependency on the legacy pane).
+    function moveKeysFor(m){ return (!isTrans(m) && AMB_MOVE[m]) ? AMB_MOVE[m] : (REL.movement(m)?['turbulence','flow','undulate','animate']:[]); }
+    function randomizeLook(m){
+      const keys=new Set(MK[m]||[]);
+      (DIRK[m]||[]).forEach(k=>keys.add(k));
+      moveKeysFor(m).forEach(k=>keys.add(k));
+      if(REL.reveal(m)) keys.add('spread');
+      if(REL.advanced(m)){ keys.add('organic'); keys.add('edges'); }
+      keys.forEach(k=>{ const spec=P[k]; if(!spec) return;
+        if(Array.isArray(spec)){ const stp=spec[3]||0.001; const v=spec[1]+Math.random()*(spec[2]-spec[1]); st[k]=Math.round(v/stp)*stp; }
+        else if(spec.t==='select'){ const vals=Object.values(spec.opts); st[k]=vals[Math.floor(Math.random()*vals.length)]; }
+        else if(spec.t==='check'){ st[k]=Math.random()<0.5; }
+      });
+      st.seed=Math.floor(Math.random()*999);
+      if(E.restartPlayback)E.restartPlayback(); if(E.save)E.save();
+    }
     // global grade on the matte (levels + brightness/contrast).
     const gradeBody=bar.querySelector('#grade-body');
     function buildGrade(){
@@ -623,7 +643,7 @@
         const rs=document.createElement('button'); rs.className='btn sm'; rs.textContent='↺ reset mode';
         rs.onclick=()=>{ E.resetMode(m); buildParams(m); };
         const rnd=document.createElement('button'); rnd.className='btn sm'; rnd.textContent='randomize';
-        rnd.onclick=()=>{ E.randomizeMode(m); buildParams(m); };
+        rnd.onclick=()=>{ randomizeLook(m); buildParams(m); };
         fb.appendChild(rs); fb.appendChild(rnd); paramsEl.appendChild(fb);
       }
       // ── presets: save / recall a whole look (mode + all tuned params) ──
@@ -709,8 +729,6 @@
         : m===54 ? {turbulence:'canopy density'} : null;
       // per-mode movement keys: full set for transitions; only the used ones for
       // ambient modes (the rest are dead for those generators).
-      const AMB_MOVE = {50:['turbulence','flow','undulate'],51:['turbulence','flow','undulate'],
-        60:['turbulence','flow','undulate'],54:['turbulence'],55:['turbulence'],56:['turbulence'],58:['turbulence']};
       const moveKeys = (!isTrans(m) && AMB_MOVE[m]) ? AMB_MOVE[m] : ['turbulence','flow','undulate','animate'];
       paramsEl.appendChild(section('Movement',moveKeys,!REL.movement(m),moveLabels));
       { const dk = DIRK[m] || (REL.dir(m) ? ['driftAngle','driftAmount','sunX','sunY','streakMove'] : []);

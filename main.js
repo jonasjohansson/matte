@@ -5,8 +5,11 @@
 // version but the rendering path is rebuilt on WebGPU. Modes will be ported in
 // subsequent milestones; right now only the default smooth dissolve runs.
 
-import { Pane } from 'tweakpane';
-import * as EssentialsPlugin from '@tweakpane/plugin-essentials';
+// The legacy Tweakpane UI is retired — ui.js is the real interface. Its ~300
+// historical .addBinding/.addFolder sites now run against an inert chainable stub
+// (below) so they no-op without surgical removal, and the two Tweakpane deps are
+// gone. The few preset/state helpers that lived alongside it are still used by
+// window.__engine and ui.js.
 import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
 import { SHADER, SIM_SHADER, INIT_SHADER } from './shader.js';
 import { IDB_NAME, IDB_STORE, IDB_LIB_STORE, idbOpen, idbGet, idbPut, idbClearAll, libList, libAdd, libDelete, makeThumb } from './idb.js';
@@ -1247,10 +1250,23 @@ window.addEventListener('resize', resizeCanvas);
 // (panel show/hide is owned by ui.js — H / Tab toggles body.ui-hidden)
 
 // ============================================================================
-// Tweakpane (minimal for milestone 1)
+// Inert UI registry (was Tweakpane). A chainable Proxy: every method/property
+// returns the same stub so all historical .addFolder().addBinding().on() chains
+// no-op safely. `children` is [] (dispose loops short-circuit) and `pages` yields
+// the stub (tab/page chains keep working). The real UI is ui.js.
 // ============================================================================
-const pane = new Pane({ container: document.getElementById('tp-host') });
-pane.registerPlugin(EssentialsPlugin);
+const _paneStub = new Proxy(function () {}, {
+  get(_t, prop) {
+    if (prop === 'children') return [];
+    if (prop === 'pages') return [_paneStub, _paneStub, _paneStub, _paneStub];
+    if (prop === 'element' || prop === 'controller_') return document.createElement('div');
+    if (prop === Symbol.toPrimitive || prop === 'then' || prop === Symbol.iterator) return undefined;
+    return _paneStub;
+  },
+  apply() { return _paneStub; },
+  set() { return true; },
+});
+const pane = _paneStub;
 
 // Wrap addBinding / addFolder so every tracked binding records its options,
 // letting randomizeMode pick values in each control's actual UI range without
