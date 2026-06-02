@@ -647,50 +647,58 @@ fn ambVolFog(uv: vec2f) -> f32 {
   let v = 1.0 - exp(-raw * 1.6);
   return clamp(v, 0.0, 1.0);
 }
-fn boltDx(uv: vec2f, xc: f32, sseed: f32, amp: f32, jag: f32) -> f32 {
-  // horizontal distance to a jagged vertical channel: a coarse zig-zag plus a finer
-  // kink octave so the channel has crisp, organic detail (not a smooth wiggle).
-  let coarse = (fbm(vec2f(uv.y * jag + sseed, sseed)) - 0.5) * 2.0;
-  let fine = (fbm(vec2f(uv.y * jag * 3.0 + sseed, sseed + 1.0)) - 0.5) * 0.55;
-  let pathX = xc + (coarse + fine) * amp;
-  return abs(uv.x - pathX);
+fn lpath(y: f32, seed: f32, segs: f32) -> f32 {
+  // piecewise-LINEAR 1D noise → sharp angular kinks (real bolts zig-zag, they don't
+  // wiggle smoothly). Returns ~-1..1.
+  let yy = y * segs + seed * 7.0;
+  let i = floor(yy); let f = fract(yy);
+  let a = hash21(vec2f(i, seed)) - 0.5;
+  let b = hash21(vec2f(i + 1.0, seed)) - 0.5;
+  return mix(a, b, f) * 2.0;
+}
+fn boltX(y: f32, xc: f32, seed: f32, amp: f32, segs: f32) -> f32 {
+  // angular channel: coarse zig-zag + a finer kink octave.
+  return xc + (lpath(y, seed, segs) + lpath(y, seed + 3.0, segs * 2.7) * 0.35) * amp;
 }
 fn ambLightning(uv: vec2f) -> f32 {
-  // Discrete strikes. The loop is split into strike slots; in each, a bolt's whole
-  // channel lights at once in a brilliant MAIN return stroke, followed by a couple
-  // of fainter return strokes (distinct flashes, not a strobe), then darkness until
-  // the next strike. The channel shape is fixed per strike (decoupled from the
-  // animated seed) so it does NOT drift sideways.
-  //   ambSpeed = strikes per loop   ambSize = jag amplitude   ambDetail = jaggedness
-  //   ambCount = forked branches    ambSoft = glow width
+  // Discrete strikes drawn as an ANGULAR channel (piecewise-linear, sharp kinks)
+  // running top→bottom, with branches that fork off the main channel and taper out.
+  // Each slot: the whole tree lights in a main return stroke + two fainter returns,
+  // then darkness. Shape is fixed per strike (no sideways drift).
+  //   ambSpeed = strikes per loop   ambSize = jag amplitude   ambDetail = segments
+  //   ambCount = branches           ambSoft = glow width
   let strikes = floor(mix(1.0, 5.0, p.ambSpeed) + 0.5);
   let tl = fract(p.t);
   let slot = floor(tl * strikes);
-  let local = fract(tl * strikes);                         // 0..1 within this strike
-  // brightness: main stroke + two fainter return strokes, each a quick gaussian
-  // flash, then dark — distinct strokes the way real lightning flickers.
+  let local = fract(tl * strikes);
   let bright = exp(-pow((local - 0.02) / 0.025, 2.0))
              + exp(-pow((local - 0.11) / 0.03, 2.0)) * 0.7
              + exp(-pow((local - 0.20) / 0.04, 2.0)) * 0.45;
   if (bright < 0.004) { return 0.0; }                      // dark gap between strikes
-  let sseed = slot * 13.7 + 2.0;                           // stable per strike
-  let xc = 0.5 + (hash21(vec2f(slot + 1.0, 3.7)) - 0.5) * 0.7;
-  let amp = mix(0.04, 0.22, p.ambSize);
-  let jag = mix(5.0, 18.0, p.ambDetail);
-  let glowW = mix(10.0, 30.0, 1.0 - p.ambSoft);            // smaller soft = wider glow
-  let dx = boltDx(uv, xc, sseed, amp, jag);
-  var v = exp(-dx * dx * 3500.0) + exp(-dx * glowW) * 0.3; // whole channel lights at once
-  // forked branches: each splits off at a random height and runs downward, fading.
-  let nb = u32(mix(0.0, 3.0, p.ambCount) + 0.5);
-  for (var i = 0u; i < 3u; i = i + 1u) {
+  let seed = slot * 4.0 + 1.0;
+  let xc = 0.5 + (hash21(vec2f(slot + 1.0, 3.7)) - 0.5) * 0.55;
+  let amp = mix(0.05, 0.26, p.ambSize);
+  let segs = mix(6.0, 16.0, p.ambDetail);
+  let glowW = mix(12.0, 34.0, 1.0 - p.ambSoft);
+  // main channel — thin bright core (sharper toward the bottom) + soft glow.
+  let mdx = abs(uv.x - boltX(uv.y, xc, seed, amp, segs));
+  var v = exp(-mdx * mdx * mix(2600.0, 6500.0, uv.y)) + exp(-mdx * glowW) * 0.28;
+  // branches: each starts ON the main channel at a random height, then diverges
+  // diagonally with its own zig-zag and tapers out over a short run.
+  let nb = u32(mix(1.0, 4.0, p.ambCount) + 0.5);
+  for (var i = 0u; i < 4u; i = i + 1u) {
     if (i >= nb) { break; }
     let fi = f32(i) + 1.0;
-    let by = 0.15 + 0.6 * hash21(vec2f(slot * 3.0 + fi, sseed));   // branch point height
+    let by = 0.1 + 0.7 * hash21(vec2f(slot * 5.0 + fi, seed));
     if (uv.y > by) {
-      let bxc = xc + (hash21(vec2f(fi, slot + 1.0)) - 0.5) * 0.28;
-      let bdx = boltDx(uv, bxc, sseed + fi * 5.0, amp * 0.6, jag * 1.3);
-      let bfade = smoothstep(by, by + 0.05, uv.y) * smoothstep(1.0, by + 0.1, uv.y);
-      v = v + (exp(-bdx * bdx * 4500.0) + exp(-bdx * glowW * 1.3) * 0.2) * bfade * 0.7;
+      let bx0 = boltX(by, xc, seed, amp, segs);             // attach to the main channel
+      let dirSign = sign(hash21(vec2f(fi, slot + 2.0)) - 0.5);
+      let slope = 0.25 + 0.35 * hash21(vec2f(fi, 9.0));
+      let dy = uv.y - by;
+      let bx = bx0 + dirSign * dy * slope + lpath(uv.y, seed + fi * 11.0, segs * 1.4) * amp * 0.5;
+      let bdx = abs(uv.x - bx);
+      let bfade = smoothstep(by, by + 0.03, uv.y) * (1.0 - smoothstep(by + 0.18, by + 0.55, uv.y));
+      v = v + (exp(-bdx * bdx * 6500.0) + exp(-bdx * glowW * 1.4) * 0.18) * bfade * 0.6;
     }
   }
   return clamp(v * bright, 0.0, 1.0);
@@ -721,11 +729,12 @@ fn ambInk(uv: vec2f) -> f32 {
   let diag = 0.5 * sqrt(p.canvasAspect * p.canvasAspect + 1.0);
   let r = length(dd) / diag;
   let frontR = mix(0.03, 1.3, pow(grow, 0.55));            // tiny drop → full cloud
-  let conc = 1.0 - smoothstep(frontR * 0.3, frontR, r);    // dense centre, fading edge
-  ink = ink * conc + conc * 0.35;
-  let cov = mix(0.55, 0.24, p.ambCount);
-  let soft = mix(0.05, 0.4, p.ambSoft);
-  var v = smoothstep(cov, cov + soft, ink);
+  let conc = 1.0 - smoothstep(frontR * mix(0.05, 0.4, p.ambSoft), frontR, r);   // dense → dispersed
+  // translucent dye: tendril structure modulated by concentration, with a soft
+  // Beer-Lambert rolloff so the dense centre stays a deep tone with visible swirls
+  // instead of blowing out to a flat white blob.
+  let dye = ink * conc * mix(1.0, 2.3, p.ambCount);
+  let v = 1.0 - exp(-dye * 1.25);
   return clamp(v, 0.0, 1.0);
 }
 fn ambSunBokeh(uv: vec2f) -> f32 {
@@ -780,7 +789,7 @@ fn ambWaterShimmer(uv: vec2f) -> f32 {
   // Sunlit water surface: interfering travelling wavefronts sharpened into caustic
   // ridges that shimmer and flow. Smooth gradients make a lovely displacement map.
   //   ambSize = scale   ambSoft = contrast   ambSpeed = speed   ambDetail = glints
-  let tt = p.t * 6.2831853 * (0.03 + p.ambSpeed * 1.4);     // can crawl to near-still
+  let tt = p.t * 6.2831853 * (0.006 + p.ambSpeed * 0.6);    // crawls to near-still at low speed
   var q = uv; q.x = q.x * p.canvasAspect;
   let sc = mix(3.0, 12.0, p.ambSize);
   var w = 0.0;
@@ -852,23 +861,26 @@ fn ambInkPaper(uv: vec2f) -> f32 {
 fn ambNebula(uv: vec2f) -> f32 {
   // Deep-space nebula + starfield: slow domain-warped cosmic dust with bright cores
   // and dark lanes, overlaid with twinkling stars. Lovely with a colour LUT.
-  //   ambCount = nebula density   ambSize = scale   ambSoft = contrast (dust lanes)
+  //   ambCount = nebula density   ambSize = scale   ambSoft = gas contrast
   //   ambSpeed = drift   ambDetail = star density
+  //   turbulence = swirl   flow = star glow/size   undulate = dust-lane depth
   let tt = p.t * 6.2831853 * (0.04 + p.ambSpeed * 0.2);        // very slow
   var q = uv; q.x = q.x * p.canvasAspect;
   let sc = mix(1.4, 4.0, p.ambSize);
-  // iterated warp for billowing gas clouds.
+  // iterated warp for billowing gas clouds; turbulence adds curl-swirl wispiness.
   let w1 = vec2f(fbm(q * sc * 0.5 + vec2f(0.0, tt * 0.1)),
                  fbm(q * sc * 0.5 + vec2f(5.0, 0.0 - tt * 0.08))) - vec2f(0.5);
-  let w2 = vec2f(fbm(q * sc + w1 * 1.6), fbm(q * sc + w1 * 1.6 + 7.0)) - vec2f(0.5);
+  let swirl = vec2f(-w1.y, w1.x) * p.turbulence * 2.0;
+  let w2 = vec2f(fbm(q * sc + w1 * 1.6 + swirl), fbm(q * sc + w1 * 1.6 + swirl + 7.0)) - vec2f(0.5);
   var neb = fbm(q * sc + w2 * 2.0);
   // dark dust lanes: subtract a sharper ridged noise so the gas is threaded with
-  // dark filaments instead of a uniform glow.
+  // dark filaments instead of a uniform glow (undulate sets how dark/deep).
   let lane = pow(clamp(1.0 - abs(2.0 * fbm(q * sc * 1.7 + w2) - 1.0), 0.0, 1.0), 2.0);
-  neb = neb - lane * 0.28;
+  neb = neb - lane * mix(0.12, 0.55, p.undulate);
   neb = pow(clamp(neb, 0.0, 1.0), mix(1.2, 2.8, p.ambSoft)) * mix(0.55, 1.4, p.ambCount);
   neb = neb + pow(clamp(neb, 0.0, 1.0), 2.0) * 0.45;          // glowing cores (bloom)
   // starfield: one candidate star per cell, twinkling; a few bright, many faint.
+  // flow grows the stars from pin-pricks to glowing points.
   let cell = mix(45.0, 130.0, p.ambDetail);
   let g = q * cell;
   let id = floor(g);
@@ -879,7 +891,8 @@ fn ambNebula(uv: vec2f) -> f32 {
     let sd = length(fract(g) - center);
     let bright = smoothstep(0.78, 1.0, rnd);                  // rarer = brighter
     let tw = 0.5 + 0.5 * sin(tt * 40.0 + rnd * 50.0);
-    star = (exp(-sd * sd * 260.0) + exp(-sd * 9.0) * 0.25) * (0.5 + 0.9 * bright) * tw;
+    let glow = mix(0.6, 1.8, p.flow);
+    star = (exp(-sd * sd * mix(360.0, 150.0, p.flow)) + exp(-sd * 9.0) * 0.25 * glow) * (0.5 + 0.9 * bright) * tw;
   }
   return clamp(neb + star, 0.0, 1.0);
 }

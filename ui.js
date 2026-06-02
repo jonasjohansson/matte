@@ -159,7 +159,7 @@
   // relevance of the global groups per mode
   const isTrans = m => (m<=32 && m!==31) || m===48 || m===49 || m===53; // reveal/movement/advanced apply
   const REL = {
-    reveal: m=>isTrans(m), movement: m=>isTrans(m)||m===50||m===51||m===55||m===56||m===58, advanced: m=>isTrans(m),
+    reveal: m=>isTrans(m), movement: m=>isTrans(m)||m===50||m===51||m===55||m===56||m===58||m===60, advanced: m=>isTrans(m),
     points: m=>(m<=32&&m!==31)||m===34, dir: m=>[33,35,36,39,40,41,42,43,44,45,46,47,50].includes(m), vign: ()=>true,
   };
 
@@ -595,7 +595,8 @@
         : m===51 ? {turbulence:'curl',flow:'rise / reach',undulate:'sway',animate:'variation'}
         : m===55 ? {turbulence:'swirl',flow:'flow',undulate:'sway',animate:'variation'}
         : m===58 ? {turbulence:'flow / curl',flow:'flow',undulate:'sway',animate:'variation'}
-        : m===56 ? {turbulence:'dapple / foliage',flow:'flow',undulate:'sway',animate:'variation'} : null;
+        : m===56 ? {turbulence:'dapple / foliage',flow:'flow',undulate:'sway',animate:'variation'}
+        : m===60 ? {turbulence:'swirl',flow:'star glow',undulate:'dust lanes',animate:'variation'} : null;
       paramsEl.appendChild(section('Movement',['turbulence','flow','undulate','animate'],!REL.movement(m),moveLabels));
       { const dk = DIRK[m] || (REL.dir(m) ? ['driftAngle','driftAmount','sunX','sunY','streakMove'] : []);
         const dirLabels = m===50 ? {driftAngle:'comes from',driftAmount:'fog ↔ plume'}
