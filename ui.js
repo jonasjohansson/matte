@@ -93,7 +93,7 @@
     ['Watercolor',[[2,'paper grain'],[3,'backrun blooms'],[4,'wet diffusion'],[5,'tonal sediment'],[6,'salt'],[8,'wet bleed'],[9,'pigment run'],[17,'tonal wash'],[24,'cauliflower bloom'],[25,'wet-stage'],[26,'migration']]],
     ['Painterly',[[16,'stroke-follow'],[22,'mold tendrils']]],
     ['Light & burn',[[27,'paper scorch'],[29,'lamp grid'],[30,'light bloom'],[48,'radial burst'],[49,'smoke ring']]],
-    ['Ambient (loop)',[[33,'bokeh'],[34,'water ripples'],[35,'sun glare'],[36,'light streaks'],[38,'aurora'],[39,'godrays'],[50,'smoke / fog'],[52,'fog 2 (volumetric)'],[51,'fire / flames'],[41,'caustics'],[42,'embers'],[46,'marble'],[47,'ink blooms'],[55,'ink in water'],[56,'sun flare + bokeh'],[54,'sun through trees'],[57,'water shimmer'],[58,'silk flow'],[59,'ink on paper'],[60,'nebula']]],
+    ['Ambient (loop)',[[33,'bokeh'],[34,'water ripples'],[35,'sun glare'],[36,'light streaks'],[38,'aurora'],[39,'godrays'],[50,'smoke / fog'],[52,'fog 2 (volumetric)'],[51,'fire / flames'],[41,'caustics'],[61,'caustics 2'],[42,'embers'],[46,'marble'],[47,'ink blooms'],[55,'ink in water'],[56,'sun flare + bokeh'],[54,'sun through trees'],[57,'water shimmer'],[58,'silk flow'],[59,'ink on paper'],[60,'nebula']]],
     ['Special',[[28,'video mask'],[32,'texture-source'],[31,'particles'],[37,'paint']]],
     ['Archive',[[10,'adv wet'],[11,'adv gravity'],[12,'adv curl'],[13,'adv brush'],[14,'adv seed'],[18,'edge underdraw'],[19,'painterly flow'],[20,'color dabs'],[21,'density grav'],[23,'formation'],[44,'rain'],[45,'snow'],[40,'clouds'],[43,'mist']]],
   ];
@@ -146,6 +146,7 @@
     58:['ambSize','ambSoft','ambSpeed','ambDetail'],                     // silk flow
     59:['ambCount','ambSize','ambSoft','ambDetail'],                     // ink on paper
     60:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // nebula
+    61:['ambSize','ambSoft','ambSpeed','ambDetail'],                     // caustics 2 (voronoi net)
   };
   // per-mode label overrides: mode 29 reuses existing uniforms, relabelled.
   const MK_LABELS = {};  // (mode 29 now uses dedicated cell* params with their own labels)
@@ -153,7 +154,7 @@
   const DIRK = {
     33:['driftAngle','driftAmount'], 36:['driftAngle','streakMove'],
     35:['sunX','sunY'], 39:['driftAmount','sunX','sunY'],
-    40:['driftAngle'], 41:['driftAngle','driftAmount'], 42:['driftAngle','driftAmount'],
+    40:['driftAngle'], 41:['driftAngle','driftAmount'], 61:['driftAngle','driftAmount'], 42:['driftAngle','driftAmount'],
     43:['driftAngle'], 44:['driftAngle'], 45:['driftAngle','driftAmount'], 46:['driftAngle','driftAmount'],
     50:['driftAngle','driftAmount'],
     52:['driftAngle','driftAmount','sunX','sunY'],   // wind + light intensity + light position

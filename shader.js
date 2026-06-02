@@ -453,6 +453,49 @@ fn ambCaustics(uv: vec2f) -> f32 {
   let glim = (fbm(s * 6.0 + ph * 0.6) - 0.5) * p.ambDetail * 0.9;
   return clamp(v * (1.0 + glim), 0.0, 1.0);
 }
+fn caus2_cell(pt: vec2f, ph: f32) -> vec2f {
+  // nearest (F1) and second-nearest (F2) distances to animated feature points.
+  // Each point orbits inside its cell so the equidistant borders ripple like a
+  // moving water surface — that border motion is what reads as living caustics.
+  let n = floor(pt); let f = fract(pt);
+  var f1 = 9.0; var f2 = 9.0;
+  for (var j = -1; j <= 1; j = j + 1) {
+    for (var i = -1; i <= 1; i = i + 1) {
+      let g = vec2f(f32(i), f32(j));
+      let h = hash22(n + g);
+      let o = vec2f(0.5) + vec2f(0.42) * sin(ph + h * 6.2831853 + vec2f(0.0, 1.7));
+      let r = g + o - f;
+      let d = dot(r, r);
+      if (d < f1) { f2 = f1; f1 = d; } else if (d < f2) { f2 = d; }
+    }
+  }
+  return vec2f(sqrt(f1), sqrt(f2));
+}
+fn ambCaustics2(uv: vec2f) -> f32 {
+  // Voronoi light-net caustics: bright threads where refracted rays bunch along
+  // moving cell borders — the sharp polygonal net you see on a sunlit pool floor.
+  // Distinct from mode 41 (soft ridged-noise webbing); this is crisp + nodal.
+  let ph = p.t * 6.2831853 * (0.15 + p.ambSpeed * 0.7);
+  var q = uv; q.x = q.x * p.canvasAspect;
+  let a = p.driftAngle * 6.2831853;
+  let wind = vec2f(cos(a), sin(a)) * ph * 0.12 * p.driftAmount;
+  let sc = mix(4.0, 14.0, p.ambSize);
+  // gentle domain warp so the net flows instead of sitting on a rigid lattice
+  let warp = vec2f(fbm(q * sc * 0.5 + ph * 0.1), fbm(q * sc * 0.5 + 9.1 - ph * 0.08)) - vec2f(0.5);
+  let base = q * sc + wind + warp * 0.8;
+  let c0 = caus2_cell(base, ph);                 // coarse net
+  let c1 = caus2_cell(base * 2.3 + 3.1, ph * 1.4); // fine net
+  // border distance F2-F1 is small on cell edges -> bright threads. ambSoft maps
+  // thread width: soft (wide glow) -> thin (sharp filament).
+  let w0 = mix(0.18, 0.045, p.ambSoft);
+  let net0 = 1.0 - smoothstep(0.0, w0, c0.y - c0.x);
+  let net1 = 1.0 - smoothstep(0.0, w0 * 0.7, c1.y - c1.x);
+  // product term brightens the nodes where coarse + fine borders cross
+  var v = net0 * 0.7 + net1 * 0.45 + net0 * net1 * 0.7;
+  v = pow(clamp(v, 0.0, 1.0), mix(1.5, 0.7, p.ambSoft));
+  let glint = pow(net0 * net1, 3.0) * p.ambDetail * 0.85;  // sparkle on the crossings
+  return clamp(v + glint, 0.0, 1.0);
+}
 fn ambEmbers(uv: vec2f) -> f32 {
   // drifting glowing motes (embers / fireflies): rise + twinkle, soft glow.
   let ph = p.t * 6.2831853;
@@ -2430,6 +2473,7 @@ fn frostMask(uv: vec2f) -> f32 {
   else if (p.mode == 58u) { ambF = ambSilk(uv); }
   else if (p.mode == 59u) { ambF = ambInkPaper(uv); }
   else if (p.mode == 60u) { ambF = ambNebula(uv); }
+  else if (p.mode == 61u) { ambF = ambCaustics2(uv); }
   // modes 48/49 act as standalone looping fields when the role toggle is set;
   // otherwise they stay on the normal reveal path above (ambF left at -1).
   else if (p.mode == 48u && p.ambRole >= 0.5) { ambF = radialBurstField(uv); }

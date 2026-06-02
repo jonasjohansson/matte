@@ -2365,8 +2365,10 @@ async function startRecording(opts = {}) {
     const savedToFolder = await saveBlobToOutputFolder(blob, filename);
     let where = '';
     if (savedToFolder) {
-      where = ` → ${getOutputDir()?.name || 'folder'}`;
-      console.log(`[record] saved ${filename} (${mb} MB) to folder`);
+      const dir = getOutputDir()?.name || 'folder';
+      where = ` → ${dir}`;
+      // full path to the file the user can actually open (folder handle + name).
+      console.log(`[record] saved → ${dir}/${filename}  (${mb} MB)`);
     } else {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -2374,7 +2376,9 @@ async function startRecording(opts = {}) {
       document.body.appendChild(a);   // some browsers ignore click() on a detached anchor
       a.click();
       setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 1000);
-      console.log(`[record] downloaded ${filename} (${mb} MB)`);
+      // no output folder set → the browser writes it to its Downloads dir; the
+      // real OS path isn't exposed to JS, so name the folder we know it lands in.
+      console.log(`[record] downloaded → <Downloads>/${filename}  (${mb} MB)`);
     }
 
     finishRecordProgress(`Done ✓ · ${mb} MB${where}`, 'done', 3500);
