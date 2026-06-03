@@ -1740,15 +1740,15 @@ fn swipeMask(uv: vec2f) -> f32 {
   // a = distance from the reveal-start edge (0 reveals first). uv.y=0 is top.
   var a = along;
   if (dir == 0u || dir == 2u) { a = 1.0 - along; }  // up: from bottom; left: from right
-  // weighted columns: each column's width is set by swipeW[i] (default 1 = equal),
-  // so e.g. a centre column can be wider than its neighbours.
-  var total = 0.0;
-  for (var i = 0u; i < 16u; i = i + 1u) { if (i >= nc) { break; } total = total + swW(i); }
-  if (total < 0.0001) { total = cols; }
+  // per-column widths: swipeW[i] is each column's width as a FRACTION of the
+  // across axis (CPU sends pixels / axis size; 0 = auto equal share). Columns
+  // tile from the start edge; the last one fills any remainder so it completes.
   var acc = 0.0; var col = 0.0; var colStart = 0.0; var colFrac = 1.0 / cols;
   for (var i = 0u; i < 16u; i = i + 1u) {
     if (i >= nc) { break; }
-    let wf = swW(i) / total;
+    var wf = swW(i);
+    if (wf <= 0.0) { wf = 1.0 / cols; }
+    if (i == nc - 1u) { wf = max(wf, 1.0 - acc); }
     if (across < acc + wf || i == nc - 1u) { col = f32(i); colStart = acc; colFrac = wf; break; }
     acc = acc + wf;
   }

@@ -675,26 +675,32 @@
         paramsEl.appendChild(rs);
       }
       if(MK[m]) paramsEl.appendChild(section('this mode',MK[m],false,MK_LABELS[m]));
-      // column swipe (63): per-column width sliders (one per column, live with count)
+      // column swipe (63): per-column widths in PIXELS (one slider per column,
+      // live with the count + direction; 0 in state = auto equal share).
       if(m===63){
-        if(!Array.isArray(st.swipeColWidths)) st.swipeColWidths=Array(16).fill(1);
+        if(!Array.isArray(st.swipeColWidths)) st.swipeColWidths=Array(16).fill(0);
         const nCols=Math.max(1,Math.min(16,Math.round(st.swipeCols)));
-        const cs=document.createElement('div'); cs.className='psec'; cs.innerHTML='<h4>Column sizes</h4>';
+        const axis=Math.round((st.swipeDir<2 ? st.outW : st.outH)||1920);
+        const eq=Math.max(1,Math.round(axis/nCols));
+        const cs=document.createElement('div'); cs.className='psec'; cs.innerHTML='<h4>Column widths (px)</h4>';
         for(let i=0;i<nCols;i++){
           const row=document.createElement('div'); row.className='row';
-          row.innerHTML=`<span class="lab">col ${i+1}</span><input type="range" min="0.25" max="3" step="0.05" aria-label="column ${i+1} size"><span class="val"></span>`;
+          row.innerHTML=`<span class="lab">col ${i+1}</span><input type="range" min="4" max="${axis}" step="1" aria-label="column ${i+1} px"><span class="val"></span>`;
           const r=row.querySelector('input'), v=row.querySelector('.val'); const idx=i;
-          r.value=st.swipeColWidths[idx]??1; v.textContent=(+r.value).toFixed(2);
-          r.oninput=()=>{ st.swipeColWidths[idx]=+r.value; v.textContent=(+r.value).toFixed(2); };
+          const cur=(st.swipeColWidths[idx]>0)?st.swipeColWidths[idx]:eq;
+          r.value=cur; v.textContent=Math.round(cur);
+          r.oninput=()=>{ st.swipeColWidths[idx]=+r.value; v.textContent=Math.round(+r.value); };
           cs.appendChild(row);
         }
         const eb=document.createElement('div'); eb.className='ptsbar split';
         const er=document.createElement('button'); er.className='btn sm'; er.textContent='↺ equal';
-        er.onclick=()=>{ for(let i=0;i<16;i++) st.swipeColWidths[i]=1; buildParams(m); };
+        er.onclick=()=>{ for(let i=0;i<16;i++) st.swipeColWidths[i]=0; buildParams(m); };
         eb.appendChild(er); cs.appendChild(eb); paramsEl.appendChild(cs);
-        // rebuild the size sliders live when the column count changes
+        // rebuild the px sliders live when the column count or direction changes
         const ci=paramsEl.querySelector('input[aria-label="columns"]');
         if(ci) ci.addEventListener('change',()=>buildParams(m));
+        const di=paramsEl.querySelector('select[aria-label="direction"]');
+        if(di) di.addEventListener('change',()=>buildParams(m));
       }
       // footage-driven modes share one T-slot clip as a spatial mask.
       const FOOT={ 39:['Footage occluder','load clip…'],

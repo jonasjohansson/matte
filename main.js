@@ -760,9 +760,19 @@ function writeUniforms() {
   uboF32[284] = state.swipeStagger;
   uboF32[285] = state.swipeColW;
   uboF32[286] = state.swipeSoft;
-  // per-column width weights (mode 63): 16 floats at 288-303, default 1 = equal
-  const _sw = state.swipeColWidths || [];
-  for (let i = 0; i < 16; i++) uboF32[288 + i] = (_sw[i] != null ? _sw[i] : 1);
+  // per-column widths (mode 63): swipeColWidths are PIXELS; send each as a
+  // fraction of the across axis (width for up/down, height for left/right).
+  // 0 (or unset) = auto equal share. 16 floats at 288-303.
+  {
+    const axis = ((state.swipeDir < 2 ? state.outW : state.outH) || 1920);
+    const cols = Math.max(1, Math.round(state.swipeCols));
+    const eq = 1 / cols;
+    const _sw = state.swipeColWidths || [];
+    for (let i = 0; i < 16; i++) {
+      const px = _sw[i];
+      uboF32[288 + i] = (px > 0 ? px / axis : eq);
+    }
+  }
   uboU32[208] = (state.originSource === 'paint' && state._paintReady) ? 255 : nPts;
   uboF32[209] = state.flow;  // turbulence time-drift (animated ink)
   uboF32[210] = state.undulate;  // slow large-scale dance of the reveal front
