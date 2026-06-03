@@ -75,11 +75,11 @@ body.ui-hidden #canvas{ box-shadow:none; }
 
 /* ── modes column (FAR right) ── */
 #ui-modes{ position:fixed; top:0; bottom:0; right:0; width:var(--modes); z-index:300;
-  overflow-y:auto; padding:var(--sp-lg) 9px; background:var(--ui-glass);
+  overflow-y:auto; padding:0; background:var(--ui-glass);
   backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
   border-left:1px solid var(--ui-line); font:var(--fz-body)/1.35 var(--ui-font); color:var(--ui-text); }
 .mgroup{ margin-bottom:0; }
-.mgroup h4{ position:sticky; top:-14px; z-index:2; margin:0 0 7px; padding:6px 2px;
+.mgroup h4{ position:sticky; top:0; z-index:2; margin:0 0 7px; padding:10px 12px;
   color:var(--ui-text); font-size:var(--fz-label); text-transform:uppercase;
   letter-spacing:.12em; font-weight:700; background:var(--ui-glass);
   border-bottom:1px solid var(--ui-line-2); }
