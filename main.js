@@ -2183,8 +2183,17 @@ async function startRecording(opts = {}) {
           const m = new Muxer({ target: new ArrayBufferTarget(), video: { codec: muxerCodec, width: w, height: h, frameRate: fps }, fastStart: 'in-memory' });
           enc = new VideoEncoder({ output: (ch, meta) => { try { m.addVideoChunk(ch, meta); } catch (e) { err = err || e; } }, error: e => { err = err || e; } });
           enc.configure({ codec, width: w, height: h, framerate: fps, bitrate: BITRATE, hardwareAcceleration: 'prefer-hardware' });
-          const cv = new OffscreenCanvas(w, h); const cx = cv.getContext('2d'); cx.fillStyle = '#000'; cx.fillRect(0, 0, w, h);
-          for (let i = 0; i < 2; i++) { const vf = new VideoFrame(cv, { timestamp: Math.round(i * fd), duration: Math.round(fd) }); enc.encode(vf); vf.close(); }
+          // Encode two NON-uniform, frame-to-frame-varying frames. A flat/black
+          // probe compresses below the size threshold at small resolutions and
+          // false-negatives a working encoder, so paint real entropy instead.
+          const cv = new OffscreenCanvas(w, h); const cx = cv.getContext('2d');
+          for (let i = 0; i < 2; i++) {
+            const g = cx.createLinearGradient(0, 0, w, h);
+            g.addColorStop(0, '#000'); g.addColorStop(0.5, i ? '#fff' : '#aaa'); g.addColorStop(1, '#555');
+            cx.fillStyle = g; cx.fillRect(0, 0, w, h);
+            for (let j = 0; j < 32; j++) { cx.fillStyle = (j + i) % 2 ? '#fff' : '#000'; cx.fillRect((j * 31 + i * 7) % w, (j * 47) % h, 10, 10); }
+            const vf = new VideoFrame(cv, { timestamp: Math.round(i * fd), duration: Math.round(fd) }); enc.encode(vf); vf.close();
+          }
           await enc.flush(); m.finalize();
           try { enc.close(); } catch (e) {}
           return !err && m.target.buffer.byteLength > 1024;
@@ -3171,12 +3180,14 @@ window.__engine = {
   async bakePreviews(opts = {}) {
     const ids = (window.__modeNames ? Object.keys(window.__modeNames).map(Number) : [])
       .filter((n) => !Number.isNaN(n)).sort((a, b) => a - b);
-    const W = opts.w || 256, H = opts.h || 160, dur = opts.duration || 2, fps = opts.fps || 15;
+    const W = opts.w || 384, H = opts.h || 240, dur = opts.duration || 2, fps = opts.fps || 15;
     const saved = { mode: state.mode, outW: state.outW, outH: state.outH, customSize: state.customSize,
                     duration: state.duration, exportFps: state.exportFps, exportSizeMode: state.exportSizeMode };
     state.outW = W; state.outH = H; state.customSize = true; state.duration = dur;
     state.exportFps = fps; state.exportSizeMode = 'src'; resizeCanvas();
-    for (const id of ids) {
+    for (let k = 0; k < ids.length; k++) {
+      const id = ids[k];
+      if (opts.onProgress) try { opts.onProgress(k + 1, ids.length, id); } catch (e) {}
       state.mode = id; updateModeFolders(); advec.needsReset = true; particles.needsReset = true; restartPlayback();
       await new Promise((r) => setTimeout(r, 250));
       try { await startRecording({ filename: 'm' + String(id).padStart(2, '0') + '.mp4' }); }

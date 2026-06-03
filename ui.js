@@ -296,6 +296,7 @@
         <div class="grp" id="proj-grp"><label for="ui-proj">project</label><input type="text" id="ui-proj" placeholder="none" maxlength="24" aria-label="project name (filename prefix)" title="prefixed to export filenames, e.g. DML → DML_…"></div>
         <div class="grp"><span id="recwrap"><button class="btn rec" id="ui-rec">● Record</button><span id="recbar"></span></span></div>
         <div class="grp"><button class="btn" id="ui-folder" title="choose a folder to save recordings into">Folder: default</button></div>
+        <div class="grp"><button class="btn sm" id="ui-bake" title="record a short looping clip of every mode (saved to your folder as mNN.mp4) for the hover-previews. Pick a folder first.">Bake previews…</button></div>
       </div>
       <div class="uigroup">
         <h5>Playback</h5>
@@ -389,6 +390,23 @@
       else if(E.folderName && E.folderName!=='browser default'){ await E.clearFolder(); refreshFolderBtn(); }  // cancel on an already-set folder = clear to default
     };
     refreshFolderBtn();
+    // BAKE PREVIEWS — record a short clip of every mode into the chosen folder.
+    { const bk=bar.querySelector('#ui-bake'); const idle=bk.textContent;
+      bk.onclick=async()=>{
+        if(!E.bakePreviews){ return; }
+        const hasFolder = E.folderName && E.folderName!=='browser default';
+        if(!hasFolder){
+          if(!E.hasFolderAPI){ alert('Pick a folder isn’t supported here — the 64 clips would download individually.'); }
+          else { alert('Pick an output folder first (Folder button), so the clips save there instead of 64 downloads.'); return; }
+        }
+        if(!confirm('Bake hover-preview clips for every mode? This records ~64 short clips and takes a couple of minutes.')) return;
+        bk.disabled=true;
+        try{ await E.bakePreviews({ onProgress:(i,n)=>{ bk.textContent='Baking '+i+'/'+n+'…'; } });
+          bk.textContent='Done ✓ — move mNN.mp4 → previews/'; }
+        catch(e){ bk.textContent='Bake failed (see console)'; console.error(e); }
+        setTimeout(()=>{ bk.textContent=idle; bk.disabled=false; }, 6000);
+      };
+    }
     // show/hide all rails (pure-effect view). H or Tab toggles; a small always-
     // visible handle (top-right) makes it reversible even when everything is hidden.
     const uiToggle=document.createElement('button'); uiToggle.id='ui-hide'; uiToggle.title='show / hide panels (H)'; uiToggle.textContent='⊙';
