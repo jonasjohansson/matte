@@ -2316,6 +2316,9 @@ async function startRecording(opts = {}) {
 
     const blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
     if (blob.size < 1024) throw new Error('empty output — the encoder produced no data (codec or size unsupported)');
+    // returnBlob: hand the bytes back instead of saving/downloading (used by the
+    // preview-baking automation, which captures the blob and writes it to disk).
+    if (opts.returnBlob) return blob;
 
     // Build filename with duration, fps, actual output dimensions, and pad.
     let base = opts.filename || makeFilenameV2();
