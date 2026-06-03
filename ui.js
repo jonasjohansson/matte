@@ -688,18 +688,15 @@
       }
       if(MK[m]) paramsEl.appendChild(section('this mode',MK[m],false,MK_LABELS[m]));
       // footage-driven modes share one T-slot clip as a spatial mask.
-      const FOOT={ 39:['Footage occluder','Optional: light streams through the clip’s bright gaps — load blinds, leaves, a window, anything. Empty = procedural clouds.','load clip…'],
-                   54:['Foliage','Load a treetop/canopy clip — its bright gaps drive the god-rays. Empty = procedural canopy.','load foliage clip…'],
-                   62:['Footage source','Load any clip to stylise into a B/W matte (key · glow · edge below). Empty = placeholder.','load footage…'] };
+      const FOOT={ 39:['Footage occluder','load clip…'],
+                   54:['Foliage','load foliage clip…'],
+                   62:['Footage source','load footage…'] };
       if(FOOT[m] && E.loadFoliageVideo){
         const fs=document.createElement('div'); fs.className='psec'; fs.innerHTML=`<h4>${FOOT[m][0]}</h4>`;
         const has=E.hasFoliageVideo&&E.hasFoliageVideo();
-        const h=document.createElement('div'); h.className='hint sec-note';
-        h.textContent = has ? 'Clip loaded — driving this mode.' : FOOT[m][1];
-        fs.appendChild(h);
         if(has && (m===39||m===54)){ const dw=widget('foliageDrift'); if(dw) fs.appendChild(dw); }  // sway/parallax
         const fb=document.createElement('div'); fb.className='ptsbar split';
-        const ld=document.createElement('button'); ld.className='btn sm'; ld.textContent=has?'replace clip…':FOOT[m][2];
+        const ld=document.createElement('button'); ld.className='btn sm'; ld.textContent=has?'replace clip…':FOOT[m][1];
         ld.onclick=()=>{ const inp=document.createElement('input'); inp.type='file'; inp.accept='video/*';
           inp.onchange=()=>{ if(inp.files&&inp.files[0]){ E.loadFoliageVideo(inp.files[0]); if(E.restartPlayback)E.restartPlayback(); setTimeout(()=>buildParams(m),100); } }; inp.click(); };
         fb.appendChild(ld);

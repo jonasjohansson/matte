@@ -43,7 +43,7 @@ html, body { width: 100%; height: 100%; background: #0a0a0a; color: var(--text-m
 /* A / T / B stacked full-width so each slot is large and obvious */
 .slots-3 { grid-template-columns: 1fr; }
 .slot {
-  aspect-ratio: 16/7; background: var(--ui-bg2); border: 1px solid var(--ui-line);
+  aspect-ratio: 4/3; background: var(--ui-bg2); border: 1px solid var(--ui-line);
   position: relative; cursor: pointer; overflow: hidden;
   display: flex; align-items: center; justify-content: center;
   color: var(--ui-mut); font-size: 10px;
@@ -58,7 +58,7 @@ html, body { width: 100%; height: 100%; background: #0a0a0a; color: var(--text-m
   padding: 6px 10px 4px;
   border-top: 1px solid #1a1a1a;
   display: flex; flex-direction: column; gap: 4px;
-  max-height: 240px;
+  max-height: 360px;
   flex-shrink: 0;
 }
 .library-head {
@@ -72,7 +72,7 @@ html, body { width: 100%; height: 100%; background: #0a0a0a; color: var(--text-m
   min-height: 24px;
 }
 .library-thumb {
-  position: relative; width: 100%; height: auto; aspect-ratio: 4 / 3;
+  position: relative; width: 100%; height: auto; aspect-ratio: 5 / 4;
   border: 1px solid var(--ui-line); border-radius: var(--r-sm, 4px); overflow: hidden;
   cursor: pointer; background: var(--ui-bg);
   transition: border-color 0.1s, transform 0.1s;
