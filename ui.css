@@ -4,12 +4,12 @@
    size/space/colour so the UI stays consistent. The WebGPU engine is untouched;
    Tweakpane lives off-screen as the side-effect registry. ── */
 
-/* UI typeface — Martian Mono (brutalist monospace, Evil Martians). Self-hosted
-   variable woff2 so it works offline via the service worker (which only caches
-   same-origin). One weight-axis file covers 400 body / 600·700 labels. */
+/* UI typeface — Spline Sans Mono (UI monospace grotesque; slashed zero by
+   default). Self-hosted variable woff2 so it works offline via the service
+   worker (which only caches same-origin). One weight-axis file (300–700). */
 @font-face{
-  font-family:"Martian Mono"; font-style:normal; font-weight:100 800;
-  font-display:swap; src:url("./vendor/martian-mono-var.woff2") format("woff2");
+  font-family:"Spline Sans Mono"; font-style:normal; font-weight:300 700;
+  font-display:swap; src:url("./vendor/spline-sans-mono-var.woff2") format("woff2");
 }
 
 :root{
@@ -25,7 +25,7 @@
   --hue-blue:#7fb4e8; --hue-green:#74d2a6; --hue-purple:#c79fe0;
   --hue-amber:#e8b27f; --hue-pink:#e890b4; --hue-cyan:#9fd0e0;
   --hue-recent:#d8d8d8;
-  --ui-font:"Martian Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --ui-font:"Spline Sans Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
   /* type scale — tight 3-step ramp (9 / 10 / 12) for consistency */
   --fz-label:9px;     /* uppercase section + field labels */
   --fz-body:10px;     /* controls, buttons */
