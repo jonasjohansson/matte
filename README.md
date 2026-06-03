@@ -38,15 +38,15 @@ Desktop-only by design: touch devices get a "needs a desktop + WebGPU" notice
 | `main.js` | engine: render loop, uniform packing, sources/library, paint/points, recording/export, SAM segmentation and the `window.__engine` API |
 | `shader.js` | the three WGSL shader strings (display / advection-sim / init) — pure data |
 | `particles.js` | the GPU particle mode (31): compute + draw passes |
-| `ui.js` | the visible custom UI — rails L→R: controls · canvas · settings · **globals (Origin+Vignette)** · modes; drives the engine via `window.__engine` |
-| `style.css` / `ui.css` | engine styles / custom-UI styles + design tokens |
+| `ui.js` | the visible custom UI — controls rail (Output · Playback · View, with **Source images inline in View**) · canvas · settings · mode rail (Origin/Vignette/Grade **globals** pinned above the gallery, far right); drives the engine via `window.__engine` |
+| `style.css` / `ui.css` | engine styles / custom-UI styles + design tokens (one flat, square, gapless band system; Spline Sans Mono self-hosted) |
 | `idb.js` | IndexedDB persistence (kv store + image library) — pure |
 | `recorder.js` | WebCodecs codec selection — pure |
 | `output.js` | File System Access "save here" folder; owns the dir handle |
 | `util.js` | pure helpers (`fitInfo`, `hexToRgb`) |
 | `sw.js` / `manifest.json` | offline service worker / PWA manifest |
-| `vendor/` | locally-vendored ESM dep (mp4-muxer) |
-| `thumbs/` | baked mode-thumbnail PNGs (`m00.png`…`m60.png`) |
+| `vendor/` | locally-vendored, offline-precached assets (mp4-muxer ESM dep + the Spline Sans Mono variable woff2) |
+| `thumbs/` | baked mode-thumbnail PNGs (`m00.png`…`m63.png`) |
 | `defaults/` | bundled default images (seed the library + Reset) |
 | `eval-src/` | local test images — gitignored, not deployed |
 
@@ -68,8 +68,13 @@ Desktop-only by design: touch devices get a "needs a desktop + WebGPU" notice
 - **The legacy Tweakpane UI is retired.** Its `.addBinding`/`.addFolder` calls
   now run against an inert chainable stub in `main.js`, and the two Tweakpane
   deps are gone. `ui.js` is the only real UI; randomize, presets and the rest are
-  self-contained there / on `window.__engine`. (The ~300 historical binding lines
-  are harmless no-ops and can be pruned mechanically when convenient.)
+  self-contained there / on `window.__engine`. `updateModeFolders()` is a no-op.
+  The remaining binding calls are harmless no-ops, but they're **interleaved with
+  live data consts** (mode option/name maps), so pruning them is a careful
+  line-level pass, not a block delete.
+- **Typeface.** Spline Sans Mono (UI monospace grotesque) is **self-hosted** as a
+  variable woff2 in `vendor/` and precached — a Google Fonts `<link>` would be
+  cross-origin and vanish offline, since `sw.js` only caches same-origin.
 - **Tests:** `npm test` runs `test/check-shaders.mjs` (no-browser WGSL/struct
   guard) + `test/smoke.mjs` (renders every mode) + `test/functional.mjs`
   (randomize/presets/mode-switch). CI runs them on push/PR.
@@ -84,7 +89,13 @@ Desktop-only by design: touch devices get a "needs a desktop + WebGPU" notice
 
 ## Modes
 
-61 modes (0–60): transition modes (reveal / watercolor / painterly / light&burn)
-plus 14 ambient looping fields (33–47: bokeh, ripples, glare, streaks, aurora,
-godrays, clouds, caustics, embers, mist, rain, snow, marble, ink-blooms).
-Photo-edge modes that "looked digital" live in a de-emphasised **Archive** group.
+64 modes (0–63): transition modes (reveal / watercolor / painterly / light&burn,
+incl. **column swipe** (63) — staggered organic directional wipe) plus the
+ambient looping fields (bokeh, ripples, glare, streaks, aurora, godrays, fog,
+fire, caustics + **caustics 2** (61) Voronoi light-net, embers, marble, ink,
+sun-through-trees, water shimmer, silk, nebula …). Three modes are **footage-
+driven**: a clip loaded into the T-slot acts as a spatial mask — the foliage
+canopy (54), the godray occluder (39), and **footage → matte** (62), which
+stylises any clip into a clean B/W matte. Photo-edge / older modes that "looked
+digital" live in a de-emphasised **Archive** group. The mode rail is a single-
+open accordion; curate with the per-chip **★** Favourites.
