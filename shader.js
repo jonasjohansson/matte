@@ -85,7 +85,8 @@ struct Params {
   pointSize: f32, pointPop: f32, pointFill: f32, padTop: f32,
   padBottom: f32, padLeft: f32, padRight: f32, gradeBright: f32,
   gradeContrast: f32, gradeBlack: f32, gradeWhite: f32, gradeGamma: f32,
-  footageMask: f32, foliageDrift: f32, _pad1: f32, _pad2: f32,
+  footageMask: f32, foliageDrift: f32, swipeCols: f32, swipeDir: f32,
+  swipeStagger: f32, swipeColW: f32, swipeSoft: f32, _pad2: f32,
 };`;
 
 export const SHADER = /* wgsl */`
@@ -1716,6 +1717,37 @@ fn wetEdgeMask(uv: vec2f) -> f32 {
   return clamp(m, 0.0, 1.0);
 }
 
+fn swipeMask(uv: vec2f) -> f32 {
+  // Column-swipe reveal: the frame is split into N columns (across the axis
+  // perpendicular to the swipe); each column wipes along the swipe direction,
+  // started at a staggered time, with an organic noise-displaced fade front.
+  // Returns a per-pixel reveal time (low = reveals first).
+  //   swipeCols = column count   swipeDir 0=up 1=down 2=left 3=right
+  //   swipeStagger = per-column time offset   swipeColW = column fill (gaps follow)
+  //   swipeSoft = organic edge break-up
+  let cols = max(1.0, floor(p.swipeCols + 0.5));
+  let dir = u32(p.swipeDir + 0.5);
+  var along = uv.y; var across = uv.x;          // vertical swipe, columns across x
+  if (dir >= 2u) { along = uv.x; across = uv.y; } // horizontal swipe, columns across y
+  // a = distance from the reveal-start edge (0 reveals first). uv.y=0 is top.
+  var a = along;
+  if (dir == 0u || dir == 2u) { a = 1.0 - along; }  // up: from bottom; left: from right
+  let slot = across * cols;
+  let col = floor(slot);
+  let colOrder = col / max(1.0, cols - 1.0);          // 0..1 left/top -> right/bottom
+  let colStart = colOrder * p.swipeStagger;
+  // duty cycle: the active strip fills swipeColW of each slot; the gaps near the
+  // slot edges fall back to the plain (un-staggered) front so the matte completes.
+  let frac = slot - col;
+  let edgeDist = abs(frac - 0.5) * 2.0;               // 0 centre .. 1 slot edge
+  let colMix = 1.0 - smoothstep(p.swipeColW - 0.08, p.swipeColW + 0.08, edgeDist);
+  let staggered = colStart + a * (1.0 - p.swipeStagger);
+  var m = mix(a, staggered, colMix);
+  // organic front: break the reveal line up with per-column noise
+  let n = fbm(vec2f(across * cols * 1.6, along * 4.5) + col * 3.1 + p.seed * 0.13) - 0.5;
+  m = m + n * p.swipeSoft * 0.5;
+  return clamp(m, 0.0, 1.0);
+}
 fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
   let n1 = fbm(uv * p.maskScale + p.seed * 0.13);
   let n2 = fbm(uv * p.maskScale * 2.3 + 17.0 + p.seed * 0.09);
@@ -2033,6 +2065,8 @@ fn frostMask(uv: vec2f) -> f32 {
     // reveals early; the soft brush falloff makes each stroke grow/expand. Stroke
     // brightness encodes its start time (stagger).
     mask = clamp(1.0 - texFitLuma(uv), 0.0, 1.0);
+  } else if (p.mode == 63u) {
+    mask = swipeMask(uv);
   } else {
     let eA = edgeMag(texA, uv, p.scaleA, p.offsetA, p.validA, p.slotAColor);
     let eB = edgeMag(texB, uv, p.scaleB, p.offsetB, p.validB, p.slotBColor);
