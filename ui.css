@@ -84,8 +84,8 @@ body.ui-hidden #canvas{ box-shadow:none; }
   letter-spacing:.12em; font-weight:700; background:var(--ui-glass);
   border-bottom:1px solid var(--ui-line-2); }
 .chip{
-  position:relative; display:block; width:100%; aspect-ratio:320/200; margin:0 0 6px;
-  border:1px solid var(--ui-line); border-radius:var(--r-sm); overflow:hidden;
+  position:relative; display:block; width:100%; aspect-ratio:320/200; margin:0;
+  border:1px solid var(--ui-line); border-radius:0; overflow:hidden;
   cursor:pointer; font:inherit; color:var(--ui-text); transition:border-color .12s, box-shadow .12s;
   background:var(--ui-bg2) center/cover no-repeat; filter:grayscale(1);
 }
@@ -99,12 +99,11 @@ body.ui-hidden #canvas{ box-shadow:none; }
   background:var(--ui-bg2); color:var(--ui-text); border:1px solid var(--ui-line); border-radius:var(--r-sm);
   font:var(--fz-body)/1.2 var(--ui-font); }
 #mode-search:focus{ outline:none; border-color:var(--ui-line-2); }
-.chip .fav{ position:absolute; top:1px; right:4px; z-index:3; font-size:13px; line-height:1;
-  color:rgba(255,255,255,.4); cursor:pointer; opacity:0; transition:opacity .12s, color .12s;
-  text-shadow:0 1px 2px rgba(0,0,0,.85); }
-.chip:hover .fav, .chip .fav.on{ opacity:1; }
-.chip .fav.on{ color:var(--hue-amber); }
-.chip .fav:hover{ color:#fff; }
+.chip .fav{ position:absolute; top:2px; right:4px; z-index:3; font-size:16px; line-height:1;
+  color:rgba(255,255,255,.5); cursor:pointer; opacity:1; transition:color .12s, transform .12s;
+  text-shadow:0 1px 3px rgba(0,0,0,.95); }
+.chip .fav.on{ color:var(--hue-amber); text-shadow:0 0 6px color-mix(in srgb, var(--hue-amber) 60%, transparent), 0 1px 3px rgba(0,0,0,.95); }
+.chip .fav:hover{ color:var(--ui-text); transform:scale(1.18); }
 .chip .nm{ position:absolute; left:0; right:0; bottom:0; padding:4px 6px 5px;
   font-size:var(--fz-body); line-height:1.15;
   background:linear-gradient(transparent, rgba(0,0,0,.85) 60%); color:#fff; }
@@ -221,10 +220,9 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 
 /* foldable groups (controls-rail h5 + mode-column h4). The body keeps the
    parent's column spacing so collapsing doesn't reflow the controls. */
-.fold-head{ cursor:pointer; user-select:none; }
-.fold-head::before{ content:'\25BE'; display:inline-block; width:1em; margin-right:1px;
-  font-size:9px; opacity:.6; transition:transform .15s; vertical-align:middle; }
-.folded > .fold-head::before{ transform:rotate(-90deg); }
+.fold-head{ cursor:pointer; user-select:none; display:flex; align-items:center; justify-content:space-between; gap:6px; }
+.fold-head::after{ content:'\25BE'; flex:none; font-size:9px; opacity:.55; transition:transform .15s; }
+.folded > .fold-head::after{ transform:rotate(-90deg); }
 .folded > .fold-body{ display:none !important; }
 #ui-controls .fold-body,#ui-globals .fold-body{ display:flex; flex-direction:column; gap:7px; }
 
