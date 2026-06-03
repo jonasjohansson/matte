@@ -78,7 +78,7 @@ body.ui-hidden #canvas{ box-shadow:none; }
   overflow-y:auto; padding:var(--sp-lg) 9px; background:var(--ui-glass);
   backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
   border-left:1px solid var(--ui-line); font:var(--fz-body)/1.35 var(--ui-font); color:var(--ui-text); }
-.mgroup{ margin-bottom:var(--sp-lg); }
+.mgroup{ margin-bottom:4px; }
 .mgroup h4{ position:sticky; top:-14px; z-index:2; margin:0 0 7px; padding:6px 2px;
   color:var(--ui-text); font-size:var(--fz-label); text-transform:uppercase;
   letter-spacing:.12em; font-weight:700; background:var(--ui-glass);
@@ -95,7 +95,7 @@ body.ui-hidden #canvas{ box-shadow:none; }
   border-radius:var(--r-sm); padding:0 8px; min-height:var(--ctl-h); font:var(--fz-body) var(--ui-font); }
 #ui-right .preset-name:focus{ outline:none; border-color:var(--m); }
 /* mode search + per-chip favourite star */
-#mode-search{ width:100%; margin:0 0 8px; padding:6px 9px; -webkit-appearance:none; appearance:none;
+#mode-search{ width:100%; margin:0 0 5px; padding:6px 9px; -webkit-appearance:none; appearance:none;
   background:var(--ui-bg2); color:var(--ui-text); border:1px solid var(--ui-line); border-radius:var(--r-sm);
   font:var(--fz-body)/1.2 var(--ui-font); }
 #mode-search:focus{ outline:none; border-color:var(--ui-line-2); }
@@ -213,7 +213,7 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
   text-transform:uppercase; letter-spacing:.12em; font-weight:700; }
 #ui-controls .uigroup .grp,#ui-globals .uigroup .grp{ width:100%; }
 /* global controls (Origin/Vignette/Grade) relocated to the top of the mode rail */
-#ui-globals{ display:flex; flex-direction:column; gap:0; margin-bottom:var(--sp); }
+#ui-globals{ display:flex; flex-direction:column; gap:0; margin-bottom:4px; }
 #ui-controls #ui-size{ flex:1; }
 #ui-controls #ui-dur{ flex:1; min-width:0; }
 #ui-controls #ui-proj{ flex:1; min-width:0; }
