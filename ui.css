@@ -202,14 +202,6 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 #ui-controls #recwrap{ flex:1 1 100%; }
 #ui-controls .barchk{ margin-left:0; }
 
-
-/* About / how-it-works — a foldable .uigroup at the BOTTOM of the controls rail,
-   collapsed by default (kept a <section> so it doesn't shift the .uigroup
-   nth-of-type accents). Box + heading come from .uigroup; just style its prose. */
-#ui-intro p{ margin:0; color:var(--ui-mut); font-size:var(--fz-val); line-height:1.55; }
-#ui-intro p + p{ margin-top:8px; }
-#ui-intro strong{ color:var(--ui-text); font-weight:600; }
-
 /* subtle grouped blocks in the controls rail. Each group carries a hue in --g
    (set per nth-of-type below); the background is a light translucent wash tinted
    with the hue so the block reads as its colour without going muddy-black. */
@@ -245,9 +237,8 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 .btn.ico{ min-height:var(--ctl-h); }
 
 /* per-group colour accents — the tinted background + heading carry the hue per
-   block (no left stripe). Left rail (Output·Playback·View) by nth-of-type
-   (#ui-intro is a <section>, so it doesn't shift the count); the relocated
-   globals (Origin·Vignette·Grade, now in #ui-globals) are hued by ID. */
+   block (no left stripe). Left rail (Output·Playback·View) by nth-of-type; the
+   relocated globals (Origin·Vignette·Grade, now in #ui-globals) are hued by ID. */
 #ui-controls .uigroup:nth-of-type(1){ --g:var(--hue-blue); }   /* Output */
 #ui-controls .uigroup:nth-of-type(2){ --g:var(--hue-green); }  /* Playback */
 #ui-controls .uigroup:nth-of-type(3){ --g:var(--hue-cyan); }   /* View */

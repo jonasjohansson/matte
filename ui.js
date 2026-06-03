@@ -307,16 +307,7 @@
       </div>
       <div class="uigroup" id="ui-origin"><h5>Origin</h5><div id="origin-body"></div></div>
       <div class="uigroup" id="ui-vignette"><h5>Vignette</h5><div id="vign-body"></div></div>
-      <div class="uigroup" id="ui-grade"><h5>Grade</h5><div id="grade-body"></div></div>
-      <section id="ui-intro" class="uigroup">
-        <h5>About</h5>
-        <p><strong>Matte</strong> builds black-and-white transition mattes for video — designed to drive luma / track mattes in After Effects. It boots image-free: you're always looking at a matte you can record straight away.</p>
-        <p><strong>Modes</strong> (gallery, far right) are the look of the transition — watercolor blooms, paper grain, wet edges, light & burn, plus ambient loops. Open a group to browse; each mode's parameters appear in the <strong>settings</strong> panel beside the gallery. <strong>↺ reset</strong> / <strong>randomize</strong> are pinned at its top.</p>
-        <p><strong>Origin</strong> sets where the reveal begins: grow from the centre (or image A's bright area), place up to 16 <strong>points</strong> on the canvas, or <strong>paint</strong> a start region. <strong>Vignette</strong> darkens the edges. Both are global — they apply to every mode.</p>
-        <p><strong>Source images:</strong> open the <strong>⊞</strong> panel (View) and drag images onto A / B (and an optional video into T). Toggle <strong>Use source images</strong> to preview the matte applied to a real A→B dissolve in colour; leave it off for the pure B/W matte that gets recorded.</p>
-        <p><strong>Output:</strong> choose a resolution (or type W×H), duration, fps and an optional <strong>project</strong> name (prefixed to filenames). <strong>▶ play</strong> / scrub to preview, then <strong>● Record</strong> — each export is auto-numbered and saved to your chosen folder, or downloaded. The encoder is probed first so you always get the largest size that actually works on your machine.</p>
-        <p><strong>Ambient</strong> modes can run as a black→white <strong>reveal</strong> or a standalone <strong>loop</strong> (their settings panel). Recently exported modes collect under <strong>Recent</strong> at the top of the gallery. Click any heading to fold a panel; <strong>H</strong> or <strong>Tab</strong> hides the whole UI.</p>
-      </section>`;
+      <div class="uigroup" id="ui-grade"><h5>Grade</h5><div id="grade-body"></div></div>`;
     document.body.appendChild(bar);
     // Origin / Vignette / Grade are GLOBAL (shared across every mode). Relocate
     // them out of the controls rail to the TOP of the mode rail, above the
@@ -364,11 +355,11 @@
     // Defaults (first visit / no saved state): mode column + Export/View start
     // collapsed; Output and Playback stay open. Key is versioned so the new
     // defaults apply once even for users with older saved fold state.
-    const FOLD_KEY='matte.folded.v5';
+    const FOLD_KEY='matte.folded.v6';
     let folded;
     { const stored=localStorage.getItem(FOLD_KEY);
       if(stored!=null){ try{ folded=new Set(JSON.parse(stored)); }catch(e){ folded=null; } }
-      if(!folded){ folded=new Set(['ctrl:View','ctrl:Vignette','ctrl:Grade','ctrl:About']); MODES.forEach(([g])=>folded.add('mode:'+g)); } }
+      if(!folded){ folded=new Set(['ctrl:View','ctrl:Origin','ctrl:Vignette','ctrl:Grade','mode:Recent']); MODES.forEach(([g])=>folded.add('mode:'+g)); } }
     const saveFold=()=>{ try{ localStorage.setItem(FOLD_KEY,JSON.stringify([...folded])); }catch(e){} };
     function makeFoldable(group,head,key,onToggle){
       const body=document.createElement('div'); body.className='fold-body';
@@ -378,13 +369,12 @@
       head.addEventListener('click',()=>{ const f=group.classList.toggle('folded'); if(f)folded.add(key); else folded.delete(key); if(onToggle)onToggle(f); saveFold(); });
     }
     [...bar.querySelectorAll('.uigroup'), ...globalsHost.querySelectorAll('.uigroup')].forEach(g=>{ const h=g.querySelector('h5'); if(h) makeFoldable(g,h,'ctrl:'+h.textContent.trim()); });
-    // Mode column = accordion: opening one group folds the others (Recent is
-    // independent and stays open alongside).
-    const modeGroups=[...left.querySelectorAll('.mgroup')].filter(g=>!g.classList.contains('mgroup-recent'));
-    left.querySelectorAll('.mgroup').forEach(g=>{
+    // Mode column = strict accordion: opening any group (Favourites/Recent
+    // included) folds every other, so only one is ever open.
+    const modeGroups=[...left.querySelectorAll('.mgroup')];
+    modeGroups.forEach(g=>{
       const h=g.querySelector('h4'); if(!h) return;
-      const recent=g.classList.contains('mgroup-recent');
-      makeFoldable(g,h,'mode:'+h.textContent.trim(), recent?null:(isFolded)=>{
+      makeFoldable(g,h,'mode:'+h.textContent.trim(), (isFolded)=>{
         if(isFolded) return;  // only collapse peers when THIS group just opened
         modeGroups.forEach(o=>{ if(o!==g && !o.classList.contains('folded')){
           o.classList.add('folded'); folded.add('mode:'+o.querySelector('h4').textContent.trim()); }});
@@ -659,13 +649,13 @@
         const ps=document.createElement('div'); ps.className='psec'; ps.innerHTML='<h4>Preset</h4>';
         const lr=document.createElement('div'); lr.className='row';
         const sel=document.createElement('select'); sel.setAttribute('aria-label','load preset');
-        sel.innerHTML='<option value="">— load a saved look —</option>';
+        sel.innerHTML='<option value="">—</option>';
         E.presetOptions().forEach(o=>{ const op=document.createElement('option'); op.value=o.id; op.textContent=o.label; sel.appendChild(op); });
         sel.onchange=()=>{ if(!sel.value) return; E.applyPreset(sel.value); if(E.restartPlayback)E.restartPlayback(); if(E.save)E.save(); selectMode(E.state.mode); };
         lr.appendChild(sel); ps.appendChild(lr);
         // name on its own row; save + delete share the next row
         const nr=document.createElement('div'); nr.className='row';
-        const nm=document.createElement('input'); nm.type='text'; nm.placeholder='name this look…'; nm.setAttribute('aria-label','preset name');
+        const nm=document.createElement('input'); nm.type='text'; nm.placeholder='name this preset…'; nm.setAttribute('aria-label','preset name');
         nm.className='preset-name'; nm.onkeydown=(e)=>{ if(e.key==='Enter'&&nm.value.trim()){ E.savePreset(nm.value.trim()); buildParams(m); } };
         nr.appendChild(nm); ps.appendChild(nr);
         const sr=document.createElement('div'); sr.className='ptsbar split';
