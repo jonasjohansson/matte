@@ -38,34 +38,29 @@ html, body { width: 100%; height: 100%; background: #0a0a0a; color: var(--text-m
   overflow: hidden;
   transition: transform 0.18s ease;
 }
-#slot-bar { padding: 10px 10px 6px; display: flex; flex-direction: column; gap: 6px; }
-.slots { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+#slot-bar { padding: var(--sp) var(--sp) 6px; display: flex; flex-direction: column; gap: var(--sp); }
+.slots { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp); }
 /* A / T / B inline, three across */
 .slots-3 { grid-template-columns: 1fr 1fr 1fr; }
 .slot {
   aspect-ratio: 1/1; background: var(--ui-bg2); border: 1px solid var(--ui-line);
   position: relative; cursor: pointer; overflow: hidden;
   display: flex; align-items: center; justify-content: center;
-  color: var(--ui-mut); font-size: 10px;
+  color: var(--ui-mut); font-size: var(--fz-val);
 }
 .slot:hover { border-color: var(--ui-line-2); color: var(--ui-text); }
 .slot.drop-target { border-color: var(--ui-accent); box-shadow: 0 0 0 1px var(--ui-accent) inset; }
 .slot.drop-target * { pointer-events: none; }
-.slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.slot .lab { position: absolute; top: 3px; left: 4px; color: #fff;
-  background: rgba(0,0,0,0.6); padding: 1px 5px; font-size: 9px; pointer-events: none; }
+.slot img { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
+.slot .lab { position: absolute; top: 3px; left: 4px; color: var(--ui-text);
+  background: rgba(0,0,0,0.6); padding: 1px 5px; font-size: var(--fz-label); pointer-events: none; }
 #library-section {
-  padding: 6px 10px 4px;
-  border-top: 1px solid #1a1a1a;
-  display: flex; flex-direction: column; gap: 4px;
+  padding: 6px var(--sp) 4px;
+  border-top: 1px solid var(--ui-line);
+  display: flex; flex-direction: column; gap: var(--sp-sm);
   max-height: 360px;
   flex-shrink: 0;
 }
-.library-head {
-  display: flex; justify-content: space-between; align-items: baseline;
-  font-size: 9.5px; color: var(--ui-faint);
-}
-.library-title { color: var(--ui-text); font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
 #library-grid {
   display: grid; grid-template-columns: 1fr; gap: 5px;
   overflow-y: auto; padding-bottom: 4px;
@@ -73,30 +68,30 @@ html, body { width: 100%; height: 100%; background: #0a0a0a; color: var(--text-m
 }
 .library-thumb {
   position: relative; width: 100%; height: auto; aspect-ratio: 5 / 4;
-  border: 1px solid var(--ui-line); border-radius: var(--r-sm, 4px); overflow: hidden;
+  border: 1px solid var(--ui-line); border-radius: var(--r-sm); overflow: hidden;
   cursor: pointer; background: var(--ui-bg);
   transition: border-color 0.1s, transform 0.1s;
 }
-.library-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+.library-thumb img { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; pointer-events: none; }
 .library-thumb:hover { border-color: var(--ui-accent); }
 .lib-del {
   position: absolute; top: 0; right: 0; width: 16px; height: 16px;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(0,0,0,0.65); color: #fff; font-size: 13px; line-height: 1;
-  cursor: pointer; opacity: 0; transition: opacity 0.1s; border-bottom-left-radius: 3px;
+  background: rgba(0,0,0,0.65); color: var(--ui-text); font-size: var(--fz-title); line-height: 1;
+  cursor: pointer; opacity: 0; transition: opacity 0.1s; border-bottom-left-radius: var(--r-sm);
 }
 .library-thumb:hover .lib-del { opacity: 1; }
 .lib-del:hover { background: #e44; }
 .library-thumb.in-A::before, .library-thumb.in-B::after {
   position: absolute; top: 1px; padding: 0 3px;
-  font-size: 9px; line-height: 11px; background: var(--ui-accent); color: var(--ui-accent-fg);
+  font-size: var(--fz-label); line-height: 11px; background: var(--ui-accent); color: var(--ui-accent-fg);
   font-weight: 600; pointer-events: none;
 }
 .library-thumb.in-A::before { content: 'A'; left: 1px; }
 .library-thumb.in-B::after  { content: 'B'; right: 1px; }
 .library-empty {
   grid-column: 1 / -1;
-  color: var(--ui-mut); font-size: 10px; padding: 12px 4px; text-align: center;
+  color: var(--ui-mut); font-size: var(--fz-val); padding: var(--sp-lg) 4px; text-align: center;
 }
 
 #tp-host { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 10px 10px; }

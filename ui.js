@@ -219,21 +219,7 @@
       c.querySelector('.fav').onclick=(e)=>{ e.stopPropagation(); toggleFav(id); };
       return c;
     }
-    // search/filter box (pinned at the top of the mode rail).
-    const search=document.createElement('input'); search.id='mode-search'; search.type='search';
-    search.placeholder='Search modes…'; search.setAttribute('aria-label','search modes');
-    left.appendChild(search);
-    search.addEventListener('input',()=>{
-      const q=search.value.trim().toLowerCase();
-      left.classList.toggle('filtering', !!q);
-      if(!q){ left.querySelectorAll('.chip').forEach(c=>c.style.display=''); left.querySelectorAll('.mgroup').forEach(g=>g.style.display=''); renderFavs(); return; }
-      left.querySelectorAll('.mgroup').forEach(g=>{
-        if(g.classList.contains('mgroup-recent')||g.classList.contains('mgroup-fav')){ g.style.display='none'; return; }
-        let any=false;
-        g.querySelectorAll('.chip').forEach(c=>{ const m=(c.dataset.name||'').includes(q); c.style.display=m?'':'none'; if(m)any=true; });
-        g.style.display=any?'':'none';
-      });
-    });
+    // (search removed — curate with the ★ Favourites group instead)
     // Favourites group: pinned starred modes (above Recent).
     const favG=document.createElement('div'); favG.className='mgroup mgroup-fav'; favG.innerHTML='<h4>Favourites</h4>';
     { const fh=favG.querySelector('h4'); fh.style.color='var(--hue-amber)';
@@ -343,7 +329,6 @@
     // Moving (not rebuilding) the nodes keeps main.js's existing listeners intact.
     // Appended BEFORE the fold pass so they get wrapped into View's fold-body.
     const srcHost=document.createElement('div'); srcHost.id='src-host';
-    srcHost.innerHTML='<div class="src-head"><span class="pop-title">Source Images</span></div>';
     ['slot-bar','library-section'].forEach(id=>{ const el=document.getElementById(id); if(el) srcHost.appendChild(el); });
     bar.querySelector('#ui-view').appendChild(srcHost);
     // 'use sources' toggle (engine on/off)

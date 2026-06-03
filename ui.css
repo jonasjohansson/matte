@@ -24,7 +24,7 @@
   --fz-val:10.5px;    /* numeric values, hints, .btn.sm, About prose */
   --fz-title:13px;    /* mode name */
   /* metrics */
-  --r:6px; --r-sm:4px; --sp:8px; --sp-lg:14px; --ctl-h:30px;
+  --r:6px; --r-sm:4px; --sp-sm:4px; --sp:8px; --sp-lg:14px; --ctl-h:30px;
   /* rail widths */
   --left:264px; --modes:232px; --right:264px; --bottom:0px; --src:240px;
 }
@@ -78,7 +78,7 @@ body.ui-hidden #canvas{ box-shadow:none; }
   overflow-y:auto; padding:var(--sp-lg) 9px; background:var(--ui-glass);
   backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
   border-left:1px solid var(--ui-line); font:var(--fz-body)/1.35 var(--ui-font); color:var(--ui-text); }
-.mgroup{ margin-bottom:4px; }
+.mgroup{ margin-bottom:0; }
 .mgroup h4{ position:sticky; top:-14px; z-index:2; margin:0 0 7px; padding:6px 2px;
   color:var(--ui-text); font-size:var(--fz-label); text-transform:uppercase;
   letter-spacing:.12em; font-weight:700; background:var(--ui-glass);
@@ -213,7 +213,7 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
   text-transform:uppercase; letter-spacing:.12em; font-weight:700; }
 #ui-controls .uigroup .grp,#ui-globals .uigroup .grp{ width:100%; }
 /* global controls (Origin/Vignette/Grade) relocated to the top of the mode rail */
-#ui-globals{ display:flex; flex-direction:column; gap:0; margin-bottom:4px; }
+#ui-globals{ display:flex; flex-direction:column; gap:0; margin-bottom:0; }
 #ui-controls #ui-size{ flex:1; }
 #ui-controls #ui-dur{ flex:1; min-width:0; }
 #ui-controls #ui-proj{ flex:1; min-width:0; }
@@ -309,10 +309,9 @@ select.mini{ background:var(--ui-bg2); color:var(--ui-text); border:1px solid va
 
 /* ── source images: inline inside the View group (no separate sidebar) ── */
 #src-host{ display:block; margin-top:var(--sp); border-top:1px solid var(--ui-line); padding-top:var(--sp); }
-#src-host .src-head{ display:flex; align-items:center; margin:0 0 var(--sp); }
-#src-host .pop-title{ margin:0; color:var(--ui-faint); font-size:var(--fz-label);
-  text-transform:uppercase; letter-spacing:.12em; font-weight:700; }
-#src-host #slot-bar,#src-host #library-section{ position:static; width:auto; }
+/* full-bleed within the group so slots + library align with the buttons above */
+#src-host #slot-bar{ position:static; width:auto; padding:0 0 6px; }
+#src-host #library-section{ position:static; width:auto; padding:6px 0 4px; }
 
 /* presets / folder popovers */
 #ui-pop{ position:fixed; z-index:420; display:none; min-width:220px; max-width:420px;
