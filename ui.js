@@ -19,7 +19,7 @@
     maskShift:['mask shift',-.5,.5,.005], organic:['organic',0,1,.01], edges:['edges',-1,1,.01], seed:['seed',0,999,1],
     curve:{t:'select',label:'timing',opts:{'linear':0,'ease-in-out':1,'ease-in':2,'ease-out':3}},
     // column swipe (mode 63)
-    swipeCols:['columns',1,16,1], swipeColW:['column width',0.2,1,.01],
+    swipeCols:['columns',1,16,1], swipeColW:['column fill',0.2,1,.01],
     swipeStagger:['stagger',0,1,.01], swipeSoft:['organic edge',0,1,.01],
     swipeDir:{t:'select',label:'direction',opts:{'up':0,'down':1,'left':2,'right':3}},
     // start points / paint
@@ -675,6 +675,27 @@
         paramsEl.appendChild(rs);
       }
       if(MK[m]) paramsEl.appendChild(section('this mode',MK[m],false,MK_LABELS[m]));
+      // column swipe (63): per-column width sliders (one per column, live with count)
+      if(m===63){
+        if(!Array.isArray(st.swipeColWidths)) st.swipeColWidths=Array(16).fill(1);
+        const nCols=Math.max(1,Math.min(16,Math.round(st.swipeCols)));
+        const cs=document.createElement('div'); cs.className='psec'; cs.innerHTML='<h4>Column sizes</h4>';
+        for(let i=0;i<nCols;i++){
+          const row=document.createElement('div'); row.className='row';
+          row.innerHTML=`<span class="lab">col ${i+1}</span><input type="range" min="0.25" max="3" step="0.05" aria-label="column ${i+1} size"><span class="val"></span>`;
+          const r=row.querySelector('input'), v=row.querySelector('.val'); const idx=i;
+          r.value=st.swipeColWidths[idx]??1; v.textContent=(+r.value).toFixed(2);
+          r.oninput=()=>{ st.swipeColWidths[idx]=+r.value; v.textContent=(+r.value).toFixed(2); };
+          cs.appendChild(row);
+        }
+        const eb=document.createElement('div'); eb.className='ptsbar split';
+        const er=document.createElement('button'); er.className='btn sm'; er.textContent='↺ equal';
+        er.onclick=()=>{ for(let i=0;i<16;i++) st.swipeColWidths[i]=1; buildParams(m); };
+        eb.appendChild(er); cs.appendChild(eb); paramsEl.appendChild(cs);
+        // rebuild the size sliders live when the column count changes
+        const ci=paramsEl.querySelector('input[aria-label="columns"]');
+        if(ci) ci.addEventListener('change',()=>buildParams(m));
+      }
       // footage-driven modes share one T-slot clip as a spatial mask.
       const FOOT={ 39:['Footage occluder','load clip…'],
                    54:['Foliage','load foliage clip…'],

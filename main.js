@@ -160,7 +160,7 @@ function makeDisplayBindGroup(finalState) {
 //   5  seed         13  scaleB.y                                          29 bloomCount     37 saltContrast
 //   6  validA       14  offsetB.x                                         30 bloomRim       38 saltBias
 //   7  validB       15  offsetB.y                                         31 bloomRate      39 saltImage
-const UBO_SIZE = 1152;  // 288 f32: ... +footageMask (280) +foliageDrift (281) +swipe (282-286) +pad
+const UBO_SIZE = 1216;  // 304 f32: ... +swipe (282-286) +pad (287) +swipeW[16] (288-303)
 const uniformBuffer = device.createBuffer({
   size: UBO_SIZE,
   usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
@@ -760,6 +760,9 @@ function writeUniforms() {
   uboF32[284] = state.swipeStagger;
   uboF32[285] = state.swipeColW;
   uboF32[286] = state.swipeSoft;
+  // per-column width weights (mode 63): 16 floats at 288-303, default 1 = equal
+  const _sw = state.swipeColWidths || [];
+  for (let i = 0; i < 16; i++) uboF32[288 + i] = (_sw[i] != null ? _sw[i] : 1);
   uboU32[208] = (state.originSource === 'paint' && state._paintReady) ? 255 : nPts;
   uboF32[209] = state.flow;  // turbulence time-drift (animated ink)
   uboF32[210] = state.undulate;  // slow large-scale dance of the reveal front
@@ -2445,7 +2448,7 @@ const PRESET_KEYS = [
   'lightIntensity', 'lightSpread', 'lightPeakT', 'lightFlashWidth', 'lightColor',
   'boundsEnable', 'boundsCx', 'boundsCy', 'boundsW', 'boundsH', 'boundsSoftness',
   'organic', 'edges', 'spread', 'maskScale', 'maskShift',
-  'swipeCols', 'swipeDir', 'swipeStagger', 'swipeColW', 'swipeSoft',
+  'swipeCols', 'swipeDir', 'swipeStagger', 'swipeColW', 'swipeSoft', 'swipeColWidths',
   'zoomA', 'panAx', 'panAy', 'zoomB', 'panBx', 'panBy',
   // movement / ambient / direction / grade / vignette — the look knobs the
   // current modes actually use (were missing, so presets couldn't capture them).

@@ -87,6 +87,7 @@ struct Params {
   gradeContrast: f32, gradeBlack: f32, gradeWhite: f32, gradeGamma: f32,
   footageMask: f32, foliageDrift: f32, swipeCols: f32, swipeDir: f32,
   swipeStagger: f32, swipeColW: f32, swipeSoft: f32, _pad2: f32,
+  swipeW: array<vec4f, 4>,   // per-column width weights (mode 63), default 1 = equal
 };`;
 
 export const SHADER = /* wgsl */`
@@ -1717,6 +1718,12 @@ fn wetEdgeMask(uv: vec2f) -> f32 {
   return clamp(m, 0.0, 1.0);
 }
 
+fn swW(i: u32) -> f32 {            // per-column width weight (swipeW[] as 4 vec4s)
+  let v = p.swipeW[i / 4u];
+  let c = i % 4u;
+  if (c == 0u) { return v.x; } else if (c == 1u) { return v.y; }
+  else if (c == 2u) { return v.z; } return v.w;
+}
 fn swipeMask(uv: vec2f) -> f32 {
   // Column-swipe reveal: the frame is split into N columns (across the axis
   // perpendicular to the swipe); each column wipes along the swipe direction,
@@ -1726,22 +1733,33 @@ fn swipeMask(uv: vec2f) -> f32 {
   //   swipeStagger = per-column time offset   swipeColW = column fill (gaps follow)
   //   swipeSoft = organic edge break-up
   let cols = max(1.0, floor(p.swipeCols + 0.5));
+  let nc = u32(cols + 0.5);
   let dir = u32(p.swipeDir + 0.5);
   var along = uv.y; var across = uv.x;          // vertical swipe, columns across x
   if (dir >= 2u) { along = uv.x; across = uv.y; } // horizontal swipe, columns across y
   // a = distance from the reveal-start edge (0 reveals first). uv.y=0 is top.
   var a = along;
   if (dir == 0u || dir == 2u) { a = 1.0 - along; }  // up: from bottom; left: from right
-  let slot = across * cols;
-  let col = floor(slot);
+  // weighted columns: each column's width is set by swipeW[i] (default 1 = equal),
+  // so e.g. a centre column can be wider than its neighbours.
+  var total = 0.0;
+  for (var i = 0u; i < 16u; i = i + 1u) { if (i >= nc) { break; } total = total + swW(i); }
+  if (total < 0.0001) { total = cols; }
+  var acc = 0.0; var col = 0.0; var colStart = 0.0; var colFrac = 1.0 / cols;
+  for (var i = 0u; i < 16u; i = i + 1u) {
+    if (i >= nc) { break; }
+    let wf = swW(i) / total;
+    if (across < acc + wf || i == nc - 1u) { col = f32(i); colStart = acc; colFrac = wf; break; }
+    acc = acc + wf;
+  }
+  let inCol = clamp((across - colStart) / max(colFrac, 0.0001), 0.0, 1.0);  // 0..1 within column
   let colOrder = col / max(1.0, cols - 1.0);          // 0..1 left/top -> right/bottom
-  let colStart = colOrder * p.swipeStagger;
-  // duty cycle: the active strip fills swipeColW of each slot; the gaps near the
-  // slot edges fall back to the plain (un-staggered) front so the matte completes.
-  let frac = slot - col;
-  let edgeDist = abs(frac - 0.5) * 2.0;               // 0 centre .. 1 slot edge
+  let colStartT = colOrder * p.swipeStagger;
+  // duty cycle: the active strip fills swipeColW of each column; the gaps near the
+  // column edges fall back to the plain (un-staggered) front so the matte completes.
+  let edgeDist = abs(inCol - 0.5) * 2.0;              // 0 centre .. 1 column edge
   let colMix = 1.0 - smoothstep(p.swipeColW - 0.08, p.swipeColW + 0.08, edgeDist);
-  let staggered = colStart + a * (1.0 - p.swipeStagger);
+  let staggered = colStartT + a * (1.0 - p.swipeStagger);
   var m = mix(a, staggered, colMix);
   // organic front: break the reveal line up with per-column noise
   let n = fbm(vec2f(across * cols * 1.6, along * 4.5) + col * 3.1 + p.seed * 0.13) - 0.5;
