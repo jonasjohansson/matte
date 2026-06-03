@@ -299,10 +299,12 @@
       </div>
       <div class="uigroup" id="ui-view">
         <h5>View</h5>
-        <div class="grp"><button class="btn" id="ui-preview" title="show B/W matte or the colour result on A/B">Preview: Matte</button></div>
-        <label class="barchk wide" title="invert the matte (white↔black)"><input type="checkbox" id="ui-inv">Invert matte</label>
-        <button class="btn usesrc-btn" id="ui-usesrc" title="use the A/B images for the transition (off = pure matte)">Use source images</button>
+        <div class="ptsbar split">
+          <button class="btn" id="ui-preview" title="show B/W matte or the colour result on A/B">Preview: Matte</button>
+          <button class="btn" id="ui-inv" title="invert the matte (white↔black)">Invert matte</button>
+        </div>
         <button class="btn" id="ui-colourise" title="colourise the matte preview with a gradient image (dark→light maps across it). Preview only — the recorded matte stays black-and-white.">Colourise…</button>
+        <button class="btn usesrc-btn" id="ui-usesrc" title="use the A/B images for the transition (off = pure matte)">Use source images</button>
       </div>
       <div class="uigroup" id="ui-origin"><h5>Origin</h5><div id="origin-body"></div></div>
       <div class="uigroup" id="ui-vignette"><h5>Vignette</h5><div id="vign-body"></div></div>
@@ -439,7 +441,10 @@
     fpsIn.onchange=()=>{ st.exportFps=+fpsIn.value; E.save(); };
     const projIn=bar.querySelector('#ui-proj'); projIn.value=st.projectName||'';
     projIn.oninput=()=>{ st.projectName=projIn.value; E.save(); };
-    const inv=bar.querySelector('#ui-inv'); inv.checked=!!st.matteInvert; inv.onchange=()=>{st.matteInvert=inv.checked;};
+    const inv=bar.querySelector('#ui-inv');
+    const syncInv=()=>{ inv.classList.toggle('on', !!st.matteInvert); };
+    inv.onclick=()=>{ st.matteInvert=!st.matteInvert; syncInv(); if(E.save)E.save(); };
+    syncInv();
     const prev=bar.querySelector('#ui-preview');
     const syncPrev=()=>{ const on=E.matteOutput!==false; prev.textContent='Preview: '+(on?'Matte':'Colour'); prev.classList.toggle('on',!on); };
     prev.onclick=()=>{ E.setMatte(E.matteOutput===false); syncPrev(); };
