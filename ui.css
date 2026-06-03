@@ -21,6 +21,7 @@
   /* type scale */
   --fz-label:9.5px;   /* uppercase section + field labels */
   --fz-body:11px;     /* controls, buttons, values */
+  --fz-val:10.5px;    /* numeric values, hints, .btn.sm, About prose */
   --fz-title:13px;    /* mode name */
   /* metrics */
   --r:6px; --r-sm:4px; --sp:8px; --sp-lg:14px; --ctl-h:30px;
@@ -65,7 +66,7 @@ body.ui-hidden #canvas{ box-shadow:none; }
 #ui-controls .grp{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
 #ui-controls .sep{ width:100%; height:1px; background:var(--ui-line); margin:3px 0; }
 #ui-controls label{ color:var(--ui-mut); font-size:var(--fz-label);
-  text-transform:uppercase; letter-spacing:.06em; }
+  text-transform:uppercase; letter-spacing:.08em; }
 #ui-controls select,#ui-controls #ui-scrub{ flex:1; min-width:0; width:auto; }
 #ui-controls input[type=number]{ flex:1; min-width:0; width:auto; }
 #ui-controls #ui-wh{ gap:5px; }
@@ -185,6 +186,9 @@ select,input[type=number],input[type=text]{
   font:var(--fz-body)/1 var(--ui-font); outline:none; }
 input[type=number]{ width:62px; }
 select:focus,input:focus{ border-color:var(--ui-accent); }
+/* keyboard focus ring (pointer focus stays ring-free via :focus-visible) */
+.btn:focus-visible,.chip:focus-visible,select:focus-visible,input:focus-visible,
+.seg-btn:focus-visible,.fav:focus-visible{ outline:2px solid var(--ui-accent-soft); outline-offset:1px; }
 
 /* record progress bar */
 #recwrap{ position:relative; display:flex; }
@@ -270,7 +274,7 @@ body.ui-hidden #stage{ inset:0 !important; }
 
 /* progress scrubber */
 #ui-scrub{ width:140px; accent-color:var(--ui-accent); height:3px; }
-#scrub-grp .val{ width:40px; color:var(--ui-mut); font-size:var(--fz-val); }
+#scrub-grp .val{ width:40px; color:var(--ui-mut); font-size:var(--fz-val); font-variant-numeric:tabular-nums; }
 
 /* point-placing / paint controls */
 .ptsbar{ display:flex; gap:6px; margin-top:7px; flex-wrap:wrap; align-items:center; }
