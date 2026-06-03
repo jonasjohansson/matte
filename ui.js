@@ -285,7 +285,7 @@
       </div>
       <div class="uigroup">
         <h5>Playback</h5>
-        <div class="grp transport"><button class="btn ico" id="ui-play" title="play / pause">▶</button><button class="btn ico" id="ui-restart" title="restart from 0">⟳</button><button class="btn ico" id="ui-loop" title="loop playback">↻</button></div>
+        <div class="grp transport"><button class="btn ico" id="ui-play" title="play / pause">▶</button><button class="btn ico" id="ui-restart" title="restart from 0">⏮</button><button class="btn ico" id="ui-loop" title="loop playback">↻</button></div>
         <div class="grp" id="scrub-grp"><input type="range" id="ui-scrub" min="0" max="1" step="0.001" value="0" aria-label="scrub transition progress" title="scrub the transition (progress)"><span class="val" id="ui-scrub-val">0.00</span></div>
       </div>
       <div class="uigroup" id="ui-view">

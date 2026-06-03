@@ -22,8 +22,8 @@
   /* group accent hues — SINGLE SOURCE. Used by the controls-rail stripes/
      headings (CSS below) and, read via getComputedStyle, by the mode-column
      headers + Recent group + per-mode settings tint (ui.js). */
-  --hue-blue:#7fb4e8; --hue-green:#74d2a6; --hue-purple:#c79fe0;
-  --hue-amber:#e8b27f; --hue-pink:#e890b4; --hue-cyan:#9fd0e0;
+  --hue-blue:#8eb4d9; --hue-green:#81c5a5; --hue-purple:#c5a8d7;
+  --hue-amber:#d9b28e; --hue-pink:#dc9cb6; --hue-cyan:#a8cbd7;
   --hue-recent:#d8d8d8;
   --ui-font:"Spline Sans Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
   /* type scale — tight 3-step ramp (9 / 10 / 12) for consistency */
@@ -92,7 +92,7 @@ body.ui-hidden #canvas{ box-shadow:none; }
   letter-spacing:.12em; font-weight:700; background:var(--ui-glass);
   border-bottom:1px solid var(--ui-line-2); }
 .chip{
-  position:relative; display:block; width:100%; aspect-ratio:320/200; margin:0;
+  position:relative; display:block; width:100%; aspect-ratio:320/200; margin:0 0 -1px;
   border:1px solid var(--ui-line); border-radius:0; overflow:hidden;
   cursor:pointer; font:inherit; color:var(--ui-text); transition:border-color .12s, box-shadow .12s;
   background:var(--ui-bg2) center/cover no-repeat; filter:grayscale(1);
