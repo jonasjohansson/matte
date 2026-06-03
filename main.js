@@ -3161,6 +3161,27 @@ window.__engine = {
     if (typeof updateTransportLabels === 'function') updateTransportLabels();
   },
   togglePlay, restartPlayback, toggleLoop, startRecording,
+  // Bake hover-preview clips: loop every mode and record a short low-res matte
+  // of each as previews/mNN.mp4 (via the same recorder the user already uses).
+  // Run once in real Chrome (pick an output folder first, or it downloads each):
+  //   await window.__engine.bakePreviews()
+  async bakePreviews(opts = {}) {
+    const ids = (window.__modeNames ? Object.keys(window.__modeNames).map(Number) : [])
+      .filter((n) => !Number.isNaN(n)).sort((a, b) => a - b);
+    const W = opts.w || 256, H = opts.h || 160, dur = opts.duration || 2, fps = opts.fps || 15;
+    const saved = { mode: state.mode, outW: state.outW, outH: state.outH, customSize: state.customSize,
+                    duration: state.duration, exportFps: state.exportFps, exportSizeMode: state.exportSizeMode };
+    state.outW = W; state.outH = H; state.customSize = true; state.duration = dur;
+    state.exportFps = fps; state.exportSizeMode = 'src'; resizeCanvas();
+    for (const id of ids) {
+      state.mode = id; updateModeFolders(); advec.needsReset = true; particles.needsReset = true; restartPlayback();
+      await new Promise((r) => setTimeout(r, 250));
+      try { await startRecording({ filename: 'm' + String(id).padStart(2, '0') + '.mp4' }); }
+      catch (e) { console.warn('[bake] mode', id, 'failed', e); }
+    }
+    Object.assign(state, saved); resizeCanvas(); restartPlayback(); saveSession();
+    console.log('[bake] done — ' + ids.length + ' previews. Move the mNN.mp4 files into ./previews/');
+  },
   resize: resizeCanvas, save: saveSession,
   setPlacePoints, drawOriginPoints,
   clearPoints() { state.originPoints = []; drawOriginPoints(); restartPlayback(); },

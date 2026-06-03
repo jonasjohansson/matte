@@ -217,6 +217,20 @@
       c.style.backgroundImage=`url(thumbs/m${String(id).padStart(2,'0')}.png)`;
       c.onclick=()=>{E.setMode(id);selectMode(id);};
       c.querySelector('.fav').onclick=(e)=>{ e.stopPropagation(); toggleFav(id); };
+      // hover preview: lazy-load a looping low-res clip over the static thumb if
+      // one has been baked (previews/mNN.mp4). Missing/offline -> thumb stays.
+      let pv=null, tried=false;
+      c.addEventListener('mouseenter',()=>{
+        if(pv){ pv.play().catch(()=>{}); return; }
+        if(tried) return; tried=true;
+        const v=document.createElement('video');
+        v.className='chip-preview'; v.muted=true; v.loop=true; v.playsInline=true; v.preload='metadata';
+        v.src=`previews/m${String(id).padStart(2,'0')}.mp4`;
+        v.addEventListener('error',()=>v.remove());
+        v.addEventListener('loadeddata',()=>{ pv=v; if(c.matches(':hover')) v.play().catch(()=>{}); });
+        c.appendChild(v);
+      });
+      c.addEventListener('mouseleave',()=>{ if(pv) pv.pause(); });
       return c;
     }
     // (search removed — curate with the ★ Favourites group instead)

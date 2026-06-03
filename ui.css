@@ -98,6 +98,9 @@ body.ui-hidden #canvas{ box-shadow:none; }
   background:var(--ui-bg2) center/cover no-repeat; filter:grayscale(1);
 }
 .chip:hover{ border-color:var(--ui-line-2); }
+.chip-preview{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+  display:block; filter:grayscale(1); z-index:1; pointer-events:none; }
+.chip .nm, .chip .fav{ z-index:2; }
 #ui-right .preset-name{ flex:1; min-width:0; -webkit-appearance:none; appearance:none;
   background:var(--ui-bg2); color:var(--ui-text); border:1px solid var(--ui-line);
   border-radius:var(--r-sm); padding:0 8px; min-height:var(--ctl-h); font:var(--fz-body) var(--ui-font); }
