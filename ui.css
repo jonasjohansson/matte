@@ -25,7 +25,7 @@
   /* metrics */
   --r:6px; --r-sm:4px; --sp:8px; --sp-lg:14px; --ctl-h:30px;
   /* rail widths */
-  --left:264px; --modes:150px; --right:264px; --bottom:0px; --src:240px;
+  --left:264px; --modes:232px; --right:264px; --bottom:0px; --src:240px;
 }
 
 /* hide scrollbars (still scrollable) */
@@ -83,7 +83,7 @@ body.ui-hidden #canvas{ box-shadow:none; }
   letter-spacing:.12em; font-weight:700; background:var(--ui-glass);
   border-bottom:1px solid var(--ui-line-2); }
 .chip{
-  position:relative; display:block; width:100%; height:62px; margin:0 0 6px;
+  position:relative; display:block; width:100%; aspect-ratio:320/200; margin:0 0 6px;
   border:1px solid var(--ui-line); border-radius:var(--r-sm); overflow:hidden;
   cursor:pointer; font:inherit; color:var(--ui-text); transition:border-color .12s, box-shadow .12s;
   background:var(--ui-bg2) center/cover no-repeat; filter:grayscale(1);
@@ -209,12 +209,14 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 /* subtle grouped blocks in the controls rail. Each group carries a hue in --g
    (set per nth-of-type below); the background is a light translucent wash tinted
    with the hue so the block reads as its colour without going muddy-black. */
-#ui-controls .uigroup{ --g:var(--ui-line-2);
+#ui-controls .uigroup,#ui-globals .uigroup{ --g:var(--ui-line-2);
   background:color-mix(in srgb, var(--g) 13%, rgba(255,255,255,.06)); border:1px solid var(--ui-line);
   border-radius:var(--r); padding:10px; display:flex; flex-direction:column; gap:7px; }
-#ui-controls .uigroup h5{ margin:0 0 1px; color:var(--ui-faint); font-size:var(--fz-label);
+#ui-controls .uigroup h5,#ui-globals .uigroup h5{ margin:0 0 1px; color:var(--ui-faint); font-size:var(--fz-label);
   text-transform:uppercase; letter-spacing:.12em; font-weight:700; }
-#ui-controls .uigroup .grp{ width:100%; }
+#ui-controls .uigroup .grp,#ui-globals .uigroup .grp{ width:100%; }
+/* global controls (Origin/Vignette/Grade) relocated to the top of the mode rail */
+#ui-globals{ display:flex; flex-direction:column; gap:var(--sp); margin-bottom:var(--sp-lg); }
 #ui-controls #ui-size{ flex:1; }
 #ui-controls #ui-dur{ flex:1; min-width:0; }
 #ui-controls #ui-proj{ flex:1; min-width:0; }
@@ -227,7 +229,7 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
   font-size:9px; opacity:.6; transition:transform .15s; vertical-align:middle; }
 .folded > .fold-head::before{ transform:rotate(-90deg); }
 .folded > .fold-body{ display:none !important; }
-#ui-controls .fold-body{ display:flex; flex-direction:column; gap:7px; }
+#ui-controls .fold-body,#ui-globals .fold-body{ display:flex; flex-direction:column; gap:7px; }
 
 /* button bars that should fill the rail width (reset/randomize, role, vignette) */
 .ptsbar.split{ flex-wrap:nowrap; }
@@ -239,16 +241,16 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 .btn.ico{ min-height:var(--ctl-h); }
 
 /* per-group colour accents — the tinted background + heading carry the hue per
-   block (no left stripe). nth-of-type works because the .uigroup divs are the
-   only div children of #ui-controls (#ui-intro is a <section>).
-   Order: Output·Playback·View·Origin·Vignette. */
-#ui-controls .uigroup:nth-of-type(1){ --g:var(--hue-blue); }   /* Output (+export) */
+   block (no left stripe). Left rail (Output·Playback·View) by nth-of-type
+   (#ui-intro is a <section>, so it doesn't shift the count); the relocated
+   globals (Origin·Vignette·Grade, now in #ui-globals) are hued by ID. */
+#ui-controls .uigroup:nth-of-type(1){ --g:var(--hue-blue); }   /* Output */
 #ui-controls .uigroup:nth-of-type(2){ --g:var(--hue-green); }  /* Playback */
 #ui-controls .uigroup:nth-of-type(3){ --g:var(--hue-cyan); }   /* View */
-#ui-controls .uigroup:nth-of-type(4){ --g:var(--hue-purple); } /* Origin */
-#ui-controls .uigroup:nth-of-type(5){ --g:var(--hue-pink); }   /* Vignette */
-#ui-controls .uigroup:nth-of-type(6){ --g:var(--hue-amber); }  /* Grade */
-#ui-controls .uigroup h5{ color:var(--g); }
+#ui-globals #ui-origin{ --g:var(--hue-purple); }
+#ui-globals #ui-vignette{ --g:var(--hue-pink); }
+#ui-globals #ui-grade{ --g:var(--hue-amber); }
+#ui-controls .uigroup h5,#ui-globals .uigroup h5{ color:var(--g); }
 /* mode-grid group-header colours are set inline by ui.js (GROUP_COLORS), so a
    mode keeps its hue even as a duplicate chip in the Recent group. */
 #ui-modes .recent-chips{ display:block; }

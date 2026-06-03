@@ -318,10 +318,15 @@
         <p><strong>Ambient</strong> modes can run as a black→white <strong>reveal</strong> or a standalone <strong>loop</strong> (their settings panel). Recently exported modes collect under <strong>Recent</strong> at the top of the gallery. Click any heading to fold a panel; <strong>H</strong> or <strong>Tab</strong> hides the whole UI.</p>
       </section>`;
     document.body.appendChild(bar);
-    // Origin + Vignette are global (shared across modes) and live in the left
-    // controls rail (foldable like the other groups).
-    const originGroup=bar.querySelector('#ui-origin'), originBody=bar.querySelector('#origin-body');
-    const vignBody=bar.querySelector('#vign-body');
+    // Origin / Vignette / Grade are GLOBAL (shared across every mode). Relocate
+    // them out of the controls rail to the TOP of the mode rail, above the
+    // gallery — built in `bar` above, then moved here so their body-query refs
+    // stay valid. They remain foldable (wired below).
+    const globalsHost=document.createElement('div'); globalsHost.id='ui-globals';
+    ['#ui-origin','#ui-vignette','#ui-grade'].forEach(s=>{ const el=bar.querySelector(s); if(el) globalsHost.appendChild(el); });
+    left.insertBefore(globalsHost, left.firstChild);
+    const originGroup=document.querySelector('#ui-origin'), originBody=document.querySelector('#origin-body');
+    const vignBody=document.querySelector('#vign-body');
 
     // ── popovers (sources / presets / folder) ──
     const pop=document.createElement('div'); pop.id='ui-pop'; document.body.appendChild(pop);
@@ -359,11 +364,11 @@
     // Defaults (first visit / no saved state): mode column + Export/View start
     // collapsed; Output and Playback stay open. Key is versioned so the new
     // defaults apply once even for users with older saved fold state.
-    const FOLD_KEY='matte.folded.v4';
+    const FOLD_KEY='matte.folded.v5';
     let folded;
     { const stored=localStorage.getItem(FOLD_KEY);
       if(stored!=null){ try{ folded=new Set(JSON.parse(stored)); }catch(e){ folded=null; } }
-      if(!folded){ folded=new Set(['ctrl:View','ctrl:Export','ctrl:Vignette','ctrl:About']); MODES.forEach(([g])=>folded.add('mode:'+g)); } }
+      if(!folded){ folded=new Set(['ctrl:View','ctrl:Vignette','ctrl:Grade','ctrl:About']); MODES.forEach(([g])=>folded.add('mode:'+g)); } }
     const saveFold=()=>{ try{ localStorage.setItem(FOLD_KEY,JSON.stringify([...folded])); }catch(e){} };
     function makeFoldable(group,head,key,onToggle){
       const body=document.createElement('div'); body.className='fold-body';
@@ -372,7 +377,7 @@
       if(folded.has(key)) group.classList.add('folded');
       head.addEventListener('click',()=>{ const f=group.classList.toggle('folded'); if(f)folded.add(key); else folded.delete(key); if(onToggle)onToggle(f); saveFold(); });
     }
-    bar.querySelectorAll('.uigroup').forEach(g=>{ const h=g.querySelector('h5'); if(h) makeFoldable(g,h,'ctrl:'+h.textContent.trim()); });
+    [...bar.querySelectorAll('.uigroup'), ...globalsHost.querySelectorAll('.uigroup')].forEach(g=>{ const h=g.querySelector('h5'); if(h) makeFoldable(g,h,'ctrl:'+h.textContent.trim()); });
     // Mode column = accordion: opening one group folds the others (Recent is
     // independent and stays open alongside).
     const modeGroups=[...left.querySelectorAll('.mgroup')].filter(g=>!g.classList.contains('mgroup-recent'));
@@ -629,7 +634,7 @@
       if(E.restartPlayback)E.restartPlayback(); if(E.save)E.save();
     }
     // global grade on the matte (levels + brightness/contrast).
-    const gradeBody=bar.querySelector('#grade-body');
+    const gradeBody=document.querySelector('#grade-body');
     function buildGrade(){
       if(!gradeBody) return; gradeBody.innerHTML='';
       ['gradeBlack','gradeWhite','gradeGamma','gradeBright','gradeContrast'].forEach(k=>{ const w=widget(k); if(w) gradeBody.appendChild(w); });
