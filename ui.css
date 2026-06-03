@@ -253,7 +253,7 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 
 
 /* global show/hide of all rails (H or Tab); handle stays visible */
-body.ui-hidden #ui-controls, body.ui-hidden #ui-right, body.ui-hidden #ui-modes, body.ui-hidden #ui-sources{ display:none; }
+body.ui-hidden #ui-controls, body.ui-hidden #ui-right, body.ui-hidden #ui-modes{ display:none; }
 body.ui-hidden #stage{ inset:0 !important; }
 #ui-hide{ position:fixed; top:10px; right:10px; z-index:500; width:30px; height:30px;
   display:flex; align-items:center; justify-content:center; cursor:pointer;
@@ -306,19 +306,11 @@ body.ui-hidden #stage{ inset:0 !important; }
 select.mini{ background:var(--ui-bg2); color:var(--ui-text); border:1px solid var(--ui-line);
   font-size:var(--fz-val); padding:3px 5px; border-radius:var(--r-sm); min-height:0; font-family:inherit; }
 
-/* ── sources side panel (slides out just right of the controls rail) ── */
-#ui-sources{ position:fixed; top:0; bottom:0; left:var(--left); width:var(--src); z-index:308;
-  overflow-y:auto; padding:var(--sp-lg) 12px; background:var(--ui-glass);
-  backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
-  border-right:1px solid var(--ui-line); color:var(--ui-text);
-  font:var(--fz-body)/1.35 var(--ui-font);
-  transform:translateX(-100%); transition:transform .2s ease; }
-body.sources-open #ui-sources{ transform:translateX(0); }
-#src-host{ display:block; }
-#src-host .src-head{ display:flex; align-items:center; justify-content:space-between; margin:0 0 var(--sp); }
-#src-host .pop-title{ margin:0; color:var(--ui-mut); font-size:var(--fz-label);
-  text-transform:uppercase; letter-spacing:.1em; font-weight:700; }
-#src-host .src-close{ min-height:24px; padding:0 9px; }
+/* ── source images: inline inside the View group (no separate sidebar) ── */
+#src-host{ display:block; margin-top:var(--sp); border-top:1px solid var(--ui-line); padding-top:var(--sp); }
+#src-host .src-head{ display:flex; align-items:center; margin:0 0 var(--sp); }
+#src-host .pop-title{ margin:0; color:var(--ui-faint); font-size:var(--fz-label);
+  text-transform:uppercase; letter-spacing:.12em; font-weight:700; }
 #src-host #slot-bar,#src-host #library-section{ position:static; width:auto; }
 
 /* presets / folder popovers */

@@ -297,12 +297,11 @@
         <div class="grp transport"><button class="btn ico" id="ui-play" title="play / pause">▶</button><button class="btn ico" id="ui-restart" title="restart from 0">⟳</button><button class="btn ico" id="ui-loop" title="loop playback">↻</button></div>
         <div class="grp" id="scrub-grp"><input type="range" id="ui-scrub" min="0" max="1" step="0.001" value="0" aria-label="scrub transition progress" title="scrub the transition (progress)"><span class="val" id="ui-scrub-val">0.00</span></div>
       </div>
-      <div class="uigroup">
+      <div class="uigroup" id="ui-view">
         <h5>View</h5>
         <div class="grp"><button class="btn" id="ui-preview" title="show B/W matte or the colour result on A/B">Preview: Matte</button></div>
         <label class="barchk wide" title="invert the matte (white↔black)"><input type="checkbox" id="ui-inv">Invert matte</label>
         <button class="btn usesrc-btn" id="ui-usesrc" title="use the A/B images for the transition (off = pure matte)">Use source images</button>
-        <button class="btn" id="ui-opensrc" title="open the source-image library in a side panel">⊞ Source images</button>
         <button class="btn" id="ui-colourise" title="colourise the matte preview with a gradient image (dark→light maps across it). Preview only — the recorded matte stays black-and-white.">Colourise…</button>
       </div>
       <div class="uigroup" id="ui-origin"><h5>Origin</h5><div id="origin-body"></div></div>
@@ -330,26 +329,20 @@
       pop.style.left=Math.max(8, Math.min(window.innerWidth-pop.offsetWidth-8, r.left))+'px';
       pop.style.bottom=(window.innerHeight-r.top+8)+'px';
     }
-    document.addEventListener('click',(e)=>{ if(popOpen && !pop.contains(e.target) && !e.target.closest('#ui-sources')) closePop(); });
+    document.addEventListener('click',(e)=>{ if(popOpen && !pop.contains(e.target)) closePop(); });
 
-    // SOURCES: relocate the live #side DOM (slot bar + library) into its own
-    // slide-out panel that sits just right of the controls rail. Moving (not
-    // rebuilding) the nodes keeps all of main.js's existing listeners intact.
-    const srcPanel=document.createElement('div'); srcPanel.id='ui-sources';
+    // SOURCES: relocate the live #side DOM (slot bar + library) inline into the
+    // View group (no separate sidebar) — they flow below the View controls.
+    // Moving (not rebuilding) the nodes keeps main.js's existing listeners intact.
+    // Appended BEFORE the fold pass so they get wrapped into View's fold-body.
     const srcHost=document.createElement('div'); srcHost.id='src-host';
-    srcHost.innerHTML='<div class="src-head"><span class="pop-title">Source Images</span><button class="btn sm src-close" title="close panel">✕</button></div>';
+    srcHost.innerHTML='<div class="src-head"><span class="pop-title">Source Images</span></div>';
     ['slot-bar','library-section'].forEach(id=>{ const el=document.getElementById(id); if(el) srcHost.appendChild(el); });
-    srcPanel.appendChild(srcHost); document.body.appendChild(srcPanel);
-    // 'use sources' toggle (engine on/off) stays in the View group
+    bar.querySelector('#ui-view').appendChild(srcHost);
+    // 'use sources' toggle (engine on/off)
     { const u=bar.querySelector('#ui-usesrc');
       const syncUse=()=>{ const on=E.useSources; u.classList.toggle('on',on); u.textContent = on ? 'Using source images' : 'Use source images'; };
       u.onclick=()=>{ E.setUseSources(!E.useSources); syncUse(); }; syncUse(); }
-    // open / close the sources side panel
-    { const ob=bar.querySelector('#ui-opensrc');
-      const sync=()=>{ ob.classList.toggle('on', document.body.classList.contains('sources-open')); };
-      ob.onclick=()=>{ document.body.classList.toggle('sources-open'); sync(); };
-      srcHost.querySelector('.src-close').onclick=()=>{ document.body.classList.remove('sources-open'); sync(); };
-      sync(); }
 
     // ── fold / unfold groups (controls rail + mode column), persisted ──
     // Defaults (first visit / no saved state): mode column + Export/View start
@@ -712,7 +705,7 @@
         an.onclick=()=>{ const by=['random','warmth','brightness'][E.state.cellAnalyseBy||0];
           const n=E.analyseCells(by);
           if(n){ E.state.cellIgniteBy=4; if(E.restartPlayback)E.restartPlayback(); buildParams(m); }
-          else { alert('Load an image into slot A first (⊞ Source images), then Analyse.'); } };
+          else { alert('Load an image into slot A first (View → Source Images), then Analyse.'); } };
         ab.appendChild(an); paramsEl.appendChild(ab);
         const h=document.createElement('div'); h.className='hint sec-note';
         h.textContent='Set ignite by → analysed (A) to light the detected regions. Re-run Analyse after changing A or the analyse order.';
