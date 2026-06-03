@@ -4,6 +4,14 @@
    size/space/colour so the UI stays consistent. The WebGPU engine is untouched;
    Tweakpane lives off-screen as the side-effect registry. ── */
 
+/* UI typeface — Martian Mono (brutalist monospace, Evil Martians). Self-hosted
+   variable woff2 so it works offline via the service worker (which only caches
+   same-origin). One weight-axis file covers 400 body / 600·700 labels. */
+@font-face{
+  font-family:"Martian Mono"; font-style:normal; font-weight:100 800;
+  font-display:swap; src:url("./vendor/martian-mono-var.woff2") format("woff2");
+}
+
 :root{
   /* palette */
   --ui-bg:#0c0c0c; --ui-bg2:#161616; --ui-hover:#242424;
@@ -17,7 +25,7 @@
   --hue-blue:#7fb4e8; --hue-green:#74d2a6; --hue-purple:#c79fe0;
   --hue-amber:#e8b27f; --hue-pink:#e890b4; --hue-cyan:#9fd0e0;
   --hue-recent:#d8d8d8;
-  --ui-font:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --ui-font:"Martian Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
   /* type scale */
   --fz-label:9.5px;   /* uppercase section + field labels */
   --fz-body:11px;     /* controls, buttons, values */
@@ -154,7 +162,7 @@ body.ui-hidden #canvas{ box-shadow:none; }
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .row input[type=range]{ width:92px; flex-shrink:0; accent-color:var(--ui-accent); height:3px; }
 .row .val{ width:40px; flex-shrink:0; text-align:right; font-size:var(--fz-val);
-  color:var(--ui-text); font-variant-numeric:tabular-nums; }
+  color:var(--ui-text); font-variant-numeric:tabular-nums slashed-zero; }
 .row.check label{ display:flex; align-items:center; gap:7px; cursor:pointer;
   color:var(--ui-text); font-size:var(--fz-body); }
 .row.check input{ accent-color:var(--ui-accent); }
@@ -264,7 +272,7 @@ body.ui-hidden #stage{ inset:0 !important; }
 
 /* progress scrubber */
 #ui-scrub{ width:140px; accent-color:var(--ui-accent); height:3px; }
-#scrub-grp .val{ width:40px; color:var(--ui-mut); font-size:var(--fz-val); font-variant-numeric:tabular-nums; }
+#scrub-grp .val{ width:40px; color:var(--ui-mut); font-size:var(--fz-val); font-variant-numeric:tabular-nums slashed-zero; }
 
 /* point-placing / paint controls */
 .ptsbar{ display:flex; gap:6px; margin-top:7px; flex-wrap:wrap; align-items:center; }
