@@ -1918,55 +1918,10 @@ fGodray.addBinding(state, 'gdBeams',     { min: 0, max: 1, step: 0.01, label: 'b
 fGodray.addBinding(state, 'gdCloud',     { min: 0, max: 1, step: 0.01, label: 'break through cloud' });
 fGodray.addBinding(state, 'gdPulse',     { min: 0, max: 1, step: 0.01, label: 'pulse (in & out)' });
 
-function updateModeFolders() {
-  const m = state.mode;
-  const ambient = m >= 33 && m <= 39 && m !== 37;   // ambient generators (33-36,38,39)
-  // Reveal core / movement / advanced only apply to transition modes
-  bFromWithin.hidden = ambient;
-  bEdgeSoft.hidden = ambient;
-  fMove.hidden = ambient;
-  fAdv.hidden = ambient;
-  // Start points / paint: transition modes, Paint (37), and the ambient source
-  // modes that use a placed point (ripples 34, glare 35, godrays 39)
-  fPts.hidden = !(m <= 32 || m === 34 || m === 37);   // ripples(34) still uses placed sources; glare/godray now use sun sliders
-  // direction / source: bokeh, streaks, glare, godrays
-  fDir.hidden = !(m === 33 || m === 35 || m === 36 || m === 39);
-  // hide the whole Reveal folder for ambient modes that use none of its controls
-  fDis.hidden = (m === 33 || m === 36 || m === 38);
-  fAurora.hidden = state.mode !== 38;
-  fGodray.hidden = state.mode !== 39;
-  fAmbient.hidden = !(state.mode >= 33 && state.mode <= 36);  // bokeh/ripples/glare/streaks
-  fRim.hidden    = state.mode !== 1;
-  fPaper.hidden  = state.mode !== 2;
-  fBlooms.hidden = state.mode !== 3;
-  fDiff.hidden   = state.mode !== 4;
-  fSed.hidden    = state.mode !== 5;
-  fSalt.hidden   = state.mode !== 6;
-  fIris.hidden   = state.mode !== 7;
-  fBleed.hidden  = state.mode !== 8;
-  fRun.hidden    = state.mode !== 9;
-  fAdvec.hidden   = state.mode !== 10;
-  fAdvecG.hidden  = state.mode !== 11;
-  fAdvecC.hidden  = state.mode !== 12;
-  fAdvecB.hidden  = state.mode !== 13;
-  fAdvecS.hidden  = state.mode !== 14;
-  fWetEdge.hidden = state.mode !== 15;
-  fStroke.hidden    = state.mode !== 16;
-  fGlaze.hidden     = state.mode !== 17;
-  fEdgeFirst.hidden = state.mode !== 18;
-  fFlow.hidden      = state.mode !== 19;
-  fDabs.hidden      = state.mode !== 20;
-  fDensity.hidden   = state.mode !== 21;
-  fMold.hidden      = state.mode !== 22;
-  fForm.hidden      = state.mode !== 23;
-  fBloom.hidden     = state.mode !== 24;
-  fStage.hidden     = state.mode !== 25;
-  fMig.hidden       = state.mode !== 26;
-  fBurn.hidden      = state.mode !== 27;
-  fVideoMask.hidden = state.mode !== 28;
-  fMelt.hidden      = state.mode !== 29;
-  fLight.hidden     = state.mode !== 30;
-}
+// The legacy pane's per-mode folder visibility. The real per-mode params are
+// built by ui.js (buildParams), so this is now a no-op kept only because the
+// engine + ui call it on mode change.
+function updateModeFolders() {}
 
 const fDis = tabMode.addFolder({ title: 'Reveal', expanded: true });
 // — core: where it starts and how soft the edge is —
