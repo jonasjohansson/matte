@@ -26,11 +26,11 @@
   --hue-amber:#e8b27f; --hue-pink:#e890b4; --hue-cyan:#9fd0e0;
   --hue-recent:#d8d8d8;
   --ui-font:"Martian Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
-  /* type scale */
-  --fz-label:9.5px;   /* uppercase section + field labels */
-  --fz-body:11px;     /* controls, buttons, values */
-  --fz-val:10.5px;    /* numeric values, hints, .btn.sm, About prose */
-  --fz-title:13px;    /* mode name */
+  /* type scale — tight 3-step ramp (9 / 10 / 12) for consistency */
+  --fz-label:9px;     /* uppercase section + field labels */
+  --fz-body:10px;     /* controls, buttons */
+  --fz-val:10px;      /* numeric values, hints, .btn.sm (= body) */
+  --fz-title:12px;    /* mode name */
   /* metrics */
   --r:6px; --r-sm:4px; --sp-sm:4px; --sp:8px; --sp-lg:14px; --ctl-h:30px;
   /* rail widths */
