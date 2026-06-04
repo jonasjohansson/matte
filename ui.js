@@ -519,6 +519,21 @@
     },120);
 
     // ── params builder ──
+    // editable numeric readout: click + type a value (no spinner arrows); commits
+    // on Enter/blur, clamped to [mn,mx] and snapped to the step.
+    function makeVal(mn,mx,stp,dec,onset){
+      const v=document.createElement('input');
+      v.type='text'; v.className='val'; v.inputMode='decimal'; v.setAttribute('aria-label','value');
+      const fmt=x=>(+x).toFixed(dec);
+      v.set=x=>{ v.value=fmt(x); };
+      const commit=()=>{ let n=parseFloat(v.value); if(isNaN(n)){ return; }
+        n=Math.min(mx,Math.max(mn,n)); if(stp){ n=+( Math.round(n/stp)*stp ).toFixed(6); }
+        v.value=fmt(n); onset(n); };
+      v.addEventListener('change',commit);
+      v.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); commit(); v.blur(); } });
+      v.addEventListener('focus',()=>{ try{ v.select(); }catch(e){} });
+      return v;
+    }
     function widget(key, ov){
       const spec=P[key]; if(!spec) return null;
       const row=document.createElement('div'); row.className='row';
@@ -537,10 +552,11 @@
         se.value=st[key]; se.onchange=()=>{st[key]=isNaN(+se.value)?se.value:+se.value;}; return row;
       }
       const [label,mn,mx,stp]=spec; const dec=(stp+'').includes('.')?(stp+'').split('.')[1].length:0;
-      row.innerHTML=`<span class="lab">${cap(ov||label)}</span><input type="range" min="${mn}" max="${mx}" step="${stp}" aria-label="${label}"><span class="val"></span>`;
-      const r=row.querySelector('input'), v=row.querySelector('.val');
-      r.value=st[key]; v.textContent=(+st[key]).toFixed(dec);
-      r.oninput=()=>{st[key]=+r.value; v.textContent=(+r.value).toFixed(dec);}; return row;
+      row.innerHTML=`<span class="lab">${cap(ov||label)}</span><input type="range" min="${mn}" max="${mx}" step="${stp}" aria-label="${label}">`;
+      const r=row.querySelector('input[type=range]');
+      const v=makeVal(mn,mx,stp,dec,(n)=>{ st[key]=n; r.value=n; }); v.set(st[key]); row.appendChild(v);
+      r.value=st[key];
+      r.oninput=()=>{ st[key]=+r.value; v.set(r.value); }; return row;
     }
     function section(title,keys,dim,labels){
       const s=document.createElement('div'); s.className='psec'+(dim?' dim':''); s.innerHTML=`<h4>${cap(title)}</h4>`;
@@ -717,11 +733,12 @@
         const cs=document.createElement('div'); cs.className='psec'; cs.innerHTML='<h4>Column widths (px)</h4>';
         for(let i=0;i<nCols;i++){
           const row=document.createElement('div'); row.className='row';
-          row.innerHTML=`<span class="lab">col ${i+1}</span><input type="range" min="4" max="${axis}" step="1" aria-label="column ${i+1} px"><span class="val"></span>`;
-          const r=row.querySelector('input'), v=row.querySelector('.val'); const idx=i;
+          row.innerHTML=`<span class="lab">col ${i+1}</span><input type="range" min="4" max="${axis}" step="1" aria-label="column ${i+1} px">`;
+          const r=row.querySelector('input[type=range]'); const idx=i;
           const cur=(st.swipeColWidths[idx]>0)?st.swipeColWidths[idx]:eq;
-          r.value=cur; v.textContent=Math.round(cur);
-          r.oninput=()=>{ st.swipeColWidths[idx]=+r.value; v.textContent=Math.round(+r.value); };
+          const v=makeVal(4,axis,1,0,(n)=>{ st.swipeColWidths[idx]=n; r.value=n; }); v.set(cur); row.appendChild(v);
+          r.value=cur;
+          r.oninput=()=>{ st.swipeColWidths[idx]=+r.value; v.set(r.value); };
           cs.appendChild(row);
         }
         const eb=document.createElement('div'); eb.className='ptsbar split';
