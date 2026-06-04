@@ -414,10 +414,10 @@
     // 3-state cycle: 0 full UI · 1 selected mode's settings only · 2 nothing
     let uiState=0;
     const applyUI=()=>{
-      document.body.classList.toggle('ui-settings-only', uiState===1);
+      document.body.classList.toggle('ui-right-only', uiState===1);
       document.body.classList.toggle('ui-hidden', uiState===2);
       uiToggle.classList.toggle('on', uiState!==0);
-      uiToggle.title = uiState===0 ? 'hide panels — show only the mode settings (H)'
+      uiToggle.title = uiState===0 ? 'hide the left panel — keep modes + settings merged (H)'
                      : uiState===1 ? 'hide all panels (H)'
                      : 'show all panels (H)';
     };
