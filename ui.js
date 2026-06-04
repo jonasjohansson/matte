@@ -414,10 +414,16 @@
     // 3-state cycle: 0 full UI · 1 selected mode's settings only · 2 nothing
     let uiState=0;
     const applyUI=()=>{
-      document.body.classList.toggle('ui-right-only', uiState===1);
+      const merged = uiState===1;
+      // merged: fold the mode gallery (left/#ui-modes) INTO the settings column
+      // (#ui-right), after #params, so it's one scrolling sidebar. buildParams
+      // only rebuilds #params, so the moved gallery survives mode-switches.
+      if(merged && left.parentElement!==right) right.appendChild(left);
+      else if(!merged && left.parentElement===right) document.body.appendChild(left);
+      document.body.classList.toggle('ui-right-only', merged);
       document.body.classList.toggle('ui-hidden', uiState===2);
       uiToggle.classList.toggle('on', uiState!==0);
-      uiToggle.title = uiState===0 ? 'hide the left panel — keep modes + settings merged (H)'
+      uiToggle.title = uiState===0 ? 'merge modes into the settings column (H)'
                      : uiState===1 ? 'hide all panels (H)'
                      : 'show all panels (H)';
     };

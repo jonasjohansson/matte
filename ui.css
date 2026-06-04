@@ -269,10 +269,13 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 
 /* global show/hide of all rails (H or Tab); handle stays visible */
 body.ui-hidden #ui-controls, body.ui-hidden #ui-right, body.ui-hidden #ui-modes{ display:none; }
-/* right-only: hide the left controls; keep the mode gallery + settings merged
-   into one continuous right sidebar (drop the seam between them) */
+/* merged: hide the left controls; the gallery is moved inside #ui-right (by JS)
+   and flows below the settings as one single scrolling column. */
 body.ui-right-only #ui-controls{ display:none; }
-body.ui-right-only #ui-modes{ border-left:0; }
+body.ui-right-only #ui-right{ right:0; }
+body.ui-right-only #ui-modes{ position:static; width:auto; height:auto;
+  background:transparent; backdrop-filter:none; -webkit-backdrop-filter:none;
+  border-left:0; border-top:1px solid var(--ui-line); margin-top:var(--sp); padding-top:var(--sp); }
 body.ui-hidden #stage{ inset:0 !important; }
 #ui-hide{ position:fixed; top:10px; right:10px; z-index:500; width:30px; height:30px;
   display:flex; align-items:center; justify-content:center; cursor:pointer;
