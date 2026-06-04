@@ -98,8 +98,10 @@ body.ui-hidden #canvas{ box-shadow:none; }
   background:var(--ui-bg2) center/cover no-repeat; filter:grayscale(1);
 }
 .chip:hover{ border-color:var(--ui-line-2); }
+/* preview video only shows while hovering; otherwise the static thumb stays */
 .chip-preview{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
-  display:block; filter:grayscale(1); z-index:1; pointer-events:none; }
+  display:none; filter:grayscale(1); z-index:1; pointer-events:none; }
+.chip:hover .chip-preview{ display:block; }
 .chip .nm, .chip .fav{ z-index:2; }
 #ui-right .preset-name{ flex:1; min-width:0; -webkit-appearance:none; appearance:none;
   background:var(--ui-bg2); color:var(--ui-text); border:1px solid var(--ui-line);
