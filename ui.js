@@ -411,9 +411,19 @@
     // visible handle (top-right) makes it reversible even when everything is hidden.
     const uiToggle=document.createElement('button'); uiToggle.id='ui-hide'; uiToggle.title='show / hide panels (H)'; uiToggle.textContent='⊙';
     document.body.appendChild(uiToggle);
-    const toggleUI=()=>{ document.body.classList.toggle('ui-hidden'); uiToggle.classList.toggle('on',document.body.classList.contains('ui-hidden')); };
-    uiToggle.onclick=toggleUI;
-    window.addEventListener('keydown',e=>{ const t=e.target.tagName; if(t==='INPUT'||t==='SELECT'||t==='TEXTAREA') return; if(e.key==='Tab'||e.key==='h'||e.key==='H'){ e.preventDefault(); toggleUI(); }});
+    // 3-state cycle: 0 full UI · 1 selected mode's settings only · 2 nothing
+    let uiState=0;
+    const applyUI=()=>{
+      document.body.classList.toggle('ui-settings-only', uiState===1);
+      document.body.classList.toggle('ui-hidden', uiState===2);
+      uiToggle.classList.toggle('on', uiState!==0);
+      uiToggle.title = uiState===0 ? 'hide panels — show only the mode settings (H)'
+                     : uiState===1 ? 'hide all panels (H)'
+                     : 'show all panels (H)';
+    };
+    const cycleUI=()=>{ uiState=(uiState+1)%3; applyUI(); };
+    uiToggle.onclick=cycleUI;
+    window.addEventListener('keydown',e=>{ const t=e.target.tagName; if(t==='INPUT'||t==='SELECT'||t==='TEXTAREA') return; if(e.key==='Tab'||e.key==='h'||e.key==='H'){ e.preventDefault(); cycleUI(); }});
 
     // ── output size ──
     const SIZES=[['ELVERKET ALL · 8000×4373',[8000,4373]],['ELVERKET Panorama · 8000×3411',[8000,3411]],
