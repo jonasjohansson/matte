@@ -10,7 +10,7 @@
 // (below) so they no-op without surgical removal, and the two Tweakpane deps are
 // gone. The few preset/state helpers that lived alongside it are still used by
 // window.__engine and ui.js.
-import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
+// mp4-muxer is lazy-imported inside startRecording() (only needed when recording)
 import { SHADER, SIM_SHADER, INIT_SHADER } from './shader.js';
 import { IDB_NAME, IDB_STORE, IDB_LIB_STORE, idbOpen, idbGet, idbPut, idbClearAll, libList, libAdd, libDelete, makeThumb } from './idb.js';
 import { fitInfo, hexToRgb } from './util.js';
@@ -2141,6 +2141,12 @@ function finishRecordProgress(text, kind, ms) {
 
 async function startRecording(opts = {}) {
   if (recording) return;
+  // Lazy-load the muxer (only needed when recording) so its ~61 KiB stays off
+  // the initial page load. Same-origin + service-worker-precached, so it works
+  // offline once the shell is cached.
+  let Muxer, ArrayBufferTarget;
+  try { ({ Muxer, ArrayBufferTarget } = await import('mp4-muxer')); }
+  catch (e) { console.error('[record] could not load the muxer', e); finishRecordProgress('Recorder failed to load', 'error', 4000); return; }
   // Matte-first: record whatever the (always-sized) canvas shows — image-free
   // matte or A->B transition. No image requirement.
 
