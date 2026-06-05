@@ -1786,10 +1786,14 @@ fn mirrorMask(uv: vec2f) -> f32 {
   } else {
     d = max(abs(uv.x - 0.5), abs(uv.y - 0.5)) * 2.0;       // expanding square
   }
-  // organic front: break the expanding edge up with noise (reuses the shared
-  // organic/seed params so it stays clean at 0 and ragged toward 1).
-  let n = fbm(uv * 5.0 + p.seed * 0.13) - 0.5;
-  d = d + n * p.organic * 0.5;
+  // organic front: break the expanding edge up with noise. The noise is ramped
+  // in with distance (core stays pristine) so the reveal always nucleates at the
+  // EXACT centre and grows outward — organic=0 gives a perfectly straight/round
+  // front, higher values get progressively more ragged toward the edges.
+  //   organic = wave amount   maskScale = wave frequency
+  let core = smoothstep(0.0, 0.18, d);
+  let n = fbm(uv * (2.5 + p.maskScale * 2.5) + p.seed * 0.13) - 0.5;
+  d = d + n * p.organic * 0.5 * core;
   return clamp(d, 0.0, 1.0);
 }
 fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {

@@ -111,7 +111,7 @@
   // mode -> its own param keys
   const MK = {
     63:['swipeDir','swipeCols','swipeColW','swipeStagger','swipeSoft'],
-    64:['mirrorDir','organic'],
+    64:['mirrorDir','spread','organic','maskScale'],
     1:['rimWidth','rimDark'], 2:['paperAngle','paperAniso','paperGranulation','paperGrowth','paperFollow','paperPatches'],
     3:['bloomCount','bloomRate','bloomRim','bloomImageBias'], 4:['diffStrength','diffRadius'],
     5:['sedSource','sedDirection','sedBands','sedSoftness'], 6:['saltSource','saltImage','saltDensity','saltContrast','saltBias'],
