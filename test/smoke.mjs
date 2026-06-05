@@ -50,8 +50,11 @@ try {
 }
 if (errors.length) fails.push('init errors:\n  ' + errors.join('\n  '));
 
-// canonical mode id list straight from the gallery
-const ids = await page.evaluate(() => Object.keys(window.__modeNames || {}).map(Number).sort((a, b) => a - b));
+// canonical mode id list straight from the gallery. SMOKE_MODES=64,7 sweeps just
+// those (fast iteration on one changed mode); unset sweeps all.
+const allIds = await page.evaluate(() => Object.keys(window.__modeNames || {}).map(Number).sort((a, b) => a - b));
+const only = (process.env.SMOKE_MODES || '').split(',').map((s) => Number(s.trim())).filter((n) => !Number.isNaN(n));
+const ids = only.length ? allIds.filter((id) => only.includes(id)) : allIds;
 await page.evaluate(() => { document.body.classList.add('ui-hidden'); window.__tool.state.matteOutput = 1; window.__engine.setSize(640, 400); window.__engine.resize(); });
 
 let blank = 0;
