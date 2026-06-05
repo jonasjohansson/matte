@@ -1796,6 +1796,26 @@ fn mirrorMask(uv: vec2f) -> f32 {
   d = d + n * p.organic * 0.5 * core;
   return clamp(d, 0.0, 1.0);
 }
+fn doorMask(uv: vec2f) -> f32 {
+  // Pure geometric door — opens from the centre with NO organic noise, EVER, so
+  // it can never look ragged regardless of the shared organic param. Just a
+  // clean panel parting; only edge softness (spread) feathers the seam.
+  //   mirrorDir 0=double doors (L/R)  1=up/down  2=radial (iris)  3=diamond
+  let dir = u32(p.mirrorDir + 0.5);
+  var d: f32;
+  if (dir == 0u) {
+    d = abs(uv.x - 0.5) * 2.0;
+  } else if (dir == 1u) {
+    d = abs(uv.y - 0.5) * 2.0;
+  } else if (dir == 2u) {
+    var q = uv - vec2f(0.5); q.x = q.x * p.canvasAspect;
+    let diag = 0.5 * sqrt(p.canvasAspect * p.canvasAspect + 1.0);
+    d = length(q) / diag;
+  } else {
+    d = max(abs(uv.x - 0.5), abs(uv.y - 0.5)) * 2.0;
+  }
+  return clamp(d, 0.0, 1.0);
+}
 fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
   let n1 = fbm(uv * p.maskScale + p.seed * 0.13);
   let n2 = fbm(uv * p.maskScale * 2.3 + 17.0 + p.seed * 0.09);
@@ -2117,6 +2137,8 @@ fn frostMask(uv: vec2f) -> f32 {
     mask = swipeMask(uv);
   } else if (p.mode == 64u) {
     mask = mirrorMask(uv);
+  } else if (p.mode == 65u) {
+    mask = doorMask(uv);
   } else {
     let eA = edgeMag(texA, uv, p.scaleA, p.offsetA, p.validA, p.slotAColor);
     let eB = edgeMag(texB, uv, p.scaleB, p.offsetB, p.validB, p.slotBColor);

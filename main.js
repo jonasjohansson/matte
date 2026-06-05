@@ -1600,6 +1600,8 @@ const MODE_DEFAULTS = {
   // mirror expand (64): gate-from-black by default — organic off, edge tight so
   // it opens as a thin centre sliver rather than a soft bloom.
   64: { mirrorDir: 0, organic: 0, spread: 0.06, maskScale: 0.9 },
+  // door (65): clean panel parting — crisp seam, no organic involved at all.
+  65: { mirrorDir: 0, spread: 0.03 },
 };
 function resetModeDefaults(modeId) {
   const d = MODE_DEFAULTS[modeId];
@@ -3180,6 +3182,9 @@ window.__engine = {
     // the shared organic wobble off and the edge tight on entry, so it starts
     // fully black and opens as a thin centre sliver (opt INTO softness/organic).
     if (m === 64 && prev !== 64) { state.organic = 0; state.spread = 0.06; }
+    // door (65) is geometrically clean (ignores organic) — just snap the seam
+    // crisp on entry so it reads as a hard panel, not a soft fade.
+    if (m === 65 && prev !== 65) state.spread = 0.03;
     advec.needsReset = true; particles.needsReset = true;
     if (typeof syncPaintMode === 'function') syncPaintMode();
     restartPlayback(); saveSession();
