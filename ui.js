@@ -445,7 +445,12 @@
     whBox.insertAdjacentElement('afterend', sizeWarn);
     function syncSizeUI(){
       const idx=SIZES.findIndex(s=>Array.isArray(s[1])&&s[1][0]===st.outW&&s[1][1]===st.outH);
-      selSize.value=idx>=0?idx:(SIZES.length-1); wIn.value=Math.round(st.outW); hIn.value=Math.round(st.outH);
+      selSize.value=idx>=0?idx:(SIZES.length-1);
+      // don't clobber a field the user is mid-typing in (the 1.5s poll would
+      // otherwise reset their input every tick — can't type a multi-digit value)
+      const ae=document.activeElement;
+      if(ae!==wIn) wIn.value=Math.round(st.outW);
+      if(ae!==hIn) hIn.value=Math.round(st.outH);
       const longest=Math.max(st.outW,st.outH);
       if(longest>MAXTEX){ const sc=MAXTEX/longest;
         sizeWarn.textContent=`⚠ exceeds GPU limit (${MAXTEX}px) — renders at ${Math.round(st.outW*sc)}×${Math.round(st.outH*sc)}`;
