@@ -1597,6 +1597,9 @@ const MODE_DEFAULTS = {
   // are good starting points for each effect's character.
   48: { originX: 0.5, originY: 0.5, organic: 0.55, edges: 0.4, turbulence: 0.3, flow: 0.5, spread: 0.18, curve: 3, seed: 42 },
   49: { originX: 0.5, originY: 0.5, organic: 0.45, edges: 0.0, turbulence: 0.6, flow: 0.5, spread: 0.32, curve: 0, seed: 7 },
+  // mirror expand (64): gate-from-black by default — organic off, edge tight so
+  // it opens as a thin centre sliver rather than a soft bloom.
+  64: { mirrorDir: 0, organic: 0, spread: 0.06, maskScale: 0.9 },
 };
 function resetModeDefaults(modeId) {
   const d = MODE_DEFAULTS[modeId];
@@ -3171,7 +3174,12 @@ window.__engine = {
   },
   setPreview(scale) { state.previewScale = scale; resizeCanvas(); saveSession(); },
   setMode(m) {
+    const prev = state.mode;
     state.mode = m; updateModeFolders();
+    // mirror expand (64) reads best as a gate cracking open from black — snap
+    // the shared organic wobble off and the edge tight on entry, so it starts
+    // fully black and opens as a thin centre sliver (opt INTO softness/organic).
+    if (m === 64 && prev !== 64) { state.organic = 0; state.spread = 0.06; }
     advec.needsReset = true; particles.needsReset = true;
     if (typeof syncPaintMode === 'function') syncPaintMode();
     restartPlayback(); saveSession();
