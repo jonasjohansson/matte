@@ -86,7 +86,7 @@ struct Params {
   padBottom: f32, padLeft: f32, padRight: f32, gradeBright: f32,
   gradeContrast: f32, gradeBlack: f32, gradeWhite: f32, gradeGamma: f32,
   footageMask: f32, foliageDrift: f32, swipeCols: f32, swipeDir: f32,
-  swipeStagger: f32, swipeColW: f32, swipeSoft: f32, _pad2: f32,
+  swipeStagger: f32, swipeColW: f32, swipeSoft: f32, mirrorDir: f32,
   swipeW: array<vec4f, 4>,   // per-column width weights (mode 63), default 1 = equal
 };`;
 
@@ -1766,6 +1766,32 @@ fn swipeMask(uv: vec2f) -> f32 {
   m = m + n * p.swipeSoft * 0.5;
   return clamp(m, 0.0, 1.0);
 }
+fn mirrorMask(uv: vec2f) -> f32 {
+  // Centre-out mirror reveal: the matte opens from the middle of the frame and
+  // expands symmetrically toward the edges. Per-pixel reveal time = distance
+  // from the centre (low = reveals first), so the middle pops first and the
+  // outer edges fill in last, mirrored about the centre.
+  //   mirrorDir 0=left/right (vertical split)  1=up/down (horizontal split)
+  //             2=radial (circle)              3=diamond (square)
+  let dir = u32(p.mirrorDir + 0.5);
+  var d: f32;
+  if (dir == 0u) {
+    d = abs(uv.x - 0.5) * 2.0;                 // open across x, mirrored L/R
+  } else if (dir == 1u) {
+    d = abs(uv.y - 0.5) * 2.0;                 // open across y, mirrored U/D
+  } else if (dir == 2u) {
+    var q = uv - vec2f(0.5); q.x = q.x * p.canvasAspect;   // aspect-correct circle
+    let diag = 0.5 * sqrt(p.canvasAspect * p.canvasAspect + 1.0);
+    d = length(q) / diag;                      // 0 centre .. 1 far corner
+  } else {
+    d = max(abs(uv.x - 0.5), abs(uv.y - 0.5)) * 2.0;       // expanding square
+  }
+  // organic front: break the expanding edge up with noise (reuses the shared
+  // organic/seed params so it stays clean at 0 and ragged toward 1).
+  let n = fbm(uv * 5.0 + p.seed * 0.13) - 0.5;
+  d = d + n * p.organic * 0.5;
+  return clamp(d, 0.0, 1.0);
+}
 fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
   let n1 = fbm(uv * p.maskScale + p.seed * 0.13);
   let n2 = fbm(uv * p.maskScale * 2.3 + 17.0 + p.seed * 0.09);
@@ -2085,6 +2111,8 @@ fn frostMask(uv: vec2f) -> f32 {
     mask = clamp(1.0 - texFitLuma(uv), 0.0, 1.0);
   } else if (p.mode == 63u) {
     mask = swipeMask(uv);
+  } else if (p.mode == 64u) {
+    mask = mirrorMask(uv);
   } else {
     let eA = edgeMag(texA, uv, p.scaleA, p.offsetA, p.validA, p.slotAColor);
     let eB = edgeMag(texB, uv, p.scaleB, p.offsetB, p.validB, p.slotBColor);

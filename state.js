@@ -37,6 +37,7 @@ export const state = {
   // column-swipe transition (mode 63)
   swipeCols: 3, swipeDir: 0, swipeStagger: 0.5, swipeColW: 1, swipeSoft: 0.4,
   swipeColWidths: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  // per-column widths in px (0 = auto equal)
+  mirrorDir: 0,   // centre-out mirror reveal (mode 64): 0=L/R 1=U/D 2=radial 3=diamond
   // global grade on the final matte: levels (black/white/gamma) + brightness/contrast.
   gradeBright: 0.0, gradeContrast: 0.0, gradeBlack: 0.0, gradeWhite: 1.0, gradeGamma: 1.0,
   // custom transition dimensions (independent of source footage size).

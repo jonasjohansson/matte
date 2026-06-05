@@ -46,7 +46,7 @@ Desktop-only by design: touch devices get a "needs a desktop + WebGPU" notice
 | `util.js` | pure helpers (`fitInfo`, `hexToRgb`) |
 | `sw.js` / `manifest.json` | offline service worker / PWA manifest |
 | `vendor/` | locally-vendored, offline-precached assets (mp4-muxer ESM dep + the Spline Sans Mono variable woff2) |
-| `thumbs/` | baked mode-thumbnail PNGs (`m00.png`…`m63.png`) |
+| `thumbs/` | baked mode-thumbnail PNGs (`m00.png`…`m64.png`) |
 | `defaults/` | bundled default images (seed the library + Reset) |
 | `eval-src/` | local test images — gitignored, not deployed |
 

@@ -9,7 +9,7 @@
 //     by design (too large to bundle; SAM is an optional online enhancement)
 //
 // Bump VERSION whenever the precache list changes to evict the old cache.
-const VERSION = 'matte-v17';
+const VERSION = 'matte-v18';
 
 const PRECACHE = [
   './', './index.html', './manifest.json', './favicon.svg', './icon-192.png', './icon-512.png',
@@ -18,8 +18,8 @@ const PRECACHE = [
   './idb.js', './util.js', './recorder.js', './output.js', './particles.js',
   './vendor/mp4-muxer-5.1.5.mjs', './vendor/spline-sans-mono-var.woff2',
   './defaults/lofoten_A.jpg', './defaults/lofoten_B.jpg',
-  // mode thumbnails (m00–m63)
-  ...Array.from({ length: 64 }, (_, i) => i)
+  // mode thumbnails (m00–m64)
+  ...Array.from({ length: 65 }, (_, i) => i)
     .map(i => `./thumbs/m${String(i).padStart(2, '0')}.png`),
 ];
 

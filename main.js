@@ -760,6 +760,7 @@ function writeUniforms() {
   uboF32[284] = state.swipeStagger;
   uboF32[285] = state.swipeColW;
   uboF32[286] = state.swipeSoft;
+  uboF32[287] = state.mirrorDir;     // mode 64 centre-out direction
   // per-column widths (mode 63): swipeColWidths are PIXELS; send each as a
   // fraction of the across axis (width for up/down, height for left/right).
   // 0 (or unset) = auto equal share. 16 floats at 288-303.
@@ -2477,6 +2478,7 @@ const PRESET_KEYS = [
   'boundsEnable', 'boundsCx', 'boundsCy', 'boundsW', 'boundsH', 'boundsSoftness',
   'organic', 'edges', 'spread', 'maskScale', 'maskShift',
   'swipeCols', 'swipeDir', 'swipeStagger', 'swipeColW', 'swipeSoft', 'swipeColWidths',
+  'mirrorDir',
   'zoomA', 'panAx', 'panAy', 'zoomB', 'panBx', 'panBy',
   // movement / ambient / direction / grade / vignette — the look knobs the
   // current modes actually use (were missing, so presets couldn't capture them).
