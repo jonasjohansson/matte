@@ -2210,7 +2210,7 @@ fn frostMask(uv: vec2f) -> f32 {
   // Turbulence: domain-warped multi-octave noise fractures the reveal front into
   // organic, ink-in-water tendrils instead of a smooth glossy edge. Higher =
   // finer, more chaotic detail.
-  if (p.turbulence > 0.0001 && p.mode != 29u) {
+  if (p.turbulence > 0.0001 && p.mode != 29u && p.mode != 65u) {
     let sc = mix(3.0, 10.0, p.turbulence);
     // Aspect-correct so the ink cells stay isotropic (don't stretch) at any
     // canvas aspect ratio — e.g. the wide ELVERKET surfaces.
@@ -2225,7 +2225,7 @@ fn frostMask(uv: vec2f) -> f32 {
   }
   // Undulate: a slow, large-scale animated wave on the reveal front so any mode
   // breathes / dances over the loop (auroras in the sky), not just a one-way wipe.
-  if (p.undulate > 0.0001 && p.mode != 29u) {
+  if (p.undulate > 0.0001 && p.mode != 29u && p.mode != 65u) {
     let fp = p.t * 6.2831853;
     let u2 = vec2f(uv.x * p.canvasAspect, uv.y);
     let wave = fbm(u2 * 1.4 + vec2f(sin(fp) * 0.4, cos(fp * 0.8) * 0.4) + p.seed * 0.2);
