@@ -87,7 +87,7 @@ body.ui-hidden #canvas{ box-shadow:none; }
   backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
   border-left:1px solid var(--ui-line); font:var(--fz-body)/1.35 var(--ui-font); color:var(--ui-text); }
 .mgroup{ margin-bottom:0; }
-.mgroup h4{ position:sticky; top:0; z-index:2; margin:0; padding:10px 12px;
+.mgroup h2{ position:sticky; top:0; z-index:2; margin:0; padding:10px 12px;
   color:var(--ui-text); font-size:var(--fz-label); text-transform:uppercase;
   letter-spacing:.12em; font-weight:700; background:var(--ui-glass);
   border-bottom:1px solid var(--ui-line-2); }
@@ -123,8 +123,8 @@ body.ui-hidden #canvas{ box-shadow:none; }
 /* archived modes — de-emphasised */
 .mgroup-archive{ opacity:.5; }
 .mgroup-archive:hover{ opacity:1; }
-.mgroup-archive h4{ color:var(--ui-faint); }
-.mgroup-archive h4::after{ content:" · deprecated"; font-weight:400; letter-spacing:0; }
+.mgroup-archive h2{ color:var(--ui-faint); }
+.mgroup-archive h2::after{ content:" · deprecated"; font-weight:400; letter-spacing:0; }
 
 /* ── settings rail (mode settings; sits left of the globals + modes rails) ── */
 #ui-right{ --m:var(--ui-accent);   /* mode accent, set per-mode by ui.js selectMode */
@@ -144,7 +144,7 @@ body.ui-hidden #canvas{ box-shadow:none; }
 /* ── tint every control in the settings panel with the current mode colour ── */
 #ui-right .row input[type=range]{ accent-color:var(--m); }
 #ui-right .row.check input{ accent-color:var(--m); }
-#ui-right .psec h4{ color:var(--m); border-bottom-color:color-mix(in srgb, var(--m) 32%, transparent); }
+#ui-right .psec h2{ color:var(--m); border-bottom-color:color-mix(in srgb, var(--m) 32%, transparent); }
 #ui-right select:focus,#ui-right input:focus{ border-color:var(--m); }
 #ui-right .seg-btn.on{ background:var(--m); border-color:var(--m); color:#0a0a0a; }
 #ui-right .seg-btn:hover{ color:var(--m); }
@@ -155,7 +155,7 @@ body.ui-hidden #canvas{ box-shadow:none; }
 /* param sections + rows */
 .psec{ margin-bottom:var(--sp-lg); }
 .psec.dim{ display:none; }
-.psec h4{ margin:0 0 var(--sp); padding-bottom:5px; color:var(--ui-mut);
+.psec h2{ margin:0 0 var(--sp); padding-bottom:5px; color:var(--ui-mut);
   font-size:var(--fz-label); text-transform:uppercase; letter-spacing:.1em;
   font-weight:700; border-bottom:1px solid var(--ui-line); }
 .row{ display:flex; align-items:center; gap:var(--sp); margin-bottom:9px; }
@@ -224,7 +224,7 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
   background:color-mix(in srgb, var(--g) 11%, rgba(255,255,255,.04)); border:0;
   border-bottom:1px solid var(--ui-line); border-radius:0;
   padding:10px 12px; display:flex; flex-direction:column; gap:7px; }
-#ui-controls .uigroup h5,#ui-globals .uigroup h5{ margin:0 0 1px; color:var(--ui-faint); font-size:var(--fz-label);
+#ui-controls .uigroup h2,#ui-globals .uigroup h2{ margin:0 0 1px; color:var(--ui-faint); font-size:var(--fz-label);
   text-transform:uppercase; letter-spacing:.12em; font-weight:700; }
 #ui-controls .uigroup .grp,#ui-globals .uigroup .grp{ width:100%; }
 /* global controls (Origin/Vignette/Grade) relocated to the top of the mode rail */
@@ -260,7 +260,7 @@ select:focus,input:focus{ border-color:var(--ui-accent); }
 #ui-globals #ui-origin{ --g:var(--hue-purple); }
 #ui-globals #ui-vignette{ --g:var(--hue-pink); }
 #ui-globals #ui-grade{ --g:var(--hue-amber); }
-#ui-controls .uigroup h5,#ui-globals .uigroup h5{ color:var(--g); }
+#ui-controls .uigroup h2,#ui-globals .uigroup h2{ color:var(--g); }
 /* mode-grid group-header colours are set inline by ui.js (GROUP_COLORS), so a
    mode keeps its hue even as a duplicate chip in the Recent group. */
 #ui-modes .recent-chips{ display:block; }

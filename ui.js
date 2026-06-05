@@ -235,8 +235,8 @@
     }
     // (search removed — curate with the ★ Favourites group instead)
     // Favourites group: pinned starred modes (above Recent).
-    const favG=document.createElement('div'); favG.className='mgroup mgroup-fav'; favG.innerHTML='<h4>Favourites</h4>';
-    { const fh=favG.querySelector('h4'); fh.style.color='var(--hue-amber)';
+    const favG=document.createElement('div'); favG.className='mgroup mgroup-fav'; favG.innerHTML='<h2>Favourites</h2>';
+    { const fh=favG.querySelector('h2'); fh.style.color='var(--hue-amber)';
       fh.style.background=`color-mix(in srgb, var(--hue-amber) 16%, color-mix(in srgb, #fff 7%, var(--ui-glass)))`; }
     const favBody=document.createElement('div'); favBody.className='recent-chips'; favG.appendChild(favBody); left.appendChild(favG);
     function renderFavs(){
@@ -248,8 +248,8 @@
     }
     // Recent group: the most recently EXPORTED modes, newest first. Filled from
     // localStorage 'matte.exports' (written by main.js on each export).
-    const recentG=document.createElement('div'); recentG.className='mgroup mgroup-recent'; recentG.innerHTML='<h4>Recent</h4>';
-    { const rh=recentG.querySelector('h4'); rh.style.color=RECENT_COLOR;
+    const recentG=document.createElement('div'); recentG.className='mgroup mgroup-recent'; recentG.innerHTML='<h2>Recent</h2>';
+    { const rh=recentG.querySelector('h2'); rh.style.color=RECENT_COLOR;
       rh.style.background=`color-mix(in srgb, ${RECENT_COLOR} 16%, color-mix(in srgb, #fff 7%, var(--ui-glass)))`; }
     const recentBody=document.createElement('div'); recentBody.className='recent-chips';
     recentG.appendChild(recentBody); left.appendChild(recentG);
@@ -264,8 +264,8 @@
     renderRecent(); renderFavs();
     window.addEventListener('matte-export', renderRecent);
     MODES.forEach(([gname,items],gi)=>{
-      const g=document.createElement('div'); g.className='mgroup'+(gname==='Archive'?' mgroup-archive':''); g.innerHTML=`<h4>${gname}</h4>`;
-      const h4=g.querySelector('h4'); const gc=GROUP_COLORS[gi]||'var(--ui-text)';
+      const g=document.createElement('div'); g.className='mgroup'+(gname==='Archive'?' mgroup-archive':''); g.innerHTML=`<h2>${gname}</h2>`;
+      const h4=g.querySelector('h2'); const gc=GROUP_COLORS[gi]||'var(--ui-text)';
       h4.style.color=gc;
       h4.style.borderBottomColor=`color-mix(in srgb, ${gc} 33%, transparent)`;
       h4.style.background=`color-mix(in srgb, ${gc} 16%, color-mix(in srgb, #fff 7%, var(--ui-glass)))`;
@@ -283,7 +283,7 @@
     const bar=document.createElement('div'); bar.id='ui-controls';
     bar.innerHTML=`
       <div class="uigroup">
-        <h5>Output</h5>
+        <h2>Output</h2>
         <div class="grp"><select id="ui-size" aria-label="output resolution preset"></select></div>
         <label class="barchk wide" title="lock output to the source image aspect ratio (keeps the chosen resolution)"><input type="checkbox" id="ui-matchin">Match source aspect</label>
         <div class="grp" id="ui-wh"><label for="ui-w">size</label><input type="number" id="ui-w" min="2" aria-label="output width in pixels" title="output width (px)"><span class="unit">×</span><input type="number" id="ui-h" min="2" aria-label="output height in pixels" title="output height (px)"></div>
@@ -299,12 +299,12 @@
         <div class="grp"><button class="btn sm" id="ui-bake" title="record a short looping clip of every mode (saved to your folder as mNN.mp4) for the hover-previews. Pick a folder first.">Bake previews…</button></div>
       </div>
       <div class="uigroup">
-        <h5>Playback</h5>
+        <h2>Playback</h2>
         <div class="grp transport"><button class="btn ico" id="ui-play" title="play / pause">▶</button><button class="btn ico" id="ui-restart" title="restart from 0">⏮</button><button class="btn ico" id="ui-loop" title="loop playback">↻</button></div>
         <div class="grp" id="scrub-grp"><input type="range" id="ui-scrub" min="0" max="1" step="0.001" value="0" aria-label="scrub transition progress" title="scrub the transition (progress)"><span class="val" id="ui-scrub-val">0.00</span></div>
       </div>
       <div class="uigroup" id="ui-view">
-        <h5>View</h5>
+        <h2>View</h2>
         <div class="ptsbar split">
           <button class="btn" id="ui-preview" title="show B/W matte or the colour result on A/B">Preview: Matte</button>
           <button class="btn" id="ui-inv" title="invert the matte (white↔black)">Invert matte</button>
@@ -312,9 +312,9 @@
         <button class="btn" id="ui-colourise" title="colourise the matte preview with a gradient image (dark→light maps across it). Preview only — the recorded matte stays black-and-white.">Colourise…</button>
         <button class="btn usesrc-btn" id="ui-usesrc" title="use the A/B images for the transition (off = pure matte)">Use source images</button>
       </div>
-      <div class="uigroup" id="ui-origin"><h5>Origin</h5><div id="origin-body"></div></div>
-      <div class="uigroup" id="ui-vignette"><h5>Vignette</h5><div id="vign-body"></div></div>
-      <div class="uigroup" id="ui-grade"><h5>Grade</h5><div id="grade-body"></div></div>`;
+      <div class="uigroup" id="ui-origin"><h2>Origin</h2><div id="origin-body"></div></div>
+      <div class="uigroup" id="ui-vignette"><h2>Vignette</h2><div id="vign-body"></div></div>
+      <div class="uigroup" id="ui-grade"><h2>Grade</h2><div id="grade-body"></div></div>`;
     document.body.appendChild(bar);
     // Origin / Vignette / Grade are GLOBAL (shared across every mode). Relocate
     // them out of the controls rail to the TOP of the mode rail, above the
@@ -368,16 +368,16 @@
       if(folded.has(key)) group.classList.add('folded');
       head.addEventListener('click',()=>{ const f=group.classList.toggle('folded'); if(f)folded.add(key); else folded.delete(key); if(onToggle)onToggle(f); saveFold(); });
     }
-    [...bar.querySelectorAll('.uigroup'), ...globalsHost.querySelectorAll('.uigroup')].forEach(g=>{ const h=g.querySelector('h5'); if(h) makeFoldable(g,h,'ctrl:'+h.textContent.trim()); });
+    [...bar.querySelectorAll('.uigroup'), ...globalsHost.querySelectorAll('.uigroup')].forEach(g=>{ const h=g.querySelector('h2'); if(h) makeFoldable(g,h,'ctrl:'+h.textContent.trim()); });
     // Mode column = strict accordion: opening any group (Favourites/Recent
     // included) folds every other, so only one is ever open.
     const modeGroups=[...left.querySelectorAll('.mgroup')];
     modeGroups.forEach(g=>{
-      const h=g.querySelector('h4'); if(!h) return;
+      const h=g.querySelector('h2'); if(!h) return;
       makeFoldable(g,h,'mode:'+h.textContent.trim(), (isFolded)=>{
         if(isFolded) return;  // only collapse peers when THIS group just opened
         modeGroups.forEach(o=>{ if(o!==g && !o.classList.contains('folded')){
-          o.classList.add('folded'); folded.add('mode:'+o.querySelector('h4').textContent.trim()); }});
+          o.classList.add('folded'); folded.add('mode:'+o.querySelector('h2').textContent.trim()); }});
       });
     });
 
@@ -569,7 +569,7 @@
       r.oninput=()=>{ st[key]=+r.value; v.set(r.value); }; return row;
     }
     function section(title,keys,dim,labels){
-      const s=document.createElement('div'); s.className='psec'+(dim?' dim':''); s.innerHTML=`<h4>${cap(title)}</h4>`;
+      const s=document.createElement('div'); s.className='psec'+(dim?' dim':''); s.innerHTML=`<h2>${cap(title)}</h2>`;
       keys.forEach(k=>{const w=widget(k, labels&&labels[k]); if(w)s.appendChild(w);}); return s;
     }
 
@@ -692,7 +692,7 @@
       }
       // ── presets: save / recall a whole look (mode + all tuned params) ──
       if(E.presetOptions){
-        const ps=document.createElement('div'); ps.className='psec'; ps.innerHTML='<h4>Preset</h4>';
+        const ps=document.createElement('div'); ps.className='psec'; ps.innerHTML='<h2>Preset</h2>';
         const lr=document.createElement('div'); lr.className='row';
         const sel=document.createElement('select'); sel.setAttribute('aria-label','load preset');
         sel.innerHTML='<option value="">—</option>';
@@ -730,7 +730,7 @@
         const nCols=Math.max(1,Math.min(16,Math.round(st.swipeCols)));
         const axis=Math.round((st.swipeDir<2 ? st.outW : st.outH)||1920);
         const eq=Math.max(1,Math.round(axis/nCols));
-        const cs=document.createElement('div'); cs.className='psec'; cs.innerHTML='<h4>Column widths (px)</h4>';
+        const cs=document.createElement('div'); cs.className='psec'; cs.innerHTML='<h2>Column widths (px)</h2>';
         for(let i=0;i<nCols;i++){
           const row=document.createElement('div'); row.className='row';
           row.innerHTML=`<span class="lab">col ${i+1}</span><input type="range" min="4" max="${axis}" step="1" aria-label="column ${i+1} px">`;
@@ -756,7 +756,7 @@
                    54:['Foliage','load foliage clip…'],
                    62:['Footage source','load footage…'] };
       if(FOOT[m] && E.loadFoliageVideo){
-        const fs=document.createElement('div'); fs.className='psec'; fs.innerHTML=`<h4>${FOOT[m][0]}</h4>`;
+        const fs=document.createElement('div'); fs.className='psec'; fs.innerHTML=`<h2>${FOOT[m][0]}</h2>`;
         const has=E.hasFoliageVideo&&E.hasFoliageVideo();
         if(has && (m===39||m===54)){ const dw=widget('foliageDrift'); if(dw) fs.appendChild(dw); }  // sway/parallax
         const fb=document.createElement('div'); fb.className='ptsbar split';
