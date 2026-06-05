@@ -2234,8 +2234,13 @@ fn frostMask(uv: vec2f) -> f32 {
   // Spread the mask across the full [0,1] timeline so the reveal keeps arriving
   // as organic shapes right up to t=1, instead of the bulk crossing by ~0.7 and
   // overblowing to white early. (Masks tend to cluster mid-range otherwise.)
-  mask = clamp((mask - 0.1) / 0.78, 0.0, 1.0);
-  mask = clamp(mask + p.maskShift, 0.0, 1.0);
+  // Skipped for the centre-out geometric reveals (mirror 64 / door 65): their
+  // mask IS the distance from centre, and the -0.1 clip would collapse the
+  // central band to instant-reveal — they must grow from a true centre line.
+  if (p.mode != 64u && p.mode != 65u) {
+    mask = clamp((mask - 0.1) / 0.78, 0.0, 1.0);
+    mask = clamp(mask + p.maskShift, 0.0, 1.0);
+  }
   var mixT = clamp(smoothstep(mask - sp, mask + sp, t), 0.0, 1.0);
   if (p.mode == 29u) {
     // snap: a tiny reveal window so each cell ignites near-instantly. Edge
