@@ -99,7 +99,7 @@
     ['Reveal',[[0,'smooth'],[1,'pigment rim'],[7,'iris'],[15,'wet edge'],[53,'frost'],[63,'column swipe'],[64,'mirror expand'],[65,'door']]],
     ['Watercolor',[[2,'paper grain'],[3,'backrun blooms'],[4,'wet diffusion'],[5,'tonal sediment'],[6,'salt'],[8,'wet bleed'],[9,'pigment run'],[17,'tonal wash'],[24,'cauliflower bloom'],[25,'wet-stage'],[26,'migration']]],
     ['Painterly',[[16,'stroke-follow'],[22,'mold tendrils']]],
-    ['Light & burn',[[27,'paper scorch'],[30,'light bloom'],[48,'radial burst'],[49,'smoke ring']]],
+    ['Light & burn',[[27,'paper scorch'],[30,'light bloom'],[48,'radial burst'],[49,'smoke ring'],[66,'fog bloom'],[67,'fog sim']]],
     ['Ambient (loop)',[[33,'bokeh'],[34,'water ripples'],[35,'sun glare'],[36,'light streaks'],[38,'aurora'],[39,'godrays'],[50,'smoke / fog'],[52,'fog 2 (volumetric)'],[51,'fire / flames'],[41,'caustics'],[61,'caustics 2'],[42,'embers'],[46,'marble'],[47,'ink blooms'],[55,'ink in water'],[56,'sun flare + bokeh'],[54,'sun through trees'],[57,'water shimmer'],[59,'ink on paper'],[60,'nebula']]],
     ['Special',[[28,'video mask'],[32,'texture-source'],[31,'particles'],[37,'paint'],[62,'footage matte']]],
     ['Archive',[[10,'adv wet'],[11,'adv gravity'],[12,'adv curl'],[13,'adv brush'],[14,'adv seed'],[18,'edge underdraw'],[19,'painterly flow'],[20,'color dabs'],[21,'density grav'],[23,'formation'],[29,'lamp grid'],[58,'silk flow'],[44,'rain'],[45,'snow'],[40,'clouds'],[43,'mist']]],
@@ -177,7 +177,7 @@
     60:['turbulence','flow','undulate'],54:['turbulence'],55:['turbulence'],56:['turbulence'],58:['turbulence']};
 
   // relevance of the global groups per mode
-  const isTrans = m => (m<=32 && m!==31) || m===48 || m===49 || m===53; // reveal/movement/advanced apply
+  const isTrans = m => (m<=32 && m!==31) || m===48 || m===49 || m===53 || m===66 || m===67; // reveal/movement/advanced apply
   const REL = {
     reveal: m=>isTrans(m), movement: m=>isTrans(m)||m===50||m===51||m===54||m===55||m===56||m===58||m===60, advanced: m=>isTrans(m),
     points: m=>(m<=32&&m!==31)||m===34, dir: m=>[33,35,36,39,40,41,42,43,44,45,46,47,50].includes(m), vign: ()=>true,
@@ -556,26 +556,36 @@
     function widget(key, ov){
       const spec=P[key]; if(!spec) return null;
       const row=document.createElement('div'); row.className='row';
+      // Right-click any control -> reset that one parameter to its default. The
+      // engine owns the default lookup (per-mode > ambient > base); each branch
+      // wires a `reset` callback to push the value back into its own control UI.
+      const onReset=(apply)=>{ row.title='Right-click to reset to default';
+        row.addEventListener('contextmenu',(e)=>{ e.preventDefault();
+          const d=E.resetParam?E.resetParam(key):undefined; if(d!==undefined) apply(d); }); };
       if(spec.t==='check'){ row.classList.add('check');
         row.innerHTML=`<label><input type="checkbox"> ${cap(ov||spec.label)}</label>`;
-        const cb=row.querySelector('input'); cb.checked=!!st[key]; cb.onchange=()=>{st[key]=cb.checked;}; return row;
+        const cb=row.querySelector('input'); cb.checked=!!st[key]; cb.onchange=()=>{st[key]=cb.checked;};
+        onReset(d=>{ cb.checked=!!d; }); return row;
       }
       if(spec.t==='color'){
         row.innerHTML=`<span class="lab">${cap(ov||spec.label)}</span><input type="color" aria-label="${spec.label}">`;
-        const ci=row.querySelector('input'); ci.value=st[key]||'#ffffff'; ci.oninput=()=>{st[key]=ci.value;}; return row;
+        const ci=row.querySelector('input'); ci.value=st[key]||'#ffffff'; ci.oninput=()=>{st[key]=ci.value;};
+        onReset(d=>{ ci.value=d||'#ffffff'; }); return row;
       }
       if(spec.t==='select'){
         row.innerHTML=`<span class="lab">${cap(ov||spec.label)}</span><select aria-label="${spec.label}"></select>`;
         const se=row.querySelector('select');
         Object.entries(spec.opts).forEach(([l,v])=>{const o=document.createElement('option');o.value=v;o.textContent=cap(l);se.appendChild(o);});
-        se.value=st[key]; se.onchange=()=>{st[key]=isNaN(+se.value)?se.value:+se.value;}; return row;
+        se.value=st[key]; se.onchange=()=>{st[key]=isNaN(+se.value)?se.value:+se.value;};
+        onReset(d=>{ se.value=d; }); return row;
       }
       const [label,mn,mx,stp]=spec; const dec=(stp+'').includes('.')?(stp+'').split('.')[1].length:0;
       row.innerHTML=`<span class="lab">${cap(ov||label)}</span><input type="range" min="${mn}" max="${mx}" step="${stp}" aria-label="${label}">`;
       const r=row.querySelector('input[type=range]');
       const v=makeVal(mn,mx,stp,dec,(n)=>{ st[key]=n; r.value=n; }); v.set(st[key]); row.appendChild(v);
       r.value=st[key];
-      r.oninput=()=>{ st[key]=+r.value; v.set(r.value); }; return row;
+      r.oninput=()=>{ st[key]=+r.value; v.set(r.value); };
+      onReset(d=>{ r.value=d; v.set(d); }); return row;
     }
     function section(title,keys,dim,labels){
       const s=document.createElement('div'); s.className='psec'+(dim?' dim':''); s.innerHTML=`<h2>${cap(title)}</h2>`;
@@ -792,7 +802,13 @@
         paramsEl.appendChild(h);
       }
 
-      paramsEl.appendChild(section('Reveal',['spread'],!REL.reveal(m)));
+      if(m===67){
+        const h=document.createElement('div'); h.className='hint sec-note';
+        h.textContent='Press ▶ play — this is a LIVE fluid sim: density is emitted at the centre and pours/rolls outward, building up over the clip. Scrubbing jumps are approximate; let it run (or record) to see the real result.';
+        paramsEl.appendChild(h);
+      }
+      const revLabels = m===67 ? {spread:'persistence'} : null;
+      paramsEl.appendChild(section('Reveal',['spread'],!REL.reveal(m),revLabels));
       // ambient modes repurpose the movement params and relabel them in context —
       // only the keys a mode actually reads are shown (others would be dead sliders).
       const moveLabels = m===50 ? {turbulence:'billow',flow:'drift speed',undulate:'sway'}
@@ -801,16 +817,26 @@
         : m===58 ? {turbulence:'flow / curl'}
         : m===56 ? {turbulence:'dapple / foliage'}
         : m===60 ? {turbulence:'swirl',flow:'star glow',undulate:'dust lanes'}
+        : m===66 ? {turbulence:'billow / fray',flow:'pour speed',undulate:'rise'}
+        : m===67 ? {turbulence:'vortex strength',flow:'pour speed',undulate:'rise'}
         : m===54 ? {turbulence:'canopy density'} : null;
       // per-mode movement keys: full set for transitions; only the used ones for
-      // ambient modes (the rest are dead for those generators).
-      const moveKeys = (!isTrans(m) && AMB_MOVE[m]) ? AMB_MOVE[m] : ['turbulence','flow','undulate','animate'];
+      // ambient modes (the rest are dead for those generators). Fog bloom/sim (66/67)
+      // read turbulence + flow + undulate (relabelled "rise").
+      const moveKeys = (!isTrans(m) && AMB_MOVE[m]) ? AMB_MOVE[m]
+        : (m===66 || m===67) ? ['turbulence','flow','undulate']
+        : ['turbulence','flow','undulate','animate'];
       paramsEl.appendChild(section('Movement',moveKeys,!REL.movement(m),moveLabels));
       { const dk = DIRK[m] || (REL.dir(m) ? ['driftAngle','driftAmount','sunX','sunY','streakMove'] : []);
         const dirLabels = m===50 ? {driftAngle:'comes from',driftAmount:'fog ↔ plume'}
           : m===52 ? {driftAngle:'wind',driftAmount:'light',sunX:'light x',sunY:'light y'} : null;
         if (dk.length) paramsEl.appendChild(section('Direction / source', dk, false, dirLabels)); }
-      paramsEl.appendChild(section('Advanced',['originX','originY','maskScale','curve','seed','maskShift','organic','edges'],!REL.advanced(m)));
+      const adv = (m===66) ? { keys:['originX','originY','maskScale','organic','edges','seed'],
+            labels:{originX:'centre x',originY:'centre y',maskScale:'fog scale',organic:'density',edges:'edge feather'} }
+        : (m===67) ? { keys:['originX','originY','maskScale','organic','edges','seed'],
+            labels:{originX:'emitter x',originY:'emitter y',maskScale:'detail scale',organic:'density',edges:'emitter size'} }
+        : { keys:['originX','originY','maskScale','curve','seed','maskShift','organic','edges'], labels:null };
+      paramsEl.appendChild(section('Advanced',adv.keys,!REL.advanced(m),adv.labels));
     }
     function selectMode(id){
       left.querySelectorAll('.chip').forEach(c=>{ const on=+c.dataset.mode===id; c.classList.toggle('sel',on); c.setAttribute('aria-pressed',String(on)); });

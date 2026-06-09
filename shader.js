@@ -1958,6 +1958,78 @@ fn smokeRingMask(uv: vec2f) -> f32 {
   return clamp(r, 0.0, 1.0);
 }
 
+// mode 66 — fog bloom: the SAME rolling parallax-fog field as "smoke / fog" (mode
+// 50, the look that reads best), but instead of drifting in from a wind direction
+// it drifts RADIALLY OUTWARD from the origin and is gated by a centre-out growth
+// envelope, so the exact fog you like pours out from a point over the timeline.
+// Built for the ELVERKET multi-surface UV: set originX/Y per-surface to the shared
+// room centre so the FLOOR + walls read as one continuous outflow.
+//   originX/Y = pour centre   organic = coverage / density   maskScale = fog scale
+//   flow = roll / pour speed   turbulence = billow / curl   spread = edge softness
+//   edges = growth-edge feather   seed = variation
+fn fogBloomField(uv: vec2f) -> f32 {
+  let cen = vec2f(p.originX, p.originY);
+  var q = uv; q.x = q.x * p.canvasAspect;
+  var dc = uv - cen; dc.x = dc.x * p.canvasAspect;
+  let diag = 0.5 * sqrt(p.canvasAspect * p.canvasAspect + 1.0);
+  let r = length(dc) / diag;                                  // 0 centre .. ~1 corner
+  let rdir = select(dc / max(length(dc), 1e-5), vec2f(0.0, 0.0), length(dc) < 1e-5);
+
+  let sc = mix(1.0, 4.0, clamp(p.maskScale / 4.0, 0.0, 1.0)); // ambSize-equiv
+  let churn = p.t * 6.2831853 * (0.05 + p.flow * 0.35);       // in-place morph
+  // ORGANIC radial drift OUTWARD (a 360° fog machine): perturb the pure-radial
+  // direction with a slow low-frequency noise vector so the fog pours out in
+  // irregular meandering tongues (and at varying speeds) rather than a clean radial
+  // fan — turbulence sets how much it wanders. Plus an upward RISE bias (undulate).
+  // Sampling noise at coord+offset moves features OPPOSITE the offset, so outward =
+  // -odir and up (y=0 is the top) = +y in the offset.
+  let owarp = vec2f(fbm(q * 1.3 + churn * 0.10 + p.seed * 0.2),
+                    fbm(q * 1.3 - churn * 0.08 + 9.0)) - vec2f(0.5);
+  let odir = rdir + owarp * (0.5 + p.turbulence * 1.3);
+  let drift = -odir * (p.t * 6.2831853) * (0.06 + p.flow * 0.6)
+            + vec2f(0.0, (p.t * 6.2831853) * p.undulate * 0.6);
+
+  var s = q * sc;
+  // billow warp + 90°-rotated swirl (curl-ish eddies) — identical to ambSmoke.
+  let warpAmt = 0.6 + p.turbulence * 1.6;
+  let wf = vec2f(fbm(s * 0.6 + churn * 0.12 + 3.0),
+                 fbm(s * 0.6 - churn * 0.09 + 8.0)) - vec2f(0.5);
+  let swirl = vec2f(-wf.y, wf.x) * (0.4 + p.turbulence * 1.4);
+  // parallax depth layers — the heart of the rolling-fog motion.
+  var dens = 0.0; var amp = 0.6; var wsum = 0.0;
+  for (var i = 0; i < 3; i = i + 1) {
+    let fi = f32(i);
+    let ls = s * (1.0 + fi * 0.6) + drift * (0.5 + fi * 0.6)
+           + wf * warpAmt + swirl * (0.5 + fi * 0.4)
+           + vec2f(fi * 4.7, fi * 2.3) + vec2f(0.0, fi * churn * 0.35);
+    dens = dens + amp * fbm(ls);
+    wsum = wsum + amp; amp = amp * 0.55;
+  }
+  dens = dens / wsum;
+  // erode edges into wisps with a finer octave (ambSmoke's detail term).
+  let detail = fbm(s * 3.4 + drift * 1.6 + churn * 0.25 + 17.0);
+  dens = dens - (1.0 - detail) * 0.12;
+  // RADIAL bank: denser at the centre, thinning outward (replaces the directional
+  // "comes-from" bank), so it reads as a source pouring out.
+  dens = dens + 0.45 * (0.5 - r);
+  // soft, low-contrast, translucent shaping — ambSmoke's mapping.
+  let cov = mix(0.52, 0.18, p.organic);
+  let soft = mix(0.18, 0.5, p.spread);
+  var v = smoothstep(cov - 0.5 * soft, cov + soft, dens);
+
+  // ---- centre-out growth envelope (one-shot pour) ----
+  // R starts NEGATIVE so the frame is truly empty at t=0, then grows past the
+  // corners by t=1 — the fog pours out from nothing rather than starting as a blob.
+  let R = clamp(p.t, 0.0, 1.0) * 1.5 - 0.06;
+  let feat = mix(0.1, 0.6, clamp(p.edges * 0.5 + 0.5, 0.0, 1.0));
+  // organic front: fine wisps from the density + big slow lobes from a low-frequency
+  // octave, so the advancing edge is lobed + wispy, never a clean circle.
+  let lobe = (fbm(q * 0.9 + churn * 0.15 + p.seed * 0.3) - 0.5) * mix(0.12, 0.4, p.turbulence);
+  let jag = (dens - 0.5) * mix(0.1, 0.45, p.turbulence) + lobe;
+  let env = 1.0 - smoothstep(R - feat, R + feat, r + jag);
+  return clamp(v * env, 0.0, 1.0);
+}
+
 // Standalone variants of modes 48/49 are LOOPING versions of the very same
 // reveal: the identical filament-burst / smoky-lobed shape, breathing in and out
 // over the loop instead of sweeping once. So the standalone reads as the same
@@ -2032,6 +2104,37 @@ fn frostMask(uv: vec2f) -> f32 {
   // texture each frame; here we just sample and present it.
   if (p.mode >= 10u && p.mode <= 14u) {
     return vec4f(textureSampleLevel(advState, samp, uv, 0.0).rgb * padMask, 1.0);
+  }
+  // mode 67 — fog sim: the real density-advection solver gives the large-scale
+  // SHAPE + organic outward GROWTH (state texture); on top we carve high-frequency
+  // internal STRUCTURE — a contrasty domain-warped fbm with real dark voids — so the
+  // fog reads as countless dense veins and holes, not one solid cloud. The structure
+  // drifts outward with the sim so the darkness churns rather than sitting static.
+  if (p.mode == 67u) {
+    let dd = textureSampleLevel(advState, samp, uv, 0.0).r;          // sim density (shape + growth)
+    var q = uv; q.x = q.x * p.canvasAspect;
+    var dc = uv - vec2f(p.originX, p.originY); dc.x = dc.x * p.canvasAspect;
+    let rdir = select(dc / max(length(dc), 1e-5), vec2f(0.0, 0.0), length(dc) < 1e-5);
+    let sc = mix(3.0, 10.0, clamp(p.maskScale / 4.0, 0.0, 1.0));
+    let dr = -rdir * p.t * 0.4 + p.seed * 0.2;                       // structure churns OUTWARD (offset is inward)
+    let w = vec2f(fbm(q * sc * 0.5 + dr + 3.0), fbm(q * sc * 0.5 - dr + 8.0)) - vec2f(0.5);
+    var structure = fbm(q * sc + w * (1.0 + p.turbulence * 1.5) + dr);
+    // soft, HAZY internal variation: gentle veins, but the voids are lifted toward
+    // translucent haze (not hard holes) so it reads foggy/atmospheric like fog bloom.
+    let veins = smoothstep(0.28, 0.82, structure);
+    let haze = mix(veins, 1.0, 0.45);
+    let coverage = 1.0 - exp(-max(dd, 0.0) * mix(1.2, 3.0, p.organic));  // softer, translucent
+    // centre-out growth gate so the fog POURS outward over the whole clip and starts
+    // from NOTHING (R begins negative) instead of the emitter filling the frame in a
+    // few seconds and sitting full. The edge is frayed by the structure so it creeps
+    // organically rather than as a clean expanding ring.
+    let diag = 0.5 * sqrt(p.canvasAspect * p.canvasAspect + 1.0);
+    let rr = length(dc) / diag;
+    let Rg = clamp(p.t, 0.0, 1.0) * 1.5 - 0.06;
+    let jagg = (structure - 0.5) * 0.5;
+    let reachg = 1.0 - smoothstep(Rg - 0.28, Rg + 0.28, rr + jagg);
+    let v = coverage * haze * reachg;                               // hazy fog + gate the pour
+    return vec4f(vec3f(clamp(v, 0.0, 1.0)) * padMask, 1.0);
   }
 
   // Stretch t so the per-pixel smoothstep window (mask±spread) is fully
@@ -2643,17 +2746,20 @@ fn frostMask(uv: vec2f) -> f32 {
   else if (p.mode == 60u) { ambF = ambNebula(uv); }
   else if (p.mode == 61u) { ambF = ambCaustics2(uv); }
   else if (p.mode == 62u) { ambF = ambFootageMatte(uv); }
+  else if (p.mode == 66u) { ambF = fogBloomField(uv); }
   // modes 48/49 act as standalone looping fields when the role toggle is set;
   // otherwise they stay on the normal reveal path above (ambF left at -1).
   else if (p.mode == 48u && p.ambRole >= 0.5) { ambF = radialBurstField(uv); }
   else if (p.mode == 49u && p.ambRole >= 0.5) { ambF = smokeRingField(uv); }
-  if (ambF >= 0.0 && p.mode != 34u) { ambF = ambPointBias(uv, ambF); }
+  if (ambF >= 0.0 && p.mode != 34u && p.mode != 66u) { ambF = ambPointBias(uv, ambF); }
   if (ambF >= 0.0) {
     // ambRole 0 = REVEAL: a threshold sweeps high->low over t so the field goes
     // black (t=0) -> white (t=1), the bright parts of the pattern crossing first.
     // This is a real B/W transition matte and works WITH OR WITHOUT images (with
     // A+B it also dissolves A->B). ambRole 1 = standalone looping field.
-    if (p.ambRole < 0.5 && p.mode != 62u) {
+    // Mode 66 (fog bloom) always emits its translucent grayscale field directly —
+    // it bakes its own centre-out growth, so it must not go through the A/B sweep.
+    if (p.ambRole < 0.5 && p.mode != 62u && p.mode != 66u) {
       let sft = mix(0.05, 0.4, p.ambSoft);
       var fld = ambF;
       // origin from placed points: subtract a distance ramp so areas near the
@@ -2815,6 +2921,48 @@ fn curlField(uv: vec2f) -> vec2f {
   let dims = vec2f(textureDimensions(stateIn));
   let px = 1.0 / dims;
 
+  // ---- mode 67: real semi-Lagrangian DENSITY ADVECTION (fog sim) ----
+  // A density field with memory (this ping-pong texture) carried each step by a
+  // DIVERGENCE-FREE velocity = radial outward + curl-noise vortices. A central
+  // emitter injects density; low dissipation + outflow balance it. This is genuine
+  // fluid behaviour — mass transport, accumulation, mushrooming — accumulated over
+  // the many steps the driver runs, with no pressure solve (the velocity is
+  // divergence-free by construction, so fog still rolls/folds like a real sim).
+  //   originX/Y = emitter   organic = emit density   maskScale = vortex scale
+  //   flow = pour / advection speed   turbulence = vortex strength
+  //   spread = persistence (low dissipation)   edges = emitter radius   seed = variation
+  if (p.mode == 67u) {
+    let asp = p.canvasAspect;
+    var dca = vec2f((uv.x - p.originX) * asp, uv.y - p.originY);  // aspect-correct offset from centre
+    let r = length(dca);
+    let rdir = select(dca / max(r, 1e-5), vec2f(0.0, 0.0), r < 1e-5);
+    // curl-noise velocity (curl of an fbm potential -> divergence-free vortices)
+    let cs = mix(1.5, 5.0, clamp(p.maskScale / 4.0, 0.0, 1.0));
+    let an = p.t * (0.1 + p.flow * 0.4);
+    let e = 0.01;
+    let pos = vec2f(uv.x * asp, uv.y) * cs + an;
+    let cx = fbm(pos + vec2f(0.0, e)) - fbm(pos - vec2f(0.0, e));
+    let cy = fbm(pos + vec2f(e, 0.0)) - fbm(pos - vec2f(e, 0.0));
+    let curl = vec2f(cx, -cy) / (2.0 * e);
+    // strong OUTWARD radial push (360° fog machine); curl only adds rolling detail,
+    // it must not dominate or the flow reads as swirling/sucking inward.
+    var vel = rdir * (1.1 + p.flow * 1.8) + curl * (0.2 + p.turbulence * 1.0);
+    vel.y = vel.y - (0.25 + p.undulate * 1.6);            // upward RISE bias (undulate); up is -y
+    let velUV = vec2f(vel.x / asp, vel.y);                 // back to uv space for the trace
+    let dt = 0.0022 * (0.5 + p.flow);                      // small advection per step
+    let prev = textureSampleLevel(stateIn, samp, uv - velUV * dt, 0.0).r;
+    let emitRad = mix(0.03, 0.18, clamp(p.edges * 0.5 + 0.5, 0.0, 1.0));
+    // STRUCTURED source: modulate the emitter by noise so density is born in organic
+    // clumps (not a smooth disc) — those clumps then advect/roll outward, and the
+    // gaps between them carry through as the dark voids real fog has.
+    let emitN = 0.35 + 0.65 * fbm(pos * 1.7 + an * 1.5);
+    let emit = exp(-(r * r) / (emitRad * emitRad)) * (0.06 + p.organic * 0.12) * emitN;
+    let diss = 0.004 + (1.0 - p.spread) * 0.02;            // low dissipation (spread = persistence)
+    var d = prev * (1.0 - diss) + emit;
+    d = clamp(d, 0.0, 1.4);
+    return vec4f(vec3f(d), 1.0);
+  }
+
   let cA = sampleFit(texA, uv, p.scaleA, p.offsetA, p.validA, p.slotAColor);
   let cB = sampleFit(texB, uv, p.scaleB, p.offsetB, p.validB, p.slotBColor);
   let lA = luma(cA.rgb); let lB = luma(cB.rgb);
@@ -2952,6 +3100,7 @@ ${PARAMS_STRUCT}
 }
 @fragment fn fs(in: VSOut) -> @location(0) vec4f {
   let uv = in.uv;
+  if (p.mode == 67u) { return vec4f(0.0, 0.0, 0.0, 1.0); }  // fog sim starts empty; pours from the emitter
   if (p.validA == 0u) { return vec4f(p.bg, 1.0); }
   let q = (uv - p.offsetA) / p.scaleA;
   if (q.x < 0.0 || q.x > 1.0 || q.y < 0.0 || q.y > 1.0) { return vec4f(p.bg, 1.0); }

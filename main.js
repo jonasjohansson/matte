@@ -17,6 +17,10 @@ import { fitInfo, hexToRgb } from './util.js';
 import { ENCODER_CANDIDATES, encoderConfigSupported } from './recorder.js';
 import { HAS_FS_ACCESS, getOutputDir, setOutputDir, getOutputDirHandleWithPermission, saveBlobToOutputFolder } from './output.js';
 import { state } from './state.js';
+// Pristine snapshot of the default state, captured BEFORE any session restore or
+// user mutation. Source of truth for per-parameter "reset to default" (right-click
+// a control). state.js is pure data, so this import-time clone is the clean baseline.
+const BASE_DEFAULTS = structuredClone(state);
 import { canvas, adapter, device, ctx, presentationFormat, GPU_MAX_TEX } from './core.js';
 import { particles, ensureParticles, initParticleData, simAndDrawParticles } from './particles.js';
 
@@ -895,7 +899,7 @@ function renderFrame() {
   }
   writeUniforms();
 
-  const isAdvec = (state.mode >= 10 && state.mode <= 14);
+  const isAdvec = (state.mode >= 10 && state.mode <= 14) || state.mode === 67;
   let finalState = null;
   const enc = device.createCommandEncoder();
 
@@ -916,7 +920,12 @@ function renderFrame() {
       advec.src = 'A';
       advec.lastT = 0;
       advec.needsReset = false;
-      const warm = Math.max(8, Math.round(state.advecSteps * 8));
+      // Fog sim (67) accumulates over many steps, so when scrubbing/jumping we
+      // warm up proportionally to t for a representative preview (record plays
+      // forward and accumulates frame-by-frame, so it only pays this at t≈0).
+      const warm = state.mode === 67
+        ? Math.min(600, Math.max(24, Math.round(state.t * 500)))
+        : Math.max(8, Math.round(state.advecSteps * 8));
       for (let i = 0; i < warm; i++) {
         runSimStepInto(enc, state.t * ((i + 1) / warm));
       }
@@ -1556,6 +1565,8 @@ const MODE_DEFAULTS = {
   12: { advecCurlStr: 0.5, advecCurlScale: 2.5 },
   13: { advecBrushFollow: 0.7 },
   14: { advecSeedCount: 5, advecSeedRadius: 0.45 },
+  66: { originX: 0.5, originY: 0.5, maskScale: 1.6, organic: 0.55, spread: 0.45, turbulence: 0.35, flow: 0.4, undulate: 0.4, edges: 0.3, seed: 1 },
+  67: { originX: 0.5, originY: 0.5, maskScale: 1.5, organic: 0.55, spread: 0.4, turbulence: 0.5, flow: 0.4, undulate: 0.4, edges: 0.4, seed: 1 },
   15: {
     weEdgeScale: 6.0, weEdgeWobble: 0.55,
     weDryRing: 0.45, weBleed: 0.5,
@@ -3185,6 +3196,9 @@ window.__engine = {
     // door (65) is geometrically clean (ignores organic) — just snap the seam
     // crisp on entry so it reads as a hard panel, not a soft fade.
     if (m === 65 && prev !== 65) state.spread = 0.03;
+    // fog bloom (66) / fog sim (67): apply their tuned defaults on entry so they
+    // don't inherit stale values from the previous mode (e.g. a negative edges).
+    if ((m === 66 || m === 67) && prev !== m) resetModeDefaults(m);
     advec.needsReset = true; particles.needsReset = true;
     if (typeof syncPaintMode === 'function') syncPaintMode();
     restartPlayback(); saveSession();
@@ -3245,6 +3259,24 @@ window.__engine = {
     try { pane.refresh(); } catch (e) {}
     if (m >= 10 && m <= 14) advec.needsReset = true;
     restartPlayback(); saveSession();
+  },
+  // Reset ONE parameter to its default (right-click a control). Precedence mirrors
+  // resetMode: per-mode override > ambient defaults (mode>=33) > pristine base.
+  // Returns the value applied, or undefined if the key has no known default.
+  resetParam(key) {
+    const m = state.mode;
+    const AMB = { ambCount: 0.5, ambSize: 0.5, ambSoft: 0.5, ambSpeed: 0.25, ambDetail: 0.5,
+                  driftAngle: 0.25, driftAmount: 0.3, sunX: 0.5, sunY: 0.3, streakMove: 0.25 };
+    let d;
+    if (typeof MODE_DEFAULTS !== 'undefined' && MODE_DEFAULTS[m] && key in MODE_DEFAULTS[m]) d = MODE_DEFAULTS[m][key];
+    else if (m >= 33 && key in AMB) d = AMB[key];
+    else d = BASE_DEFAULTS[key];
+    if (d === undefined) return undefined;
+    state[key] = d;
+    if (m >= 10 && m <= 14) advec.needsReset = true;
+    try { pane.refresh(); } catch (e) {}
+    saveSession();
+    return d;
   },
   resetVignette() { state.vignAmount = 0; state.vignShape = 0.5; state.vignFeather = 0.5; state.vignTexture = 0; state.vignAnimate = 0; try { pane.refresh(); } catch (e) {} restartPlayback(); saveSession(); },
   setMatte(on) { state.matteOutput = !!on; if (typeof pane!=='undefined') try{pane.refresh();}catch(e){} saveSession(); },
