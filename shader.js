@@ -88,6 +88,7 @@ struct Params {
   footageMask: f32, foliageDrift: f32, swipeCols: f32, swipeDir: f32,
   swipeStagger: f32, swipeColW: f32, swipeSoft: f32, mirrorDir: f32,
   swipeW: array<vec4f, 4>,   // per-column width weights (mode 63), default 1 = equal
+  rectW: f32, rectH: f32, rectReach: f32, padRect: f32,   // box reveal (mode 68): seed half-size + travel
 };`;
 
 export const SHADER = /* wgsl */`
@@ -1816,6 +1817,22 @@ fn doorMask(uv: vec2f) -> f32 {
   }
   return clamp(d, 0.0, 1.0);
 }
+fn boxRevealMask(uv: vec2f) -> f32 {
+  // Box reveal — the matte opens as a centred rectangle and the front marches
+  // UNIFORMLY outward from its edges (sharp square corners, no rounding). Per
+  // pixel reveal time = Chebyshev distance to the rectangle's surface: inside
+  // the seed rect reveals at t=0, then every point flips in proportion to how
+  // far it sits beyond the nearest edge. Purely geometric — no organic noise.
+  //   rectW/rectH = seed half-size (uv units, aspect-corrected on x)
+  //   rectReach   = how far the front travels past the edge before t=1
+  var q = uv - vec2f(0.5);
+  q.x = q.x * p.canvasAspect;
+  // distance OUTSIDE the box along each axis (0 inside), then take the larger:
+  // a square (∞-norm) front so corners stay crisp instead of rounding off.
+  let dd = max(abs(q) - vec2f(p.rectW, p.rectH), vec2f(0.0));
+  let d = max(dd.x, dd.y);
+  return clamp(d / max(p.rectReach, 0.0001), 0.0, 1.0);
+}
 fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
   let n1 = fbm(uv * p.maskScale + p.seed * 0.13);
   let n2 = fbm(uv * p.maskScale * 2.3 + 17.0 + p.seed * 0.09);
@@ -2242,6 +2259,8 @@ fn frostMask(uv: vec2f) -> f32 {
     mask = mirrorMask(uv);
   } else if (p.mode == 65u) {
     mask = doorMask(uv);
+  } else if (p.mode == 68u) {
+    mask = boxRevealMask(uv);
   } else {
     let eA = edgeMag(texA, uv, p.scaleA, p.offsetA, p.validA, p.slotAColor);
     let eB = edgeMag(texB, uv, p.scaleB, p.offsetB, p.validB, p.slotBColor);
@@ -2263,7 +2282,9 @@ fn frostMask(uv: vec2f) -> f32 {
   // point so the transition grows from WITHIN (inside-out) rather than sweeping
   // from the edges. Origin defaults to centre, or is derived from image A's
   // bright focal region. The mode's own texture still breaks up the front.
-  if (p.originAmount > 0.0001 && p.mode != 29u) {
+  // Excluded for box reveal (68): its mask IS already an inside-out geometric
+  // field, and the radial blend would round the rectangle into a soft circle.
+  if (p.originAmount > 0.0001 && p.mode != 29u && p.mode != 68u) {
     let diag = sqrt(p.canvasAspect * p.canvasAspect + 1.0);
     var d = 1.0;
     var dLinear = false;   // points use a linear field (no area front-load)
@@ -2313,7 +2334,7 @@ fn frostMask(uv: vec2f) -> f32 {
   // Turbulence: domain-warped multi-octave noise fractures the reveal front into
   // organic, ink-in-water tendrils instead of a smooth glossy edge. Higher =
   // finer, more chaotic detail.
-  if (p.turbulence > 0.0001 && p.mode != 29u && p.mode != 65u) {
+  if (p.turbulence > 0.0001 && p.mode != 29u && p.mode != 65u && p.mode != 68u) {
     let sc = mix(3.0, 10.0, p.turbulence);
     // Aspect-correct so the ink cells stay isotropic (don't stretch) at any
     // canvas aspect ratio — e.g. the wide ELVERKET surfaces.
@@ -2328,7 +2349,7 @@ fn frostMask(uv: vec2f) -> f32 {
   }
   // Undulate: a slow, large-scale animated wave on the reveal front so any mode
   // breathes / dances over the loop (auroras in the sky), not just a one-way wipe.
-  if (p.undulate > 0.0001 && p.mode != 29u && p.mode != 65u) {
+  if (p.undulate > 0.0001 && p.mode != 29u && p.mode != 65u && p.mode != 68u) {
     let fp = p.t * 6.2831853;
     let u2 = vec2f(uv.x * p.canvasAspect, uv.y);
     let wave = fbm(u2 * 1.4 + vec2f(sin(fp) * 0.4, cos(fp * 0.8) * 0.4) + p.seed * 0.2);
@@ -2337,10 +2358,10 @@ fn frostMask(uv: vec2f) -> f32 {
   // Spread the mask across the full [0,1] timeline so the reveal keeps arriving
   // as organic shapes right up to t=1, instead of the bulk crossing by ~0.7 and
   // overblowing to white early. (Masks tend to cluster mid-range otherwise.)
-  // Skipped for the centre-out geometric reveals (mirror 64 / door 65): their
-  // mask IS the distance from centre, and the -0.1 clip would collapse the
-  // central band to instant-reveal — they must grow from a true centre line.
-  if (p.mode != 64u && p.mode != 65u) {
+  // Skipped for the centre-out geometric reveals (mirror 64 / door 65 / box 68):
+  // their mask IS the distance from the seed, and the -0.1 clip would collapse the
+  // central band to instant-reveal — they must grow from a true centre line/rect.
+  if (p.mode != 64u && p.mode != 65u && p.mode != 68u) {
     mask = clamp((mask - 0.1) / 0.78, 0.0, 1.0);
     mask = clamp(mask + p.maskShift, 0.0, 1.0);
   }

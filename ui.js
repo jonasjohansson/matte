@@ -24,6 +24,8 @@
     swipeDir:{t:'select',label:'direction',opts:{'up':0,'down':1,'left':2,'right':3}},
     // mirror expand (mode 64)
     mirrorDir:{t:'select',label:'expand',opts:{'left / right':0,'up / down':1,'radial':2,'diamond':3}},
+    // box reveal (mode 68)
+    rectW:['rect width',0.01,0.5,.01], rectH:['rect height',0.01,0.5,.01], rectReach:['reach',0.05,1.5,.01],
     // start points / paint
     originFromImage:{t:'check',label:'origin from image A'}, pointStagger:['stagger',0,1,.01],
     pointRandom:['stagger random',0,1,.01], pointSize:['lamp size',0,1,.01], pointPop:['pop (instant on)',0,1,.01],
@@ -96,7 +98,7 @@
 
   // modes grouped for the grid
   const MODES = [
-    ['Reveal',[[0,'smooth'],[1,'pigment rim'],[7,'iris'],[15,'wet edge'],[53,'frost'],[63,'column swipe'],[64,'mirror expand'],[65,'door']]],
+    ['Reveal',[[0,'smooth'],[1,'pigment rim'],[7,'iris'],[15,'wet edge'],[53,'frost'],[63,'column swipe'],[64,'mirror expand'],[65,'door'],[68,'box reveal']]],
     ['Watercolor',[[2,'paper grain'],[3,'backrun blooms'],[4,'wet diffusion'],[5,'tonal sediment'],[6,'salt'],[8,'wet bleed'],[9,'pigment run'],[17,'tonal wash'],[24,'cauliflower bloom'],[25,'wet-stage'],[26,'migration']]],
     ['Painterly',[[16,'stroke-follow'],[22,'mold tendrils']]],
     ['Light & burn',[[27,'paper scorch'],[30,'light bloom'],[48,'radial burst'],[49,'smoke ring'],[66,'fog bloom'],[67,'fog sim']]],
@@ -113,6 +115,7 @@
     63:['swipeDir','swipeCols','swipeColW','swipeStagger','swipeSoft'],
     64:['mirrorDir','spread','organic','maskScale'],
     65:['mirrorDir','spread'],
+    68:['rectW','rectH','rectReach','spread'],
     1:['rimWidth','rimDark'], 2:['paperAngle','paperAniso','paperGranulation','paperGrowth','paperFollow','paperPatches'],
     3:['bloomCount','bloomRate','bloomRim','bloomImageBias'], 4:['diffStrength','diffRadius'],
     5:['sedSource','sedDirection','sedBands','sedSoftness'], 6:['saltSource','saltImage','saltDensity','saltContrast','saltBias'],

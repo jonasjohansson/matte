@@ -164,7 +164,7 @@ function makeDisplayBindGroup(finalState) {
 //   5  seed         13  scaleB.y                                          29 bloomCount     37 saltContrast
 //   6  validA       14  offsetB.x                                         30 bloomRim       38 saltBias
 //   7  validB       15  offsetB.y                                         31 bloomRate      39 saltImage
-const UBO_SIZE = 1216;  // 304 f32: ... +swipe (282-286) +pad (287) +swipeW[16] (288-303)
+const UBO_SIZE = 1232;  // 308 f32: ... +swipe (282-286) +pad (287) +swipeW[16] (288-303) +box rect (304-306, pad 307)
 const uniformBuffer = device.createBuffer({
   size: UBO_SIZE,
   usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
@@ -778,6 +778,10 @@ function writeUniforms() {
       uboF32[288 + i] = (px > 0 ? px / axis : eq);
     }
   }
+  // box reveal (mode 68): centred seed rectangle half-size + how far the front travels
+  uboF32[304] = (state.rectW == null ? 0.15 : state.rectW);
+  uboF32[305] = (state.rectH == null ? 0.15 : state.rectH);
+  uboF32[306] = (state.rectReach == null ? 0.6 : state.rectReach);
   uboU32[208] = (state.originSource === 'paint' && state._paintReady) ? 255 : nPts;
   uboF32[209] = state.flow;  // turbulence time-drift (animated ink)
   uboF32[210] = state.undulate;  // slow large-scale dance of the reveal front
@@ -1613,6 +1617,9 @@ const MODE_DEFAULTS = {
   64: { mirrorDir: 0, organic: 0, spread: 0.06, maskScale: 0.9 },
   // door (65): clean panel parting — crisp seam, no organic involved at all.
   65: { mirrorDir: 0, spread: 0.03 },
+  // box reveal (68): centred rectangle that expands uniformly outward with crisp
+  // square corners. Seed half-size 0.15, front travels 0.6 past the edges.
+  68: { rectW: 0.15, rectH: 0.15, rectReach: 0.6, spread: 0.03, originAmount: 0 },
 };
 function resetModeDefaults(modeId) {
   const d = MODE_DEFAULTS[modeId];
@@ -2495,6 +2502,7 @@ const PRESET_KEYS = [
   'organic', 'edges', 'spread', 'maskScale', 'maskShift',
   'swipeCols', 'swipeDir', 'swipeStagger', 'swipeColW', 'swipeSoft', 'swipeColWidths',
   'mirrorDir',
+  'rectW', 'rectH', 'rectReach',
   'zoomA', 'panAx', 'panAy', 'zoomB', 'panBx', 'panBy',
   // movement / ambient / direction / grade / vignette — the look knobs the
   // current modes actually use (were missing, so presets couldn't capture them).
