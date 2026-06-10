@@ -782,6 +782,7 @@ function writeUniforms() {
   uboF32[304] = (state.rectW == null ? 0.15 : state.rectW);
   uboF32[305] = (state.rectH == null ? 0.15 : state.rectH);
   uboF32[306] = (state.rectReach == null ? 0.6 : state.rectReach);
+  uboF32[307] = (state.gdSpeed == null ? 2 : state.gdSpeed);   // godray animation rate (mode 39)
   uboU32[208] = (state.originSource === 'paint' && state._paintReady) ? 255 : nPts;
   uboF32[209] = state.flow;  // turbulence time-drift (animated ink)
   uboF32[210] = state.undulate;  // slow large-scale dance of the reveal front
@@ -1954,6 +1955,7 @@ fGodray.addBinding(state, 'gdIntensity', { min: 0, max: 1, step: 0.01, label: 'i
 fGodray.addBinding(state, 'gdBeams',     { min: 0, max: 1, step: 0.01, label: 'beam count / thinness' });
 fGodray.addBinding(state, 'gdCloud',     { min: 0, max: 1, step: 0.01, label: 'break through cloud' });
 fGodray.addBinding(state, 'gdPulse',     { min: 0, max: 1, step: 0.01, label: 'pulse (in & out)' });
+fGodray.addBinding(state, 'gdSpeed',     { min: 0.25, max: 4, step: 0.05, label: 'animation speed' });
 
 // The legacy pane's per-mode folder visibility. The real per-mode params are
 // built by ui.js (buildParams), so this is now a no-op kept only because the
@@ -2510,7 +2512,7 @@ const PRESET_KEYS = [
   'ambCount', 'ambSize', 'ambSoft', 'ambSpeed', 'ambDetail', 'ambRole',
   'driftAngle', 'driftAmount', 'sunX', 'sunY', 'streakMove', 'foliageDrift',
   'auroraDensity', 'auroraHeight', 'auroraSpeed', 'auroraWave', 'auroraDark',
-  'gdIntensity', 'gdBeams', 'gdCloud', 'gdPulse',
+  'gdIntensity', 'gdBeams', 'gdCloud', 'gdPulse', 'gdSpeed',
   'cellCols', 'cellRows', 'cellIgniteBy', 'cellAnalyseBy', 'cellCoarseness',
   'cellOrder', 'cellCascade', 'cellJitter', 'cellGlow', 'cellSnap', 'cellSpill',
   'originX', 'originY', 'originAmount', 'pointSize', 'pointPop', 'pointFill',
@@ -3142,7 +3144,7 @@ const PERSIST_KEYS = [
   'originAmount', 'originX', 'originY', 'originFromImage', 'turbulence', 'flow', 'undulate', 'animate', 'originPoints',
   'pointStagger', 'pointRandom', 'pointSize', 'pointPop', 'pointFill', 'paintBrush',
   'auroraDensity', 'auroraHeight', 'auroraSpeed', 'auroraDark', 'auroraWave', 'driftAngle', 'driftAmount',
-  'gdIntensity', 'gdBeams', 'gdCloud', 'gdPulse',
+  'gdIntensity', 'gdBeams', 'gdCloud', 'gdPulse', 'gdSpeed',
   'ambCount', 'ambSize', 'ambSoft', 'ambSpeed', 'ambDetail', 'sunX', 'sunY', 'streakMove', 'vignAmount', 'vignFeather', 'vignAnimate', 'vignTexture', 'vignShape', 'ambRole',
   'gradeBright', 'gradeContrast', 'gradeBlack', 'gradeWhite', 'gradeGamma',
   'exportFps', 'exportSizeMode', 'exportPadBottom', 'matteOutput', 'matteInvert', 'projectName',
@@ -3263,7 +3265,7 @@ window.__engine = {
                   driftAngle: 0.25, driftAmount: 0.3, sunX: 0.5, sunY: 0.3, streakMove: 0.25 };
     if (m >= 33) { for (const k in AMB) state[k] = AMB[k]; }
     if (m === 38) { state.auroraDensity = 0.5; state.auroraHeight = 0.5; state.auroraSpeed = 0.5; state.auroraWave = 0.5; state.auroraDark = 0.5; }
-    if (m === 39) { state.gdIntensity = 0.5; state.gdBeams = 0.5; state.gdCloud = 0.5; state.gdPulse = 0.4; }
+    if (m === 39) { state.gdIntensity = 0.5; state.gdBeams = 0.5; state.gdCloud = 0.5; state.gdPulse = 0.4; state.gdSpeed = 2; }
     try { pane.refresh(); } catch (e) {}
     if (m >= 10 && m <= 14) advec.needsReset = true;
     restartPlayback(); saveSession();

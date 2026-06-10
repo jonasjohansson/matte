@@ -88,7 +88,7 @@ struct Params {
   footageMask: f32, foliageDrift: f32, swipeCols: f32, swipeDir: f32,
   swipeStagger: f32, swipeColW: f32, swipeSoft: f32, mirrorDir: f32,
   swipeW: array<vec4f, 4>,   // per-column width weights (mode 63), default 1 = equal
-  rectW: f32, rectH: f32, rectReach: f32, padRect: f32,   // box reveal (mode 68): seed half-size + travel
+  rectW: f32, rectH: f32, rectReach: f32, gdSpeed: f32,   // box reveal (68) seed half-size + travel; gdSpeed = godray anim rate
 };`;
 
 export const SHADER = /* wgsl */`
@@ -402,8 +402,10 @@ fn ambGlare(uv: vec2f) -> f32 {
   return clamp((core + halo) * mix(0.45, 1.0, foliage), 0.0, 1.0);
 }
 fn ambGodrays(uv: vec2f) -> f32 {
-  // light shafts fanning down from a high sun, broken by drifting cloud gaps
-  let ph = p.t * 6.2831853;
+  // light shafts fanning down from a high sun, broken by drifting cloud gaps.
+  // gdSpeed scales the whole animation clock — clouds (gaps/foliage drift) AND
+  // rays (beam shimmer + pulse) all key off ph, so one knob livens them together.
+  let ph = p.t * 6.2831853 * max(p.gdSpeed, 0.01);
   var sun = vec2f(p.sunX, p.sunY);                            // sun position set by sliders
   var d = uv - sun; d.x = d.x * p.canvasAspect;
   let ang = atan2(d.x, d.y);                  // 0 = straight down from the sun
