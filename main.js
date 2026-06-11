@@ -528,10 +528,14 @@ function previewScaleFactor(w, h) {
   return longer > cap ? cap / longer : 1;      // only ever scale DOWN
 }
 function resizeCanvas() {
-  // Full-bleed: the effect fills the whole window; the rails float on top with a
-  // frosted backdrop, so no horizontal space is reserved for them.
-  const maxW = window.innerWidth;
-  const maxH = window.innerHeight;
+  // Fit the canvas to the STAGE box, not the window: in the default state the
+  // stage IS the window (full-bleed, rails float on top), but the fit-between /
+  // right-only UI states shrink the stage to the gap beside the panels — fitting
+  // against the window there left an oversized explicit CSS height while
+  // max-width clamped the width, squashing the aspect ratio.
+  const stageEl = document.getElementById('stage');
+  const maxW = (stageEl && stageEl.clientWidth)  || window.innerWidth;
+  const maxH = (stageEl && stageEl.clientHeight) || window.innerHeight;
   const { w, h } = computeOutputDims();
   // The display is purely a preview that always matches the OUTPUT aspect ratio.
   // CSS size = the output fit on screen; backing store = that size x dpr (sharp),

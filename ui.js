@@ -431,6 +431,8 @@
                      : uiState===1 ? 'hide the left panel + fit the canvas beside the right rails (H)'
                      : uiState===2 ? 'hide all panels (H)'
                      : 'show all panels (H)';
+      // the stage box just changed size — refit the canvas to it (keeps aspect)
+      window.dispatchEvent(new Event('resize'));
     };
     const cycleUI=()=>{ uiState=(uiState+1)%4; applyUI(); };
     uiToggle.onclick=cycleUI;
