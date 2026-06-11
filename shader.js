@@ -89,6 +89,7 @@ struct Params {
   swipeStagger: f32, swipeColW: f32, swipeSoft: f32, mirrorDir: f32,
   swipeW: array<vec4f, 4>,   // per-column width weights (mode 63), default 1 = equal
   rectW: f32, rectH: f32, rectReach: f32, gdSpeed: f32,   // box reveal (68) seed half-size + travel; gdSpeed = godray anim rate
+  gdSoft: f32, padGd0: f32, padGd1: f32, padGd2: f32,     // gdSoft = godray beam softness (low = crisp shafts, high = soft glow)
 };`;
 
 export const SHADER = /* wgsl */`
@@ -411,8 +412,11 @@ fn ambGodrays(uv: vec2f) -> f32 {
   let ang = atan2(d.x, d.y);                  // 0 = straight down from the sun
   let dist = length(d);
   let drift = ph * (0.03 + p.driftAmount * 0.1);
-  // beam size: fewer/wider at low gdBeams, many/thin at high
-  let beams = pow(clamp(fbm(vec2f(ang * mix(4.0, 11.0, p.gdBeams) + drift, ph * 0.05)) * 1.5, 0.0, 1.0), 1.8);
+  // beam size: fewer/wider at low gdBeams, many/thin at high.
+  // gdSoft feathers each shaft: the contrast exponent drops from crisp (2.4) to
+  // a soft diffuse glow (0.5), so high softness blurs the hard ray edges away.
+  let sharp = mix(2.4, 0.5, p.gdSoft);
+  let beams = pow(clamp(fbm(vec2f(ang * mix(4.0, 11.0, p.gdBeams) + drift, ph * 0.05)) * 1.5, 0.0, 1.0), sharp);
   // cloud break-through: higher gdCloud lowers the gap threshold so more light passes
   let gaps  = smoothstep(mix(0.55, 0.18, p.gdCloud), 0.85, fbm(vec2f(ang * 3.0 + drift, dist * 2.0 + 1.0)));
   // dappled foliage / tree-canopy breakup (finer, scrolling)

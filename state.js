@@ -31,7 +31,7 @@ export const state = {
   animate: 0.0,      // evolve each mode's own pattern over the loop (per-mode movement)
   auroraDensity: 0.5, auroraHeight: 0.5, auroraSpeed: 0.4, auroraDark: 0.3, auroraWave: 0.5,  // aurora settings
   driftAngle: 0.25, driftAmount: 0.3,  // wind direction + strength for ambient drift
-  gdIntensity: 0.5, gdBeams: 0.5, gdCloud: 0.5, gdPulse: 0.4, gdSpeed: 2,  // godray settings (gdSpeed = anim rate)
+  gdIntensity: 0.5, gdBeams: 0.5, gdCloud: 0.5, gdPulse: 0.4, gdSpeed: 2, gdSoft: 0.5,  // godray settings (gdSpeed = anim rate, gdSoft = beam softness)
   ambCount: 0.5, ambSize: 0.5, ambSoft: 0.5, ambSpeed: 0.25, ambDetail: 0.5, sunX: 0.5, sunY: 0.3, streakMove: 0.25, vignAmount: 0.0, vignFeather: 0.5, vignAnimate: 0.0, vignTexture: 0.0, vignShape: 0.5, ambRole: 0,  // shared bokeh/ripples/glare/streaks
   foliageDrift: 0.4,  // mode 54: sway/parallax applied to loaded foliage footage
   // column-swipe transition (mode 63)

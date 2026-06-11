@@ -164,7 +164,7 @@ function makeDisplayBindGroup(finalState) {
 //   5  seed         13  scaleB.y                                          29 bloomCount     37 saltContrast
 //   6  validA       14  offsetB.x                                         30 bloomRim       38 saltBias
 //   7  validB       15  offsetB.y                                         31 bloomRate      39 saltImage
-const UBO_SIZE = 1232;  // 308 f32: ... +swipe (282-286) +pad (287) +swipeW[16] (288-303) +box rect (304-306, pad 307)
+const UBO_SIZE = 1248;  // 312 f32: ... +swipeW[16] (288-303) +box rect (304-306) +gdSpeed (307) +gdSoft (308, pad 309-311)
 const uniformBuffer = device.createBuffer({
   size: UBO_SIZE,
   usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
@@ -783,6 +783,7 @@ function writeUniforms() {
   uboF32[305] = (state.rectH == null ? 0.15 : state.rectH);
   uboF32[306] = (state.rectReach == null ? 0.6 : state.rectReach);
   uboF32[307] = (state.gdSpeed == null ? 2 : state.gdSpeed);   // godray animation rate (mode 39)
+  uboF32[308] = (state.gdSoft == null ? 0.5 : state.gdSoft);   // godray beam softness (mode 39)
   uboU32[208] = (state.originSource === 'paint' && state._paintReady) ? 255 : nPts;
   uboF32[209] = state.flow;  // turbulence time-drift (animated ink)
   uboF32[210] = state.undulate;  // slow large-scale dance of the reveal front
@@ -1956,6 +1957,7 @@ fGodray.addBinding(state, 'gdBeams',     { min: 0, max: 1, step: 0.01, label: 'b
 fGodray.addBinding(state, 'gdCloud',     { min: 0, max: 1, step: 0.01, label: 'break through cloud' });
 fGodray.addBinding(state, 'gdPulse',     { min: 0, max: 1, step: 0.01, label: 'pulse (in & out)' });
 fGodray.addBinding(state, 'gdSpeed',     { min: 0.25, max: 4, step: 0.05, label: 'animation speed' });
+fGodray.addBinding(state, 'gdSoft',      { min: 0, max: 1, step: 0.01, label: 'softness (blur shafts)' });
 
 // The legacy pane's per-mode folder visibility. The real per-mode params are
 // built by ui.js (buildParams), so this is now a no-op kept only because the
@@ -2512,7 +2514,7 @@ const PRESET_KEYS = [
   'ambCount', 'ambSize', 'ambSoft', 'ambSpeed', 'ambDetail', 'ambRole',
   'driftAngle', 'driftAmount', 'sunX', 'sunY', 'streakMove', 'foliageDrift',
   'auroraDensity', 'auroraHeight', 'auroraSpeed', 'auroraWave', 'auroraDark',
-  'gdIntensity', 'gdBeams', 'gdCloud', 'gdPulse', 'gdSpeed',
+  'gdIntensity', 'gdBeams', 'gdCloud', 'gdPulse', 'gdSpeed', 'gdSoft',
   'cellCols', 'cellRows', 'cellIgniteBy', 'cellAnalyseBy', 'cellCoarseness',
   'cellOrder', 'cellCascade', 'cellJitter', 'cellGlow', 'cellSnap', 'cellSpill',
   'originX', 'originY', 'originAmount', 'pointSize', 'pointPop', 'pointFill',
@@ -3144,7 +3146,7 @@ const PERSIST_KEYS = [
   'originAmount', 'originX', 'originY', 'originFromImage', 'turbulence', 'flow', 'undulate', 'animate', 'originPoints',
   'pointStagger', 'pointRandom', 'pointSize', 'pointPop', 'pointFill', 'paintBrush',
   'auroraDensity', 'auroraHeight', 'auroraSpeed', 'auroraDark', 'auroraWave', 'driftAngle', 'driftAmount',
-  'gdIntensity', 'gdBeams', 'gdCloud', 'gdPulse', 'gdSpeed',
+  'gdIntensity', 'gdBeams', 'gdCloud', 'gdPulse', 'gdSpeed', 'gdSoft',
   'ambCount', 'ambSize', 'ambSoft', 'ambSpeed', 'ambDetail', 'sunX', 'sunY', 'streakMove', 'vignAmount', 'vignFeather', 'vignAnimate', 'vignTexture', 'vignShape', 'ambRole',
   'gradeBright', 'gradeContrast', 'gradeBlack', 'gradeWhite', 'gradeGamma',
   'exportFps', 'exportSizeMode', 'exportPadBottom', 'matteOutput', 'matteInvert', 'projectName',
@@ -3265,7 +3267,7 @@ window.__engine = {
                   driftAngle: 0.25, driftAmount: 0.3, sunX: 0.5, sunY: 0.3, streakMove: 0.25 };
     if (m >= 33) { for (const k in AMB) state[k] = AMB[k]; }
     if (m === 38) { state.auroraDensity = 0.5; state.auroraHeight = 0.5; state.auroraSpeed = 0.5; state.auroraWave = 0.5; state.auroraDark = 0.5; }
-    if (m === 39) { state.gdIntensity = 0.5; state.gdBeams = 0.5; state.gdCloud = 0.5; state.gdPulse = 0.4; state.gdSpeed = 2; }
+    if (m === 39) { state.gdIntensity = 0.5; state.gdBeams = 0.5; state.gdCloud = 0.5; state.gdPulse = 0.4; state.gdSpeed = 2; state.gdSoft = 0.5; }
     try { pane.refresh(); } catch (e) {}
     if (m >= 10 && m <= 14) advec.needsReset = true;
     restartPlayback(); saveSession();
