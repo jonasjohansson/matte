@@ -41,6 +41,7 @@ export const state = {
   rectW: 0.15, rectH: 0.15, rectReach: 1,   // box reveal (68): seed rect half-w/h + travel as fraction of far edge (1 = cover by t=1)
   // global grade on the final matte: levels (black/white/gamma) + brightness/contrast.
   gradeBright: 0.0, gradeContrast: 0.0, gradeBlack: 0.0, gradeWhite: 1.0, gradeGamma: 1.0,
+  lutBlack: 0.0, lutWhite: 0.0,   // colourise anchors: keep blacks black / whites white through the gradient LUT (preview-only)
   // custom transition dimensions (independent of source footage size).
   // Default ON: trans is primarily a matte-video builder, so it boots to a
   // fixed canvas showing the B/W matte without requiring any footage.

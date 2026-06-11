@@ -42,6 +42,7 @@
     vignAmount:['amount',0,1,.01], vignFeather:['feather',0,1,.01], vignAnimate:['animate (pulse)',0,1,.01], vignTexture:['edge texture',0,1,.01], vignShape:['shape (ellipse↔rect)',0,1,.01],
     // global grade (post-process on the matte)
     gradeBright:['brightness',-1,1,.01], gradeContrast:['contrast',-1,1,.01], gradeBlack:['black point',0,1,.01], gradeWhite:['white point',0,1,.01], gradeGamma:['gamma',.1,3,.01],
+    lutBlack:['colourise: keep blacks',0,1,.01], lutWhite:['colourise: keep whites',0,1,.01],
     // mode-specific
     rimWidth:['rim width',0,.4,.005], rimDark:['rim dark',0,1,.01],
     paperAngle:['fiber angle',0,1,.005], paperAniso:['anisotropy',1,10,.1], paperGranulation:['granulation',0,1,.01],
@@ -695,10 +696,10 @@
     const gradeBody=document.querySelector('#grade-body');
     function buildGrade(){
       if(!gradeBody) return; gradeBody.innerHTML='';
-      ['gradeBlack','gradeWhite','gradeGamma','gradeBright','gradeContrast'].forEach(k=>{ const w=widget(k); if(w) gradeBody.appendChild(w); });
+      ['gradeBlack','gradeWhite','gradeGamma','gradeBright','gradeContrast','lutBlack','lutWhite'].forEach(k=>{ const w=widget(k); if(w) gradeBody.appendChild(w); });
       const gb=document.createElement('div'); gb.className='ptsbar split';
       const gr=document.createElement('button'); gr.className='btn sm'; gr.textContent='↺ reset grade';
-      gr.onclick=()=>{ st.gradeBright=0; st.gradeContrast=0; st.gradeBlack=0; st.gradeWhite=1; st.gradeGamma=1; if(E.save)E.save(); buildGrade(); };
+      gr.onclick=()=>{ st.gradeBright=0; st.gradeContrast=0; st.gradeBlack=0; st.gradeWhite=1; st.gradeGamma=1; st.lutBlack=0; st.lutWhite=0; if(E.save)E.save(); buildGrade(); };
       gb.appendChild(gr); gradeBody.appendChild(gb);
     }
 

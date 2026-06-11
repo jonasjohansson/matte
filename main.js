@@ -813,6 +813,10 @@ function writeUniforms() {
   uboF32[307] = Math.max(1, Math.round(state.gdSpeed == null ? 2 : state.gdSpeed));
   uboF32[308] = (state.gdSoft == null ? 0.5 : state.gdSoft);   // godray beam softness (mode 39)
   uboF32[309] = (state.gdBlur == null ? 0 : state.gdBlur);     // godray gaussian blur radius (mode 39)
+  // colourise B/W anchors: preview-only, like the colourise LUT itself — zeroed
+  // while recording so the exported matte is the untouched grayscale value.
+  uboF32[310] = recording ? 0 : (state.lutBlack || 0);
+  uboF32[311] = recording ? 0 : (state.lutWhite || 0);
   uboU32[208] = (state.originSource === 'paint' && state._paintReady) ? 255 : nPts;
   uboF32[209] = state.flow;  // turbulence time-drift (animated ink)
   uboF32[210] = state.undulate;  // slow large-scale dance of the reveal front
@@ -2609,7 +2613,7 @@ const PRESET_KEYS = [
   'cellOrder', 'cellCascade', 'cellJitter', 'cellGlow', 'cellSnap', 'cellSpill',
   'originX', 'originY', 'originAmount', 'pointSize', 'pointPop', 'pointFill',
   'vignAmount', 'vignFeather', 'vignAnimate', 'vignTexture', 'vignShape',
-  'gradeBright', 'gradeContrast', 'gradeBlack', 'gradeWhite', 'gradeGamma',
+  'gradeBright', 'gradeContrast', 'gradeBlack', 'gradeWhite', 'gradeGamma', 'lutBlack', 'lutWhite',
 ];
 
 const FACTORY_PRESETS = {
@@ -3238,7 +3242,7 @@ const PERSIST_KEYS = [
   'auroraDensity', 'auroraHeight', 'auroraSpeed', 'auroraDark', 'auroraWave', 'driftAngle', 'driftAmount',
   'gdIntensity', 'gdBeams', 'gdCloud', 'gdPulse', 'gdSpeed', 'gdSoft', 'gdBlur',
   'ambCount', 'ambSize', 'ambSoft', 'ambSpeed', 'ambDetail', 'sunX', 'sunY', 'streakMove', 'vignAmount', 'vignFeather', 'vignAnimate', 'vignTexture', 'vignShape', 'ambRole',
-  'gradeBright', 'gradeContrast', 'gradeBlack', 'gradeWhite', 'gradeGamma',
+  'gradeBright', 'gradeContrast', 'gradeBlack', 'gradeWhite', 'gradeGamma', 'lutBlack', 'lutWhite',
   'exportFps', 'exportSizeMode', 'exportPadBottom', 'matteOutput', 'matteInvert', 'projectName',
   'cellCols', 'cellRows', 'cellJitter', 'cellGlow', 'cellOrder', 'cellCascade', 'cellSnap', 'cellSpill', 'cellIgniteBy', 'cellAnalyseBy', 'cellCoarseness',
   'slotAFillMode', 'slotAColor', 'slotBFillMode', 'slotBColor', 'keepAOutsideB',

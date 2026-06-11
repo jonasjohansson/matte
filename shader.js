@@ -89,7 +89,7 @@ struct Params {
   swipeStagger: f32, swipeColW: f32, swipeSoft: f32, mirrorDir: f32,
   swipeW: array<vec4f, 4>,   // per-column width weights (mode 63), default 1 = equal
   rectW: f32, rectH: f32, rectReach: f32, gdSpeed: f32,   // box reveal (68) seed half-size + travel; gdSpeed = godray anim rate
-  gdSoft: f32, gdBlur: f32, padGd1: f32, padGd2: f32,     // gdSoft = beam contrast feather; gdBlur = genuine gaussian radius (mode 39)
+  gdSoft: f32, gdBlur: f32, lutBlack: f32, lutWhite: f32, // godray feather/blur; lutBlack/White anchor the colourise LUT ends to true B/W
 };`;
 
 export const SHADER = /* wgsl */`
@@ -3087,6 +3087,18 @@ fn frostMask(uv: vec2f) -> f32 {
     // gain with a half-texel offset and clamps flat over the outer half-texel at
     // both ends — remapped, the gray ramp is a true identity on the matte value.
     var col = textureSample(texLut, samp, vec2f(mv * (255.0 / 256.0) + 0.5 / 256.0, 0.5)).rgb;
+    // Anchor the LUT ends (colourise): grade runs BEFORE the LUT — it only moves
+    // the sample position along the gradient, so it can never force the
+    // gradient's end COLOURS to black/white. These act on the LUT OUTPUT:
+    // keep-blacks fades the colour to true black at the dark end, keep-whites
+    // to true white at the bright end (each slider widens its fade window).
+    // CPU zeroes both while recording — the export stays a pure B/W matte.
+    if (p.lutBlack > 0.0001) {
+      col = mix(col, vec3f(0.0), p.lutBlack * (1.0 - sstep5(0.0, mix(0.08, 0.45, p.lutBlack), mv)));
+    }
+    if (p.lutWhite > 0.0001) {
+      col = mix(col, vec3f(1.0), p.lutWhite * sstep5(mix(0.92, 0.55, p.lutWhite), 1.0, mv));
+    }
     return vec4f((col * vign + dither1(in.pos.xy)) * padMask, 1.0);
   }
 
