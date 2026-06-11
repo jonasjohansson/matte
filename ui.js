@@ -81,7 +81,7 @@
     videoMaskInvert:{t:'check',label:'invert (dark first)'}, videoMaskFeather:['feather',0,1,.01], videoBrightness:['brightness',-1,1,.01], videoContrast:['contrast',0,3,.01], videoSaturate:['saturate',0,3,.01],
     lightIntensity:['light intensity',0,2.5,.01], lightSpread:['spread',0,1,.01], lightPeakT:['peak at (t)',.2,.8,.01], lightFlashWidth:['flash width',.03,.4,.01], lightColor:{t:'color',label:'light color'},
     auroraDensity:['curtain density',0,1,.01], auroraHeight:['ray height',0,1,.01], auroraSpeed:['speed',0,1,.01], auroraWave:['wave through',0,1,.01], auroraDark:['darkness',0,1,.01],
-    gdIntensity:['intensity',0,1,.01], gdBeams:['beam count / thinness',0,1,.01], gdCloud:['break through cloud',0,1,.01], gdPulse:['pulse (in & out)',0,1,.01], gdSpeed:['animation speed',0.25,4,.05], gdSoft:['softness (blur shafts)',0,1,.01],
+    gdIntensity:['intensity',0,1,.01], gdBeams:['beam count / thinness',0,1,.01], gdCloud:['break through cloud',0,1,.01], gdPulse:['pulse (in & out)',0,1,.01], gdSpeed:['animation speed',0.25,4,.05], gdSoft:['softness (edge feather)',0,1,.01], gdBlur:['gaussian blur',0,1,.01],
     texFit:{t:'select',label:'fit',opts:{'contain':1,'cover':2,'stretch':0}}, texAmount:['dissolve along texture',0,1,.01], texBg:['bg tint (image mode)',0,1,.01],
     sedSource:{t:'select',label:'banding by',opts:{'luminance':0,'saturation':1,'hue':2,'edge detail':3,'temperature':4}},
     sedDirection:{t:'select',label:'order',opts:{'dark first':0,'light first':1}},
@@ -140,7 +140,7 @@
     35:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // glare
     36:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // streaks
     38:['auroraDensity','auroraHeight','auroraSpeed','auroraWave','auroraDark'],
-    39:['gdIntensity','gdBeams','gdCloud','gdPulse','gdSpeed','gdSoft'],
+    39:['gdIntensity','gdBeams','gdCloud','gdPulse','gdSpeed','gdSoft','gdBlur'],
     40:['ambCount','ambSize','ambSoft','ambSpeed','ambDetail'],          // clouds
     41:['ambSize','ambSoft','ambSpeed','ambDetail'],                     // caustics (no count)
     42:['ambCount','ambSize','ambDetail'],                              // embers

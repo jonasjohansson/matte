@@ -11,7 +11,7 @@
 // gone. The few preset/state helpers that lived alongside it are still used by
 // window.__engine and ui.js.
 // mp4-muxer is lazy-imported inside startRecording() (only needed when recording)
-import { SHADER, SIM_SHADER, INIT_SHADER } from './shader.js';
+import { SHADER, SIM_SHADER, INIT_SHADER, BLUR_SHADER } from './shader.js';
 import { IDB_NAME, IDB_STORE, IDB_LIB_STORE, idbOpen, idbGet, idbPut, idbClearAll, libList, libAdd, libDelete, makeThumb } from './idb.js';
 import { fitInfo, hexToRgb } from './util.js';
 import { ENCODER_CANDIDATES, encoderConfigSupported } from './recorder.js';
@@ -92,6 +92,32 @@ const initPipeline = device.createRenderPipeline({
   layout: device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
   vertex:   { module: initModule, entryPoint: 'vs' },
   fragment: { module: initModule, entryPoint: 'fs', targets: [{ format: STATE_FORMAT }] },
+  primitive: { topology: 'triangle-list' },
+});
+
+// Godray gaussian (mode 39): render the light field into a state texture (reuse
+// the main module's fs_godray so all the fbm/ambGodrays code is shared), then
+// blur it separably (BLUR_SHADER fs_h + fs_v) before the main pass samples it.
+const blurModule = device.createShaderModule({ code: BLUR_SHADER });
+const godrayFieldPipeline = device.createRenderPipeline({
+  label: 'godray-field-pipeline',
+  layout: device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
+  vertex:   { module, entryPoint: 'vs' },
+  fragment: { module, entryPoint: 'fs_godray', targets: [{ format: STATE_FORMAT }] },
+  primitive: { topology: 'triangle-list' },
+});
+const blurPipelineH = device.createRenderPipeline({
+  label: 'godray-blur-h',
+  layout: device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
+  vertex:   { module: blurModule, entryPoint: 'vs' },
+  fragment: { module: blurModule, entryPoint: 'fs_h', targets: [{ format: STATE_FORMAT }] },
+  primitive: { topology: 'triangle-list' },
+});
+const blurPipelineV = device.createRenderPipeline({
+  label: 'godray-blur-v',
+  layout: device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
+  vertex:   { module: blurModule, entryPoint: 'vs' },
+  fragment: { module: blurModule, entryPoint: 'fs_v', targets: [{ format: STATE_FORMAT }] },
   primitive: { topology: 'triangle-list' },
 });
 
@@ -784,6 +810,7 @@ function writeUniforms() {
   uboF32[306] = (state.rectReach == null ? 0.6 : state.rectReach);
   uboF32[307] = (state.gdSpeed == null ? 2 : state.gdSpeed);   // godray animation rate (mode 39)
   uboF32[308] = (state.gdSoft == null ? 0.5 : state.gdSoft);   // godray beam softness (mode 39)
+  uboF32[309] = (state.gdBlur == null ? 0 : state.gdBlur);     // godray gaussian blur radius (mode 39)
   uboU32[208] = (state.originSource === 'paint' && state._paintReady) ? 255 : nPts;
   uboF32[209] = state.flow;  // turbulence time-drift (animated ink)
   uboF32[210] = state.undulate;  // slow large-scale dance of the reveal front
@@ -946,7 +973,38 @@ function renderFrame() {
     finalState = (advec.src === 'A') ? stateTexA : stateTexB;
   }
 
-  const displayBG = isAdvec ? makeDisplayBindGroup(finalState) : bindGroup;
+  // Godray gaussian (mode 39): render the field → blur H → blur V into the state
+  // ping-pong, leaving the blurred result in stateTexA for the main pass to read.
+  const isGodrayBlur = state.mode === 39 && state.gdBlur > 0 && canvas.width > 0 && canvas.height > 0;
+  if (isGodrayBlur) {
+    ensureStateTextures();
+    advec.needsReset = true;   // advection must re-init if it runs next (we reused its textures)
+    const fieldPass = enc.beginRenderPass({
+      colorAttachments: [{ view: stateTexA.createView(), clearValue: { r: 0, g: 0, b: 0, a: 1 }, loadOp: 'clear', storeOp: 'store' }],
+    });
+    fieldPass.setPipeline(godrayFieldPipeline);
+    fieldPass.setBindGroup(0, makeDisplayBindGroup(stateTexB));   // fs_godray ignores binding 4
+    fieldPass.draw(6);
+    fieldPass.end();
+    const hPass = enc.beginRenderPass({
+      colorAttachments: [{ view: stateTexB.createView(), clearValue: { r: 0, g: 0, b: 0, a: 1 }, loadOp: 'clear', storeOp: 'store' }],
+    });
+    hPass.setPipeline(blurPipelineH);
+    hPass.setBindGroup(0, makeDisplayBindGroup(stateTexA));
+    hPass.draw(6);
+    hPass.end();
+    const vPass = enc.beginRenderPass({
+      colorAttachments: [{ view: stateTexA.createView(), clearValue: { r: 0, g: 0, b: 0, a: 1 }, loadOp: 'clear', storeOp: 'store' }],
+    });
+    vPass.setPipeline(blurPipelineV);
+    vPass.setBindGroup(0, makeDisplayBindGroup(stateTexB));
+    vPass.draw(6);
+    vPass.end();
+  }
+
+  const displayBG = isAdvec ? makeDisplayBindGroup(finalState)
+                  : isGodrayBlur ? makeDisplayBindGroup(stateTexA)
+                  : bindGroup;
   const canvasView = ctx.getCurrentTexture().createView();
   const pass = enc.beginRenderPass({
     colorAttachments: [{
@@ -1957,7 +2015,8 @@ fGodray.addBinding(state, 'gdBeams',     { min: 0, max: 1, step: 0.01, label: 'b
 fGodray.addBinding(state, 'gdCloud',     { min: 0, max: 1, step: 0.01, label: 'break through cloud' });
 fGodray.addBinding(state, 'gdPulse',     { min: 0, max: 1, step: 0.01, label: 'pulse (in & out)' });
 fGodray.addBinding(state, 'gdSpeed',     { min: 0.25, max: 4, step: 0.05, label: 'animation speed' });
-fGodray.addBinding(state, 'gdSoft',      { min: 0, max: 1, step: 0.01, label: 'softness (blur shafts)' });
+fGodray.addBinding(state, 'gdSoft',      { min: 0, max: 1, step: 0.01, label: 'softness (edge feather)' });
+fGodray.addBinding(state, 'gdBlur',      { min: 0, max: 1, step: 0.01, label: 'gaussian blur' });
 
 // The legacy pane's per-mode folder visibility. The real per-mode params are
 // built by ui.js (buildParams), so this is now a no-op kept only because the
@@ -2514,7 +2573,7 @@ const PRESET_KEYS = [
   'ambCount', 'ambSize', 'ambSoft', 'ambSpeed', 'ambDetail', 'ambRole',
   'driftAngle', 'driftAmount', 'sunX', 'sunY', 'streakMove', 'foliageDrift',
   'auroraDensity', 'auroraHeight', 'auroraSpeed', 'auroraWave', 'auroraDark',
-  'gdIntensity', 'gdBeams', 'gdCloud', 'gdPulse', 'gdSpeed', 'gdSoft',
+  'gdIntensity', 'gdBeams', 'gdCloud', 'gdPulse', 'gdSpeed', 'gdSoft', 'gdBlur',
   'cellCols', 'cellRows', 'cellIgniteBy', 'cellAnalyseBy', 'cellCoarseness',
   'cellOrder', 'cellCascade', 'cellJitter', 'cellGlow', 'cellSnap', 'cellSpill',
   'originX', 'originY', 'originAmount', 'pointSize', 'pointPop', 'pointFill',
@@ -3146,7 +3205,7 @@ const PERSIST_KEYS = [
   'originAmount', 'originX', 'originY', 'originFromImage', 'turbulence', 'flow', 'undulate', 'animate', 'originPoints',
   'pointStagger', 'pointRandom', 'pointSize', 'pointPop', 'pointFill', 'paintBrush',
   'auroraDensity', 'auroraHeight', 'auroraSpeed', 'auroraDark', 'auroraWave', 'driftAngle', 'driftAmount',
-  'gdIntensity', 'gdBeams', 'gdCloud', 'gdPulse', 'gdSpeed', 'gdSoft',
+  'gdIntensity', 'gdBeams', 'gdCloud', 'gdPulse', 'gdSpeed', 'gdSoft', 'gdBlur',
   'ambCount', 'ambSize', 'ambSoft', 'ambSpeed', 'ambDetail', 'sunX', 'sunY', 'streakMove', 'vignAmount', 'vignFeather', 'vignAnimate', 'vignTexture', 'vignShape', 'ambRole',
   'gradeBright', 'gradeContrast', 'gradeBlack', 'gradeWhite', 'gradeGamma',
   'exportFps', 'exportSizeMode', 'exportPadBottom', 'matteOutput', 'matteInvert', 'projectName',
@@ -3267,7 +3326,7 @@ window.__engine = {
                   driftAngle: 0.25, driftAmount: 0.3, sunX: 0.5, sunY: 0.3, streakMove: 0.25 };
     if (m >= 33) { for (const k in AMB) state[k] = AMB[k]; }
     if (m === 38) { state.auroraDensity = 0.5; state.auroraHeight = 0.5; state.auroraSpeed = 0.5; state.auroraWave = 0.5; state.auroraDark = 0.5; }
-    if (m === 39) { state.gdIntensity = 0.5; state.gdBeams = 0.5; state.gdCloud = 0.5; state.gdPulse = 0.4; state.gdSpeed = 2; state.gdSoft = 0.5; }
+    if (m === 39) { state.gdIntensity = 0.5; state.gdBeams = 0.5; state.gdCloud = 0.5; state.gdPulse = 0.4; state.gdSpeed = 2; state.gdSoft = 0.5; state.gdBlur = 0.25; }
     try { pane.refresh(); } catch (e) {}
     if (m >= 10 && m <= 14) advec.needsReset = true;
     restartPlayback(); saveSession();

@@ -89,7 +89,7 @@ struct Params {
   swipeStagger: f32, swipeColW: f32, swipeSoft: f32, mirrorDir: f32,
   swipeW: array<vec4f, 4>,   // per-column width weights (mode 63), default 1 = equal
   rectW: f32, rectH: f32, rectReach: f32, gdSpeed: f32,   // box reveal (68) seed half-size + travel; gdSpeed = godray anim rate
-  gdSoft: f32, padGd0: f32, padGd1: f32, padGd2: f32,     // gdSoft = godray beam softness (low = crisp shafts, high = soft glow)
+  gdSoft: f32, gdBlur: f32, padGd1: f32, padGd2: f32,     // gdSoft = beam contrast feather; gdBlur = genuine gaussian radius (mode 39)
 };`;
 
 export const SHADER = /* wgsl */`
@@ -440,6 +440,23 @@ fn ambGodrays(uv: vec2f) -> f32 {
     return clamp((beams * shaft + 0.06) * fade * 2.3 * mix(0.4, 1.6, p.gdIntensity) * pulse, 0.0, 1.0);
   }
   return clamp((beams * gaps + 0.1) * fade * 2.3 * mix(0.4, 1.6, p.gdIntensity) * pulse, 0.0, 1.0);
+}
+@fragment fn fs_godray(in: VSOut) -> @location(0) vec4f {
+  // Render the raw godray light field into an offscreen texture so a separable
+  // two-pass gaussian (BLUR_SHADER) can blur it for real (mode 39). Mirrors the
+  // pad-remap of fs() so the field lines up with the on-screen content rect; the
+  // main pass then samples the blurred result and re-applies padMask.
+  var uv = in.uv;
+  let bandH = 1.0 - p.padTop - p.padBottom;
+  let bandW = 1.0 - p.padLeft - p.padRight;
+  if (in.uv.y < p.padTop || in.uv.y > 1.0 - p.padBottom
+   || in.uv.x < p.padLeft || in.uv.x > 1.0 - p.padRight
+   || bandH < 0.001 || bandW < 0.001) {
+    return vec4f(0.0, 0.0, 0.0, 1.0);
+  }
+  uv.y = (in.uv.y - p.padTop) / bandH;
+  uv.x = (in.uv.x - p.padLeft) / bandW;
+  return vec4f(ambGodrays(uv), 0.0, 0.0, 1.0);
 }
 fn ambFootageMatte(uv: vec2f) -> f32 {
   // Footage -> matte stylizer (mode 62): turn ANY loaded clip into a clean B/W
@@ -2752,7 +2769,12 @@ fn frostMask(uv: vec2f) -> f32 {
   else if (p.mode == 35u) { ambF = ambGlare(uv); }
   else if (p.mode == 36u) { ambF = ambStreaks(uv); }
   else if (p.mode == 38u) { ambF = ambAurora(uv); }
-  else if (p.mode == 39u) { ambF = ambGodrays(uv); }
+  else if (p.mode == 39u) {
+    // gdBlur > 0: the field was pre-rendered + gaussian-blurred into advState
+    // (binding 4) this frame; sample it (screen space) instead of recomputing.
+    if (p.gdBlur > 0.0001) { ambF = textureSampleLevel(advState, samp, in.uv, 0.0).r; }
+    else { ambF = ambGodrays(uv); }
+  }
   else if (p.mode == 40u) { ambF = ambClouds(uv); }
   else if (p.mode == 41u) { ambF = ambCaustics(uv); }
   else if (p.mode == 42u) { ambF = ambEmbers(uv); }
@@ -3132,6 +3154,57 @@ ${PARAMS_STRUCT}
   let q = (uv - p.offsetA) / p.scaleA;
   if (q.x < 0.0 || q.x > 1.0 || q.y < 0.0 || q.y > 1.0) { return vec4f(p.bg, 1.0); }
   return vec4f(textureSampleLevel(texA, samp, q, 0.0).rgb, 1.0);
+}
+`;
+
+// Separable gaussian blur for the godray field (mode 39). Run twice into the
+// state ping-pong textures: fs_h blurs horizontally, fs_v vertically — together
+// a genuine 2D gaussian. 17 taps per axis across ±2σ (spacing ≈ 0.25σ) so it's
+// smooth even at the widest radius. gdBlur sets σ in pixels (× ~14 at full).
+export const BLUR_SHADER = /* wgsl */`
+struct VSOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f };
+${PARAMS_STRUCT}
+@group(0) @binding(0) var<uniform> p: Params;
+@group(0) @binding(1) var texA: texture_2d<f32>;
+@group(0) @binding(2) var texB: texture_2d<f32>;
+@group(0) @binding(3) var samp: sampler;
+@group(0) @binding(4) var stateIn: texture_2d<f32>;
+@vertex fn vs(@builtin(vertex_index) idx: u32) -> VSOut {
+  let positions = array<vec2f, 6>(
+    vec2f(-1.0, -1.0), vec2f( 1.0, -1.0), vec2f(-1.0,  1.0),
+    vec2f(-1.0,  1.0), vec2f( 1.0, -1.0), vec2f( 1.0,  1.0),
+  );
+  let uvs = array<vec2f, 6>(
+    vec2f(0.0, 1.0), vec2f(1.0, 1.0), vec2f(0.0, 0.0),
+    vec2f(0.0, 0.0), vec2f(1.0, 1.0), vec2f(1.0, 0.0),
+  );
+  var out: VSOut;
+  out.pos = vec4f(positions[idx], 0.0, 1.0);
+  out.uv = uvs[idx];
+  return out;
+}
+fn blurAxis(uv: vec2f, horizontal: bool) -> f32 {
+  let dim = vec2f(textureDimensions(stateIn));
+  let radPx = p.gdBlur * 28.0;                      // gaussian reach in pixels
+  if (radPx < 0.5) { return textureSampleLevel(stateIn, samp, uv, 0.0).r; }
+  let sigma = max(radPx * 0.5, 0.5);
+  var sum = 0.0;
+  var wsum = 0.0;
+  for (var i = -8; i <= 8; i = i + 1) {
+    let o = f32(i) / 8.0 * radPx;                   // sample across ±2σ
+    let w = exp(-0.5 * o * o / (sigma * sigma));
+    var off = vec2f(o / dim.x, 0.0);
+    if (!horizontal) { off = vec2f(0.0, o / dim.y); }
+    sum = sum + textureSampleLevel(stateIn, samp, uv + off, 0.0).r * w;
+    wsum = wsum + w;
+  }
+  return sum / wsum;
+}
+@fragment fn fs_h(in: VSOut) -> @location(0) vec4f {
+  return vec4f(blurAxis(in.uv, true), 0.0, 0.0, 1.0);
+}
+@fragment fn fs_v(in: VSOut) -> @location(0) vec4f {
+  return vec4f(blurAxis(in.uv, false), 0.0, 0.0, 1.0);
 }
 `;
 
