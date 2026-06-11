@@ -807,8 +807,10 @@ function writeUniforms() {
   // box reveal (mode 68): centred seed rectangle half-size + how far the front travels
   uboF32[304] = (state.rectW == null ? 0.15 : state.rectW);
   uboF32[305] = (state.rectH == null ? 0.15 : state.rectH);
-  uboF32[306] = (state.rectReach == null ? 0.6 : state.rectReach);
-  uboF32[307] = (state.gdSpeed == null ? 2 : state.gdSpeed);   // godray animation rate (mode 39)
+  uboF32[306] = (state.rectReach == null ? 1 : state.rectReach);
+  // godray animation rate (mode 39): snapped to integer cycles so every sin(ph)
+  // term completes whole periods over t 0..1 — fractional speeds break the loop.
+  uboF32[307] = Math.max(1, Math.round(state.gdSpeed == null ? 2 : state.gdSpeed));
   uboF32[308] = (state.gdSoft == null ? 0.5 : state.gdSoft);   // godray beam softness (mode 39)
   uboF32[309] = (state.gdBlur == null ? 0 : state.gdBlur);     // godray gaussian blur radius (mode 39)
   uboU32[208] = (state.originSource === 'paint' && state._paintReady) ? 255 : nPts;
@@ -881,6 +883,12 @@ let _frameCount = 0;
 window.__frameCount = () => _frameCount;
 function render() {
   _frameCount++;
+  // During a bake the recorder drives renderFrame() itself with deterministic
+  // t-stepping. Each awaited rAF/seek/back-pressure tick in the record loop
+  // would otherwise re-enter renderFrame here at the same t — harmless for
+  // stateless modes but it advances the advection/fog sims by extra fixed-dt
+  // steps, so the export evolves faster than the preview and differs run to run.
+  if (recording) { requestAnimationFrame(render); return; }
   if (state.playing) {
     const now = performance.now();
     const elapsed = (now - state.startTime) / 1000;
@@ -1679,7 +1687,7 @@ const MODE_DEFAULTS = {
   65: { mirrorDir: 0, spread: 0.03 },
   // box reveal (68): centred rectangle that expands uniformly outward with crisp
   // square corners. Seed half-size 0.15, front travels 0.6 past the edges.
-  68: { rectW: 0.15, rectH: 0.15, rectReach: 0.6, spread: 0.03, originAmount: 0 },
+  68: { rectW: 0.15, rectH: 0.15, rectReach: 1, spread: 0.03, originAmount: 0 },
 };
 function resetModeDefaults(modeId) {
   const d = MODE_DEFAULTS[modeId];
@@ -2014,7 +2022,7 @@ fGodray.addBinding(state, 'gdIntensity', { min: 0, max: 1, step: 0.01, label: 'i
 fGodray.addBinding(state, 'gdBeams',     { min: 0, max: 1, step: 0.01, label: 'beam count / thinness' });
 fGodray.addBinding(state, 'gdCloud',     { min: 0, max: 1, step: 0.01, label: 'break through cloud' });
 fGodray.addBinding(state, 'gdPulse',     { min: 0, max: 1, step: 0.01, label: 'pulse (in & out)' });
-fGodray.addBinding(state, 'gdSpeed',     { min: 0.25, max: 4, step: 0.05, label: 'animation speed' });
+fGodray.addBinding(state, 'gdSpeed',     { min: 1, max: 4, step: 1, label: 'animation speed' });  // integer = loop-safe
 fGodray.addBinding(state, 'gdSoft',      { min: 0, max: 1, step: 0.01, label: 'softness (edge feather)' });
 fGodray.addBinding(state, 'gdBlur',      { min: 0, max: 1, step: 0.01, label: 'gaussian blur' });
 
@@ -2264,7 +2272,11 @@ async function startRecording(opts = {}) {
   // really encode+mux 2 test frames and confirm bytes come out. First hit wins
   // (largest size, highest-capability codec). On a 4090 this should land AV1@8K;
   // elsewhere it falls back to 4K H.264. ──
-  const BITRATE = 12_000_000;
+  // Bitrate scales with pixel rate: a fixed bitrate that's fine at 1080p is
+  // ~16× starved at 8K, and slow grayscale gradients (this app's main content)
+  // are exactly what a starved encoder bands/blocks first. ~0.15 bits/pixel
+  // at the target fps, floored at the old 12 Mbps and capped at 120 Mbps.
+  const bitrateFor = (w, h) => Math.min(120_000_000, Math.max(12_000_000, Math.round(w * h * fps * 0.15)));
   async function probeRealEncode(codec, muxerCodec, w, h) {
     // Definitive: encode+mux 2 black frames, confirm a real file. Resolves fast
     // when an encoder emits nothing; 7s timeout guards a genuinely-stuck path.
@@ -2275,7 +2287,7 @@ async function startRecording(opts = {}) {
         try {
           const m = new Muxer({ target: new ArrayBufferTarget(), video: { codec: muxerCodec, width: w, height: h, frameRate: fps }, fastStart: 'in-memory' });
           enc = new VideoEncoder({ output: (ch, meta) => { try { m.addVideoChunk(ch, meta); } catch (e) { err = err || e; } }, error: e => { err = err || e; } });
-          enc.configure({ codec, width: w, height: h, framerate: fps, bitrate: BITRATE, hardwareAcceleration: 'prefer-hardware' });
+          enc.configure({ codec, width: w, height: h, framerate: fps, bitrate: bitrateFor(w, h), hardwareAcceleration: 'prefer-hardware' });
           // Encode two NON-uniform, frame-to-frame-varying frames. A flat/black
           // probe compresses below the size threshold at small resolutions and
           // false-negatives a working encoder, so paint real entropy instead.
@@ -2298,7 +2310,9 @@ async function startRecording(opts = {}) {
 
   const baseLong = Math.max(recW, recH + padPx0);
   const baseW = recW, baseH = recH;
-  const longs = [...new Set([baseLong, 7680, 4096, 3840, 2560, 1920].filter(d => d <= baseLong))];
+  // Graceful ladder: 6144/5120 between 7680 and 4096 so a failed 8K probe costs
+  // ~20-35% resolution, not half — matters when the projection upscales 2×.
+  const longs = [...new Set([baseLong, 7680, 6144, 5120, 4096, 3840, 2560, 1920].filter(d => d <= baseLong))];
   setRecordProgress(0, 'Analysing encoder…');
 
   let scale = 1, pick = null;
@@ -2310,12 +2324,12 @@ async function startRecording(opts = {}) {
     const tW = w + (w % 2), tH = (h + padS) + ((h + padS) % 2);
     for (const c of ENCODER_CANDIDATES) {
       if (Math.max(tW, tH) > c.max) continue;
-      if (!(await encoderConfigSupported(c.codec, tW, tH, fps, BITRATE))) continue;
+      if (!(await encoderConfigSupported(c.codec, tW, tH, fps, bitrateFor(tW, tH)))) continue;
       setRecordProgress(0, `Analysing encoder… ${c.label} @ ${tW}×${tH}`);
       const ok = await probeRealEncode(c.codec, c.muxer, tW, tH);
       console.log(`[record] probe ${c.label} @ ${tW}×${tH}: ${ok ? 'works ✓' : 'no output'}`);
       if (ok) {
-        pick = { config: { codec: c.codec, width: tW, height: tH, framerate: fps, bitrate: BITRATE, hardwareAcceleration: 'prefer-hardware' }, muxerCodec: c.muxer, label: c.label };
+        pick = { config: { codec: c.codec, width: tW, height: tH, framerate: fps, bitrate: bitrateFor(tW, tH), hardwareAcceleration: 'prefer-hardware' }, muxerCodec: c.muxer, label: c.label };
         scale = s; recW = w; recH = h; break outer;
       }
     }
@@ -2334,6 +2348,11 @@ async function startRecording(opts = {}) {
   const off = document.createElement('canvas');
   off.width = offW; off.height = totalH;
   const offCtx = off.getContext('2d');
+  // High-quality resample when a codec cap forces downscaling — the default
+  // 'low' (bilinear) undersamples below ~0.7×, aliasing fine matte detail into
+  // frame-to-frame shimmer the encoder then wastes bitrate on.
+  offCtx.imageSmoothingEnabled = true;
+  offCtx.imageSmoothingQuality = 'high';
   offCtx.fillStyle = '#000';
   offCtx.fillRect(0, 0, off.width, off.height);
 
@@ -2366,15 +2385,24 @@ async function startRecording(opts = {}) {
   // failure surfaces a message and still resets state (was silently aborting
   // with no file and no error before).
   try {
-    encoder.configure({ ...pick.config, width: offW, height: totalH });
+    encoder.configure({ ...pick.config, width: offW, height: totalH, bitrate: bitrateFor(offW, totalH) });
     state.playing = false;
     if (state.mode >= 10 && state.mode <= 14) advec.needsReset = true;
     if (state.partEnable) particles.needsReset = true;  // restart particle sim for a clean recording
 
     btnRecord.title = scale < 1 ? `Scaled to ${offW}×${totalH}. Recording…` : 'Recording…';
 
+    // Loop-exact endpoint: ambient standalone fields are periodic in t (phase =
+    // t·2π) so t=1 renders the SAME frame as t=0 — encoding both stalls the loop
+    // point for one frame on every cycle of the installed playback. Loop bakes
+    // step t = i/N (exclusive end); one-shot content (reveals, sims, ink pours,
+    // ambient in reveal role) must still land exactly on t=1, so it keeps the
+    // inclusive i/(N-1).
+    const isLoopBake = state.mode >= 33 && state.mode <= 62
+      && state.mode !== 55 && state.mode !== 59          // ink modes pour once
+      && state.ambRole >= 0.5;                           // standalone loop role
     for (let i = 0; i < totalFrames; i++) {
-      state.t = i / (totalFrames - 1);
+      state.t = isLoopBake ? i / totalFrames : i / (totalFrames - 1);
       // If T-slot has a video, seek it to the exact frame for this p.t and
       // wait for the seek to complete BEFORE rendering — otherwise the GPU
       // texture gets whatever frame was previously decoded, not the target.
@@ -2400,7 +2428,10 @@ async function startRecording(opts = {}) {
         timestamp: Math.round(i * frameDuration),
         duration: Math.round(frameDuration),
       });
-      encoder.encode(vf);
+      // Deterministic GOP: an IDR at frame 0 and a fixed 2-second cadence, so
+      // the loop start is always seekable and VBR "keyframe pumping" (quality
+      // dipping around encoder-chosen I-frames) lands at predictable spots.
+      encoder.encode(vf, { keyFrame: i % (fps * 2) === 0 });
       vf.close();
       if (encErr) throw encErr;   // bail as soon as the encoder/mux complains
 

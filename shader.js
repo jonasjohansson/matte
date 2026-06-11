@@ -194,6 +194,21 @@ fn grade1(x: f32) -> f32 {
   v = (v - 0.5) * (1.0 + p.gradeContrast) + 0.5 + p.gradeBright;
   return clamp(v, 0.0, 1.0);
 }
+// Output dither: ±0.5 LSB of interleaved gradient noise added to the final value
+// right before 8-bit quantization, so slow gradients (fog, godray glows, soft
+// reveal edges) dissolve into imperceptible noise instead of contour bands —
+// critical on 8K-wide projection where one code value spans dozens of pixels.
+// The per-frame offset decorrelates it temporally so the encoder averages it out.
+fn dither1(px: vec2f) -> f32 {
+  let q = px + fract(p.t * 7.0) * 113.0;
+  return (fract(52.9829189 * fract(0.06711056 * q.x + 0.00583715 * q.y)) - 0.5) / 255.0;
+}
+// C2 smootherstep: smoothstep is only C1 — its curvature jumps at the window ends,
+// which reads as faint mach bands framing wide soft gradients at projection scale.
+fn sstep5(a: f32, b: f32, x: f32) -> f32 {
+  let u = clamp((x - a) / max(b - a, 1e-6), 0.0, 1.0);
+  return u * u * u * (u * (u * 6.0 - 15.0) + 10.0);
+}
 // 3D value noise + fbm, for the raymarched volumetric fog (mode 52). Marching a
 // true 3D field is what gives volumetric depth + self-shadowing vs. stacked 2D.
 fn hash31(q: vec3f) -> f32 {
@@ -1847,14 +1862,19 @@ fn boxRevealMask(uv: vec2f) -> f32 {
   // the seed rect reveals at t=0, then every point flips in proportion to how
   // far it sits beyond the nearest edge. Purely geometric — no organic noise.
   //   rectW/rectH = seed half-size (uv units, aspect-corrected on x)
-  //   rectReach   = how far the front travels past the edge before t=1
+  //   rectReach   = fraction of the way to the far edge the front travels by
+  //                 t=1 (1 = exactly covers the frame). Normalising against the
+  //                 ACTUAL far-edge distance matters on wide surfaces: a fixed
+  //                 height-unit reach saturates most of an 8K frame into one
+  //                 end-of-clip pop (the far x-edge is canvasAspect/2 away).
   var q = uv - vec2f(0.5);
   q.x = q.x * p.canvasAspect;
   // distance OUTSIDE the box along each axis (0 inside), then take the larger:
   // a square (∞-norm) front so corners stay crisp instead of rounding off.
   let dd = max(abs(q) - vec2f(p.rectW, p.rectH), vec2f(0.0));
   let d = max(dd.x, dd.y);
-  return clamp(d / max(p.rectReach, 0.0001), 0.0, 1.0);
+  let need = max(p.canvasAspect * 0.5 - p.rectW, 0.5 - p.rectH);
+  return clamp(d / max(p.rectReach * need, 0.0001), 0.0, 1.0);
 }
 fn organicMask(uv: vec2f, lA: f32, lB: f32, edge: f32) -> f32 {
   let n1 = fbm(uv * p.maskScale + p.seed * 0.13);
@@ -2143,7 +2163,7 @@ fn frostMask(uv: vec2f) -> f32 {
   // Advection family (modes 10..14): the compute pipeline writes a state
   // texture each frame; here we just sample and present it.
   if (p.mode >= 10u && p.mode <= 14u) {
-    return vec4f(textureSampleLevel(advState, samp, uv, 0.0).rgb * padMask, 1.0);
+    return vec4f((textureSampleLevel(advState, samp, uv, 0.0).rgb + dither1(in.pos.xy)) * padMask, 1.0);
   }
   // mode 67 — fog sim: the real density-advection solver gives the large-scale
   // SHAPE + organic outward GROWTH (state texture); on top we carve high-frequency
@@ -2174,7 +2194,7 @@ fn frostMask(uv: vec2f) -> f32 {
     let jagg = (structure - 0.5) * 0.5;
     let reachg = 1.0 - smoothstep(Rg - 0.28, Rg + 0.28, rr + jagg);
     let v = coverage * haze * reachg;                               // hazy fog + gate the pour
-    return vec4f(vec3f(clamp(v, 0.0, 1.0)) * padMask, 1.0);
+    return vec4f(vec3f(clamp(v, 0.0, 1.0) + dither1(in.pos.xy)) * padMask, 1.0);
   }
 
   // Stretch t so the per-pixel smoothstep window (mask±spread) is fully
@@ -2388,12 +2408,12 @@ fn frostMask(uv: vec2f) -> f32 {
     mask = clamp((mask - 0.1) / 0.78, 0.0, 1.0);
     mask = clamp(mask + p.maskShift, 0.0, 1.0);
   }
-  var mixT = clamp(smoothstep(mask - sp, mask + sp, t), 0.0, 1.0);
+  var mixT = sstep5(mask - sp, mask + sp, t);
   if (p.mode == 29u) {
     // snap: a tiny reveal window so each cell ignites near-instantly. Edge
     // softness still scales it, but with a much lower floor than the default.
     let w29 = mix(0.004, 0.25, clamp(p.spread, 0.0, 1.0));
-    mixT = clamp(smoothstep(mask - w29, mask + w29, t), 0.0, 1.0);
+    mixT = sstep5(mask - w29, mask + w29, t);
   }
   // Burn mode: hard step at the front — no crossfade between A and B at all.
   // The char band + glow at the front provide the only visible transition.
@@ -2873,7 +2893,7 @@ fn frostMask(uv: vec2f) -> f32 {
       bite = 0.3 + 0.7 * nz;                                // dark mottling within the band
     }
     let inner = clamp((1.0 - p.vignFeather) * anim, 0.0, 0.999);
-    let band = smoothstep(inner, anim, vd);                 // 0 inside .. 1 at the edge
+    let band = sstep5(inner, anim, vd);                     // 0 inside .. 1 at the edge (C2 = no mach band)
     vign = clamp(1.0 - band * p.vignAmount * mix(1.0, bite, p.vignTexture), 0.0, 1.0);
   }
   if (p.matteOutput == 1u) {
@@ -2882,8 +2902,11 @@ fn frostMask(uv: vec2f) -> f32 {
     mv = grade1(mv);                                        // global grade (levels/bright/contrast)
     // gradient-map: texLut is a grayscale ramp by default (⇒ pure B/W matte), or
     // a colour ramp for on-screen colourising (swapped back to gray when recording).
-    var col = textureSample(texLut, samp, vec2f(mv, 0.5)).rgb;
-    return vec4f(col * vign * padMask, 1.0);
+    // texel-centre remap: sampling the 256-wide ramp at raw mv applies a 256/255
+    // gain with a half-texel offset and clamps flat over the outer half-texel at
+    // both ends — remapped, the gray ramp is a true identity on the matte value.
+    var col = textureSample(texLut, samp, vec2f(mv * (255.0 / 256.0) + 0.5 / 256.0, 0.5)).rgb;
+    return vec4f((col * vign + dither1(in.pos.xy)) * padMask, 1.0);
   }
 
   // Texture overlay on the composite (image/preview look only — the matte path
@@ -2894,7 +2917,7 @@ fn frostMask(uv: vec2f) -> f32 {
   }
   let rgb = clamp(outc * vign, vec3f(0.0), vec3f(1.0));
   let graded = vec3f(grade1(rgb.r), grade1(rgb.g), grade1(rgb.b));
-  return vec4f(graded * padMask, alpha * padMask);
+  return vec4f((graded + dither1(in.pos.xy)) * padMask, alpha * padMask);
 }
 `;
 

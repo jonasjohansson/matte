@@ -17,6 +17,12 @@ export const ENCODER_CANDIDATES = [
   { codec: 'avc1.640028',      muxer: 'avc',  max: 4096, label: 'H.264 High L4 (4K)' },
   { codec: 'av01.0.16M.08',    muxer: 'av1',  max: 8192, label: 'AV1 (8K)' },              // >4K: NVENC AV1 (RTX 40-series)
   { codec: 'hev1.1.6.L186.B0', muxer: 'hevc', max: 8192, label: 'HEVC L6.1 (8K)' },        // >4K
+  // H.264 >4K fallbacks so machines without AV1/HEVC-8K encode don't drop
+  // straight to 4096 (half resolution in one step). L6.0 covers full 8K areas;
+  // L5.2's area cap (~9.4M luma samples) still fits very wide+short ELVERKET
+  // strips (e.g. 8192×1148). The real-encode probe decides what actually works.
+  { codec: 'avc1.64003C',      muxer: 'avc',  max: 8192, label: 'H.264 High L6.0 (8K)' },
+  { codec: 'avc1.640034',      muxer: 'avc',  max: 8192, label: 'H.264 High L5.2 (wide)' },
   { codec: 'avc1.42E01E',      muxer: 'avc',  max: 4096, label: 'H.264 Baseline' },        // last-resort
 ];
 
