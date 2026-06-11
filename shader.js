@@ -160,9 +160,14 @@ fn applyCurve(x: f32, mode: u32) -> f32 {
 }
 
 fn hash21(q: vec2f) -> f32 {
-  var x = fract(q * vec2f(123.34, 456.21));
-  x += dot(x, x + 45.32);
-  return fract(x.x * x.y);
+  // fract-first domain reduction keeps mantissa precision at large coordinates.
+  // The old fract(q·456.21)-style hash lost all fractional bits once |q| got
+  // into the thousands — exactly where seed offsets (+seed·1.7) and the 5th fbm
+  // octave (×2.03⁴) land — so fine grain layers striped/flattened at high seeds
+  // and on 8K-wide surfaces.
+  var p3 = fract(vec3f(q.x, q.y, q.x) * 0.1031);
+  p3 = p3 + dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
 }
 fn vnoise(q: vec2f) -> f32 {
   let i = floor(q);
@@ -175,12 +180,17 @@ fn vnoise(q: vec2f) -> f32 {
   return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
 fn fbm(q: vec2f) -> f32 {
+  // Octaves rotate by ~0.6 rad each (×2.03 lacunarity folded into the matrix)
+  // with an offset, so each octave's lattice is decorrelated. Un-rotated fbm
+  // stacks every octave's grid axis-aligned — the value-noise plus/diamond bias
+  // reinforces across octaves into visible horizontal/vertical streaking, which
+  // hard thresholds (cloud gaps, foliage dapple) turn into rectilinear edges.
   var v = 0.0;
   var amp = 0.5;
   var pp = q;
   for (var i = 0; i < 5; i = i + 1) {
     v += amp * vnoise(pp);
-    pp *= 2.03;
+    pp = mat2x2f(1.675431, 1.146224, -1.146224, 1.675431) * pp + vec2f(13.7, 7.1);
     amp *= 0.5;
   }
   return v;
@@ -236,10 +246,12 @@ fn vnoise3(q: vec3f) -> f32 {
   return mix(mix(x00, x10, u.y), mix(x01, x11, u.y), u.z);
 }
 fn fbm3(q: vec3f) -> f32 {
+  // xy rotates per octave (like fbm) to kill the axis-aligned lattice bias.
   var v = 0.0; var amp = 0.5; var pp = q;
   for (var i = 0; i < 4; i = i + 1) {
     v = v + amp * vnoise3(pp);
-    pp = pp * 2.02; amp = amp * 0.5;
+    pp = vec3f(mat2x2f(1.667177, 1.140577, -1.140577, 1.667177) * pp.xy, pp.z * 2.02 + 9.4);
+    amp = amp * 0.5;
   }
   return v;
 }
@@ -901,7 +913,12 @@ fn ambVolFog(uv: vec2f) -> f32 {
   return volFogField(uv, p.t);
 }
 fn hash22(p: vec2f) -> vec2f {
-  return fract(sin(vec2f(dot(p, vec2f(127.1, 311.7)), dot(p, vec2f(269.5, 183.3)))) * 43758.5453);
+  // fract-first hash (precision-safe, device-independent) — the old
+  // fract(sin(dot)) form depends on each GPU's sin() precision and degrades at
+  // large cell coordinates, visibly distorting worley clump layouts.
+  var p3 = fract(vec3f(p.x, p.y, p.x) * vec3f(0.1031, 0.1030, 0.0973));
+  p3 = p3 + dot(p3, p3.yzx + 33.33);
+  return fract((vec2f(p3.x, p3.x) + vec2f(p3.y, p3.z)) * vec2f(p3.z, p3.y));
 }
 fn worleyF1(p: vec2f) -> f32 {
   // distance to the nearest cell point: ~0 at leaf-clump centres, larger in the
@@ -3114,9 +3131,10 @@ ${PARAMS_STRUCT}
 }
 
 fn hash21(q: vec2f) -> f32 {
-  var x = fract(q * vec2f(123.34, 456.21));
-  x += dot(x, x + 45.32);
-  return fract(x.x * x.y);
+  // keep in lockstep with the main SHADER's hash (precision-safe fract-first)
+  var p3 = fract(vec3f(q.x, q.y, q.x) * 0.1031);
+  p3 = p3 + dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
 }
 fn vnoise(q: vec2f) -> f32 {
   let i = floor(q); let f = fract(q);
@@ -3128,8 +3146,13 @@ fn vnoise(q: vec2f) -> f32 {
   return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
 fn fbm(q: vec2f) -> f32 {
+  // rotated octaves, in lockstep with the main SHADER's fbm
   var v = 0.0; var amp = 0.5; var pp = q;
-  for (var i = 0; i < 4; i = i + 1) { v += amp * vnoise(pp); pp *= 2.03; amp *= 0.5; }
+  for (var i = 0; i < 4; i = i + 1) {
+    v += amp * vnoise(pp);
+    pp = mat2x2f(1.675431, 1.146224, -1.146224, 1.675431) * pp + vec2f(13.7, 7.1);
+    amp *= 0.5;
+  }
   return v;
 }
 fn luma(c: vec3f) -> f32 { return dot(c, vec3f(0.299, 0.587, 0.114)); }
