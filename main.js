@@ -2017,8 +2017,10 @@ fAmbient.addBinding(state, 'ambDetail', { min: 0, max: 1, step: 0.01, label: 'de
 const fDir = fWater.addFolder({ title: 'Direction / source', expanded: true });
 fDir.addBinding(state, 'driftAngle', { min: 0, max: 1, step: 0.01, label: 'direction' });
 fDir.addBinding(state, 'driftAmount', { min: 0, max: 1, step: 0.01, label: 'amount' });
-fDir.addBinding(state, 'sunX', { min: 0, max: 1, step: 0.01, label: 'sun / source x' });
-fDir.addBinding(state, 'sunY', { min: 0, max: 1, step: 0.01, label: 'sun / source y' });
+// −0.5..1.5: the sun/source can sit OUTSIDE the frame so rays/glow enter from
+// beyond the border (e.g. a sun just above the projection surface).
+fDir.addBinding(state, 'sunX', { min: -0.5, max: 1.5, step: 0.01, label: 'sun / source x' });
+fDir.addBinding(state, 'sunY', { min: -0.5, max: 1.5, step: 0.01, label: 'sun / source y' });
 fDir.addBinding(state, 'streakMove', { min: 0, max: 1, step: 0.01, label: 'movement dir' });
 
 const fGodray = fWater.addFolder({ title: 'Godrays', expanded: true });
@@ -2069,8 +2071,8 @@ fPts.addButton({ title: 'Clear paint' }).on('click', () => { if (typeof clearPai
 
 // — advanced shaping (collapsed) —
 const fAdv = fDis.addFolder({ title: 'Advanced', expanded: false });
-fAdv.addBinding(state, 'originX', { min: 0, max: 1, step: 0.01, label: 'origin x' });
-fAdv.addBinding(state, 'originY', { min: 0, max: 1, step: 0.01, label: 'origin y' });
+fAdv.addBinding(state, 'originX', { min: -0.5, max: 1.5, step: 0.01, label: 'origin x' });   // beyond-frame allowed
+fAdv.addBinding(state, 'originY', { min: -0.5, max: 1.5, step: 0.01, label: 'origin y' });
 fAdv.addBinding(state, 'maskScale', { min: 0.3, max: 4, step: 0.05, label: 'mask scale' });
 fAdv.addBinding(state, 'curve', { label: 'timing', options: { 'linear': 0, 'ease-in-out': 1, 'ease-in': 2, 'ease-out': 3 } });
 fAdv.addBinding(state, 'seed', { min: 0, max: 999, step: 1 });

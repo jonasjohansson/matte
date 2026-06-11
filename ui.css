@@ -48,7 +48,7 @@
 /* subtle gray checkerboard behind the canvas + a thin frame on the canvas itself,
    so the output bounds are visible (esp. with floor padding). Both are CSS only —
    not drawn into the canvas, so they never appear in the export. */
-#stage{ inset:0 var(--stage-r,0px) 0 0 !important; padding:0 !important; z-index:0;
+#stage{ inset:0 var(--stage-r,0px) 0 var(--stage-l,0px) !important; padding:0 !important; z-index:0;
   background-color:var(--ui-bg);
   background-image:
     linear-gradient(45deg, rgba(255,255,255,.05) 25%, transparent 25% 75%, rgba(255,255,255,.05) 75%),
@@ -274,6 +274,11 @@ body.ui-hidden #ui-controls, body.ui-hidden #ui-right, body.ui-hidden #ui-modes{
    effect sits beside the panels instead of behind them. */
 body.ui-right-only #ui-controls{ display:none; }
 body.ui-right-only{ --stage-r: calc(var(--right) + var(--modes)); }
+/* fit-between: ALL panels stay, but the canvas shrinks to the free gap between
+   the left controls and the right rails — the FULL frame is visible while
+   working (in the default state the full-window canvas slides UNDER the opaque
+   panels, hiding its outer ~30%). */
+body.ui-fit{ --stage-l: var(--left); --stage-r: calc(var(--right) + var(--modes)); }
 body.ui-hidden #stage{ inset:0 !important; }
 #ui-hide{ position:fixed; top:10px; right:10px; z-index:500; width:30px; height:30px;
   display:flex; align-items:center; justify-content:center; cursor:pointer;

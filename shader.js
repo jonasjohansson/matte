@@ -484,10 +484,12 @@ fn ambGodrays(uv: vec2f) -> f32 {
   let sharp = mix(2.4, 0.5, p.gdSoft);
   let beams = pow(clamp(fbm(cirB + sway + vec2f(0.0, sin(ph) * 0.31)) * 1.5, 0.0, 1.0), sharp);
   // cloud break-through: higher gdCloud lowers the gap threshold so more light
-  // passes. Radial decorrelation folded into the circle sample (dist offsets).
+  // passes. dist lives on its OWN noise axis (3D): mixing it into the circle
+  // coordinates slides the angular pattern as you move out along a ray, which
+  // visibly CURVES the beams — orthogonal decorrelation keeps them straight.
   let cirG = vec2f(cos(ang), sin(ang)) * 3.0;
   let gaps  = smoothstep(mix(0.55, 0.18, p.gdCloud), 0.85,
-                         fbm(cirG + sway * 0.8 + vec2f(dist * 2.0 + 1.0, dist * -1.3)));
+                         fbm3(vec3f(cirG + sway * 0.8, dist * 2.0 + 1.0)));
   // dappled foliage / tree-canopy breakup (finer, swaying; aspect-corrected so
   // the dapple stays round on very wide surfaces instead of smearing 8× wide)
   var q = uv; q.x = q.x * p.canvasAspect;
@@ -991,10 +993,12 @@ fn ambForestLight(uv: vec2f) -> f32 {
   let falloff = exp(-dist * mix(1.2, 3.0, p.ambSoft));
   let core = exp(-dist * mix(5.0, 12.0, 1.0 - p.ambSize));        // bright sun disc
   // radial god-ray striations — visible beams fanning out from the sun.
-  // integer spoke count + circle-sampled fbm = no seam at the atan2 branch cut
+  // integer spoke count + circle-sampled fbm = no seam at the atan2 branch cut;
+  // dist on its own 3D axis keeps the rays straight (mixed into the circle
+  // coords it would slide the angular pattern with radius and curve them).
   let ang = atan2(dd.y, dd.x);
   let rayStr = 0.5 + 0.5 * pow(0.5 + 0.5 * sin(ang * floor(mix(14.0, 40.0, p.ambDetail))
-             + fbm(vec2f(cos(ang), sin(ang)) * 4.0 + vec2f(dist * 3.0, dist * -1.7)) * 5.0), 2.2);
+             + fbm3(vec3f(cos(ang) * 4.0, sin(ang) * 4.0, dist * 3.0)) * 5.0), 2.2);
   var v = core * 1.2 + shaft * falloff * rayStr * 1.9 * openLocal + openLocal * 0.1;
   // bokeh dapples floating in the lit gaps.
   let count = u32(mix(3.0, 16.0, p.ambCount) + 0.5);

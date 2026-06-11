@@ -15,7 +15,7 @@
     // reveal / movement / advanced (transition modes)
     originAmount:['from within',0,1,.01], spread:['edge softness',0,1,.01],
     turbulence:['turbulence',0,1,.01], flow:['flow',0,1,.01], undulate:['undulate',0,1,.01], animate:['animate',0,1,.01],
-    originX:['origin x',0,1,.01], originY:['origin y',0,1,.01], maskScale:['mask scale',.3,4,.05],
+    originX:['origin x',-0.5,1.5,.01], originY:['origin y',-0.5,1.5,.01], maskScale:['mask scale',.3,4,.05],
     maskShift:['mask shift',-.5,.5,.005], organic:['organic',0,1,.01], edges:['edges',-1,1,.01], seed:['seed',0,999,1],
     curve:{t:'select',label:'timing',opts:{'linear':0,'ease-in-out':1,'ease-in':2,'ease-out':3}},
     // column swipe (mode 63)
@@ -32,7 +32,7 @@
     pointFill:{t:'check',label:'fill out (cover by end)'}, paintBrush:['paint brush',.02,.4,.01],
     // direction / source
     driftAngle:['direction',0,1,.01], driftAmount:['amount',0,1,.01],
-    sunX:['sun / source x',0,1,.01], sunY:['sun / source y',0,1,.01], streakMove:['movement dir',0,1,.01],
+    sunX:['sun / source x',-0.5,1.5,.01], sunY:['sun / source y',-0.5,1.5,.01], streakMove:['movement dir',0,1,.01],
     // ambient
     ambCount:['count / density',0,1,.01], ambSize:['size / scale',0,1,.01], ambSoft:['softness',0,1,.01],
     ambSpeed:['speed',0,1,.01], ambDetail:['detail / fidelity',0,1,.01],
@@ -419,17 +419,20 @@
     // visible handle (top-right) makes it reversible even when everything is hidden.
     const uiToggle=document.createElement('button'); uiToggle.id='ui-hide'; uiToggle.title='show / hide panels (H)'; uiToggle.textContent='⊙';
     document.body.appendChild(uiToggle);
-    // 3-state cycle: 0 full UI · 1 selected mode's settings only · 2 nothing
+    // 4-state cycle: 0 full UI (canvas behind the panels) · 1 fit-between (FULL
+    // frame visible in the gap between all panels) · 2 mode settings only · 3 nothing
     let uiState=0;
     const applyUI=()=>{
-      document.body.classList.toggle('ui-right-only', uiState===1);
-      document.body.classList.toggle('ui-hidden', uiState===2);
+      document.body.classList.toggle('ui-fit', uiState===1);
+      document.body.classList.toggle('ui-right-only', uiState===2);
+      document.body.classList.toggle('ui-hidden', uiState===3);
       uiToggle.classList.toggle('on', uiState!==0);
-      uiToggle.title = uiState===0 ? 'hide the left panel + fit the canvas beside the right rails (H)'
-                     : uiState===1 ? 'hide all panels (H)'
+      uiToggle.title = uiState===0 ? 'fit the canvas between the panels — see the full frame (H)'
+                     : uiState===1 ? 'hide the left panel + fit the canvas beside the right rails (H)'
+                     : uiState===2 ? 'hide all panels (H)'
                      : 'show all panels (H)';
     };
-    const cycleUI=()=>{ uiState=(uiState+1)%3; applyUI(); };
+    const cycleUI=()=>{ uiState=(uiState+1)%4; applyUI(); };
     uiToggle.onclick=cycleUI;
     window.addEventListener('keydown',e=>{ const t=e.target.tagName; if(t==='INPUT'||t==='SELECT'||t==='TEXTAREA') return; if(e.key==='Tab'||e.key==='h'||e.key==='H'){ e.preventDefault(); cycleUI(); }});
 
