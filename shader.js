@@ -209,6 +209,15 @@ fn sstep5(a: f32, b: f32, x: f32) -> f32 {
   let u = clamp((x - a) / max(b - a, 1e-6), 0.0, 1.0);
   return u * u * u * (u * (u * 6.0 - 15.0) + 10.0);
 }
+// Loop-safe cycle count: an ambient clock ph = t·2π·k only returns to its start
+// at t=1 when k is a WHOLE number — fractional k makes every sin/cos term jump
+// at the loop seam of a baked loop. Snap all speed-derived multipliers with this.
+fn loopCycles(x: f32) -> f32 { return max(1.0, round(x)); }
+// Seam crossfade weight for ambient fields whose identity is DIRECTIONAL travel
+// (rolling fog, rising fire, falling rain/snow): linear travel can never wrap, so
+// the last 15% of the loop dissolves into the same field evaluated one loop
+// earlier — t=1 lands exactly on the t=0 frame with a soft handover, not a jump.
+fn seamX(t: f32) -> f32 { return smoothstep(0.85, 1.0, t); }
 // 3D value noise + fbm, for the raymarched volumetric fog (mode 52). Marching a
 // true 3D field is what gives volumetric depth + self-shadowing vs. stacked 2D.
 fn hash31(q: vec3f) -> f32 {
@@ -263,9 +272,12 @@ fn ambBokeh(uv: vec2f) -> f32 {
   let dd = dir * p.driftAmount;
   let count = u32(mix(6.0, 40.0, p.ambCount));
   let szMul = mix(0.45, 1.8, p.ambSize);
-  let travel = (0.05 + p.ambSpeed * 0.4) * p.t;          // slow net drift over the loop
-  // soft defocused light field underneath, drifting slowly
-  var v = fbm(uv * 2.2 + dd * travel * 0.6) * 0.3;
+  // slow drift along the direction, swinging back over the loop (sin) so the
+  // field at t=1 is exactly the field at t=0 — a linear t-drift never wraps.
+  let travel = (0.05 + p.ambSpeed * 0.4) * 0.5 * sin(ph);
+  // soft defocused light field underneath, drifting slowly (aspect-corrected so
+  // the underlay cells stay round on very wide surfaces)
+  var v = fbm(auv * 2.2 + dd * travel * 0.6) * 0.3;
   for (var i = 0u; i < 40u; i = i + 1u) {
     if (i >= count) { break; }
     let fi = f32(i) + 1.0;
@@ -287,11 +299,11 @@ fn ambBokeh(uv: vec2f) -> f32 {
   }
   // foliage: slow dark leaf shapes drifting across, so the glare reads as seen
   // THROUGH trees (dappled occlusion)
-  let foliage = mix(1.0, smoothstep(0.28, 0.72, fbm(uv * 4.0 + dd * travel * 0.8 + 2.0)), 0.5);
+  let foliage = mix(1.0, smoothstep(0.28, 0.72, fbm(auv * 4.0 + dd * travel * 0.8 + 2.0)), 0.5);
   var m = v * foliage;
   if (p.ambDetail > 0.001) {                                  // fine sparkle on lit bokeh + finer leaf breakup
-    let spark = fbm(auv * mix(16.0, 46.0, p.ambDetail) + ph * 0.15) - 0.5;
-    let leaf  = smoothstep(0.35, 0.65, fbm(uv * mix(9.0, 22.0, p.ambDetail) + 7.0));
+    let spark = fbm(auv * mix(16.0, 46.0, p.ambDetail) + vec2f(sin(ph), cos(ph)) * 0.15) - 0.5;
+    let leaf  = smoothstep(0.35, 0.65, fbm(auv * mix(9.0, 22.0, p.ambDetail) + 7.0));
     m = m * (1.0 + spark * p.ambDetail * 0.9) * mix(1.0, leaf, p.ambDetail * 0.35);
   }
   return clamp(m, 0.0, 1.0);
@@ -307,7 +319,9 @@ fn ambStreaks(uv: vec2f) -> f32 {
   let along  = dot(pp, dir);
   // movement direction (streakMove) is independent of the line orientation (driftAngle):
   // project a movement vector onto the across/along axes so vertical lines can slide sideways.
-  let speed = ph * (0.04 + p.ambSpeed * 0.22);
+  // sweep back and forth over the loop (sin) — a linear ph drift through the
+  // noise domain never returns to its start, popping at the loop seam.
+  let speed = sin(ph) * (0.13 + p.ambSpeed * 0.7);
   let mvA = p.streakMove * 6.2831853;
   let moveV = vec2f(cos(mvA), sin(mvA)) * speed;
   let dAcross = dot(moveV, perp) * 4.0;
@@ -315,8 +329,10 @@ fn ambStreaks(uv: vec2f) -> f32 {
   let sc = vec2f(across * mix(3.5, 11.0, p.ambCount) + dAcross, along * mix(1.4, 0.7, p.ambSize) + dAlong);
   var s = fbm(sc) + 0.55 * fbm(sc * vec2f(2.2, 1.0) + vec2f(0.0, dAlong));
   s = pow(clamp((s - 0.45) * 1.9, 0.0, 1.0), mix(2.6, 0.9, p.ambSoft));  // sharpen->soften
+  // smear only widens lit streaks — added unconditionally it floors the blacks
+  // at ~0.12 grey, leaking light through the "dark" gaps of the matte.
   let smear = (fbm(sc + vec2f(0.0, 0.05)) + fbm(sc - vec2f(0.0, 0.05))) * 0.12;
-  var m = s + smear;
+  var m = s + smear * smoothstep(0.02, 0.25, s);
   if (p.ambDetail > 0.001) {                                  // fine striations within the streaks
     let fineSc = vec2f(across * mix(14.0, 40.0, p.ambDetail), along * mix(2.0, 1.0, p.ambSize) + dAlong * 1.7);
     m = m * (1.0 + (fbm(fineSc) - 0.5) * p.ambDetail * 0.7);
@@ -339,19 +355,26 @@ fn ambBlooms(uv: vec2f) -> f32 {
   // soft bloom shaping: patches open / breathe; ambSoft widens the wet falloff
   v = smoothstep(mix(0.55, 0.30, p.ambSoft), mix(0.78, 0.92, p.ambSoft), v);
   if (p.ambDetail > 0.001) {                          // fine granulation inside the blooms
-    let g = fbm(auv * mix(8.0, 26.0, p.ambDetail) + ph * 0.1) - 0.5;
+    let g = fbm(auv * mix(8.0, 26.0, p.ambDetail) + vec2f(sin(ph), cos(ph)) * 0.1) - 0.5;
     v = v * (1.0 + g * p.ambDetail * 0.7);
   }
   return clamp(v * 0.92, 0.0, 1.0);
 }
 fn ambRipples(uv: vec2f) -> f32 {
-  let ph = p.t * 6.2831853 * (0.3 + p.ambSpeed * 0.9);   // slower base speed
+  // loop-safe clock: whole cycles only, and every per-ring phase multiplier is
+  // an integer, so all rings return to their t=0 position at t=1.
+  let ph = p.t * 6.2831853 * loopCycles(1.0 + p.ambSpeed * 3.0);
   var auv = uv; auv.x = auv.x * p.canvasAspect;
-  let w = vec2f(fbm(auv * 3.0 + ph * 0.06), fbm(auv * 3.0 + 5.0 - ph * 0.05)) - vec2f(0.5, 0.5);
+  let w = vec2f(fbm(auv * 3.0 + vec2f(sin(ph), cos(ph)) * 0.06),
+                fbm(auv * 3.0 + 5.0 - vec2f(cos(ph), sin(ph)) * 0.05)) - vec2f(0.5, 0.5);
   // placed points become ripple sources; with none placed, count sets how many
   // procedural sources there are.
   let useClicked = p.originCount > 0u && p.originCount < 200u;
   let nsrc = select(u32(mix(1.0, 6.0, p.ambCount) + 0.5), min(6u, p.originCount), useClicked);
+  // accumulate the SIGNED wave sum, not per-source 0.5+0.5·wave averages: the
+  // old form settled to constant 0.5 grey away from sources and its maximum
+  // shrank as sources were added (6 sources could never exceed ~0.58) — the
+  // field never reached white OR black. Signed interference keeps full range.
   var v = 0.0;
   for (var i = 0u; i < 6u; i = i + 1u) {
     if (i >= nsrc) { break; }
@@ -361,19 +384,22 @@ fn ambRipples(uv: vec2f) -> f32 {
     c.x = c.x * p.canvasAspect;
     let d = length(auv + w * 0.14 - c);
     let freq = mix(26.0, 9.0, p.ambSize) + fi * 3.0;
-    let ring = sin(d * freq - ph * (1.0 + fi * 0.2)) * exp(-d * 1.7);           // outward, decaying
-    let fine = sin(d * freq * 2.7 - ph * (1.6 + fi * 0.2)) * exp(-d * 2.2);     // finer concentric rings
-    v = v + 0.5 + 0.5 * (ring + fine * p.ambDetail * 0.5);
+    let ring = sin(d * freq - ph * (1.0 + fi)) * exp(-d * 1.7);                 // outward, decaying
+    let fine = sin(d * freq * 2.7 - ph * (2.0 + fi)) * exp(-d * 2.2);           // finer concentric rings
+    v = v + ring + fine * p.ambDetail * 0.5;
   }
-  var m = pow(clamp(v / f32(nsrc), 0.0, 1.0), mix(2.6, 1.1, p.ambSoft));        // caustic sharp->soft
+  let lvl = clamp(0.5 + 0.62 * v / sqrt(f32(nsrc)), 0.0, 1.0);
+  var m = pow(lvl, mix(2.6, 1.1, p.ambSoft));                                   // caustic sharp->soft
   if (p.ambDetail > 0.001) {                                                    // water-surface micro detail (keeps blacks)
-    let g = fbm(auv * mix(14.0, 42.0, p.ambDetail) + ph * 0.2) - 0.5;
+    let g = fbm(auv * mix(14.0, 42.0, p.ambDetail) + vec2f(sin(ph), cos(ph)) * 0.2) - 0.5;
     m = m * (1.0 + g * p.ambDetail * 0.8);
   }
   return clamp(m, 0.0, 1.0);
 }
 fn ambAurora(uv: vec2f) -> f32 {
-  let ph = p.t * 6.2831853 * (0.4 + p.auroraSpeed * 1.4);
+  // loop-safe: whole cycles, and the curtains sway (sin) instead of drifting
+  // linearly through the noise — linear drifts never return at the seam.
+  let ph = p.t * 6.2831853 * loopCycles(0.4 + p.auroraSpeed * 1.6);
   let x = uv.x * p.canvasAspect;                 // aspect-consistent horizontal
   let dens = mix(0.8, 3.2, p.auroraDensity);
   let reach = mix(5.5, 1.6, p.auroraHeight);     // smaller = rays reach higher
@@ -381,20 +407,20 @@ fn ambAurora(uv: vec2f) -> f32 {
   // a few overlapping curtain layers at different depths and drift speeds
   for (var i = 0u; i < 3u; i = i + 1u) {
     let fi = f32(i) + 1.0;
-    let drift = ph * (0.04 + 0.03 * fi);
+    let drift = sin(ph + fi * 2.1) * (0.22 + 0.16 * fi);
     // soft, irregular lit clusters along x (not evenly spaced)
-    let cluster = pow(clamp(fbm(vec2f(x * dens * (0.6 + 0.3 * fi) + drift, ph * 0.1 + fi * 3.0)), 0.0, 1.0), 1.4);
+    let cluster = pow(clamp(fbm(vec2f(x * dens * (0.6 + 0.3 * fi) + drift, 0.31 * sin(ph + fi) + fi * 3.0)), 0.0, 1.0), 1.4);
     // fine wavering vertical ray striations
-    let waver = fbm(vec2f(x * 4.0 + drift, ph * 0.2 + fi)) * 6.0;
+    let waver = fbm(vec2f(x * 4.0 + drift, 0.6 * sin(ph) + fi)) * 6.0;
     let rays = 0.45 + 0.55 * pow(0.5 + 0.5 * sin(x * (12.0 + 5.0 * fi) + waver), 2.2);
     // wavy base height; rays shoot UP from it (uv.y is y-down) and fade
     let base = 0.6 + 0.18 * fbm(vec2f(x * 1.4 + drift, 7.0 + fi));
     let up = clamp(base - uv.y, 0.0, 1.0);
     let env = exp(-up * reach) * smoothstep(base + 0.12, base - 0.03, uv.y) * smoothstep(0.0, 0.12, uv.y);
-    v = v + cluster * mix(0.5, 1.0, rays) * env * (0.7 + 0.3 * sin(ph * 1.1 + x * 2.0 + fi * 2.0));
+    v = v + cluster * mix(0.5, 1.0, rays) * env * (0.7 + 0.3 * sin(ph + x * 2.0 + fi * 2.0));
   }
   // a broad brightness wave of borealis travelling sideways through the curtains
-  let wave = 0.5 + 0.5 * sin(x * 0.55 - ph * 0.7 + fbm(vec2f(x * 0.4, ph * 0.1)) * 3.5);
+  let wave = 0.5 + 0.5 * sin(x * 0.55 - ph + fbm(vec2f(x * 0.4, 0.31 * sin(ph))) * 3.5);
   v = v * mix(1.0, wave, p.auroraWave);
   v = clamp(v * 1.5, 0.0, 1.0);
   // darkness: deepen the gaps and boost contrast for more variance
@@ -404,17 +430,25 @@ fn ambAurora(uv: vec2f) -> f32 {
 fn ambGlare(uv: vec2f) -> f32 {
   let ph = p.t * 6.2831853;
   var sun = vec2f(p.sunX, p.sunY);                       // sun position set by sliders
-  sun = sun + vec2f(0.04 * sin(ph * 0.5), 0.03 * cos(ph * 0.4));
+  sun = sun + vec2f(0.04 * sin(ph), 0.03 * cos(ph));     // whole cycles = loop-safe wobble
   var duv = uv - sun; duv.x = duv.x * p.canvasAspect;
   let d = length(duv);
   let ang = atan2(duv.y, duv.x);
-  let nrays = mix(4.0, 16.0, p.ambCount);          // ray count
-  let rays0 = 0.5 + 0.5 * sin(ang * nrays + ph * (0.5 + p.ambSpeed)) * (fbm(vec2f(ang * 2.0, ph * 0.3) + 3.0) + 0.4);
-  let rays = rays0 + 0.5 * sin(ang * nrays * 3.0 + ph) * p.ambDetail * 0.4;   // finer ray striations
+  // Organic rays: angular fbm sampled ON A CIRCLE (cos/sin of ang) so the noise
+  // is inherently periodic across the atan2 branch cut — no radial seam — and
+  // drifted circularly so it loops. Replaces the old single-sin starburst whose
+  // perfectly even spokes read as clip-art at projection scale. Irregular beam
+  // widths/brightness come from the noise; ambCount sets beam fineness.
+  let cir = vec2f(cos(ang), sin(ang)) * mix(1.5, 4.5, p.ambCount);
+  let sway = vec2f(sin(ph), cos(ph)) * (0.2 + p.ambSpeed * 0.45);
+  let beam = pow(clamp(fbm(cir + sway + p.seed * 0.21) * 1.6, 0.0, 1.0), mix(2.2, 0.8, p.ambSoft));
+  // fine striation overlay — integer spoke count keeps it seamless in angle
+  let rays = beam + 0.5 * sin(ang * floor(mix(9.0, 30.0, p.ambDetail)) + ph) * p.ambDetail * 0.25;
   let core = exp(-d * mix(6.0, 2.0, p.ambSize));   // bigger size -> wider core
-  let dust = (fbm(duv * mix(110.0, 290.0, p.ambDetail) + ph * 0.25) - 0.5) * p.ambDetail * 0.7;  // atmospheric shimmer
+  let dust = (fbm(duv * mix(110.0, 290.0, p.ambDetail) + vec2f(sin(ph), cos(ph)) * 0.25) - 0.5) * p.ambDetail * 0.7;
   let halo = exp(-d * mix(2.0, 0.7, p.ambSize)) * (0.4 + 0.6 * mix(rays, 1.0, p.ambSoft)) * (1.0 + dust);  // soft -> less rayed
-  let foliage = smoothstep(0.3, 0.72, fbm(uv * 5.0 + vec2f(ph * 0.1, -ph * 0.15)));
+  var q = uv; q.x = q.x * p.canvasAspect;          // aspect-corrected: round dapple, not smears
+  let foliage = smoothstep(0.3, 0.72, fbm(q * 5.0 + vec2f(sin(ph), cos(ph)) * 0.12));
   return clamp((core + halo) * mix(0.45, 1.0, foliage), 0.0, 1.0);
 }
 fn ambGodrays(uv: vec2f) -> f32 {
@@ -426,25 +460,35 @@ fn ambGodrays(uv: vec2f) -> f32 {
   var d = uv - sun; d.x = d.x * p.canvasAspect;
   let ang = atan2(d.x, d.y);                  // 0 = straight down from the sun
   let dist = length(d);
-  let drift = ph * (0.03 + p.driftAmount * 0.1);
+  // Angular noise is sampled ON A CIRCLE (cos/sin of ang) so it is periodic
+  // across the atan2 branch cut — the old fbm(ang·k + drift) had a hard radial
+  // seam straight up from the sun, animating with the drift. The circular sway
+  // (sin/cos of ph) replaces the old linear drift so everything loops exactly.
+  let cirB = vec2f(cos(ang), sin(ang)) * mix(4.0, 11.0, p.gdBeams) * 0.5;
+  let sway = vec2f(sin(ph), cos(ph)) * (0.18 + p.driftAmount * 0.55);
   // beam size: fewer/wider at low gdBeams, many/thin at high.
   // gdSoft feathers each shaft: the contrast exponent drops from crisp (2.4) to
   // a soft diffuse glow (0.5), so high softness blurs the hard ray edges away.
   let sharp = mix(2.4, 0.5, p.gdSoft);
-  let beams = pow(clamp(fbm(vec2f(ang * mix(4.0, 11.0, p.gdBeams) + drift, ph * 0.05)) * 1.5, 0.0, 1.0), sharp);
-  // cloud break-through: higher gdCloud lowers the gap threshold so more light passes
-  let gaps  = smoothstep(mix(0.55, 0.18, p.gdCloud), 0.85, fbm(vec2f(ang * 3.0 + drift, dist * 2.0 + 1.0)));
-  // dappled foliage / tree-canopy breakup (finer, scrolling)
-  let foliage = smoothstep(0.35, 0.78, fbm(uv * 9.0 + vec2f(drift, ph * 0.04)));
+  let beams = pow(clamp(fbm(cirB + sway + vec2f(0.0, sin(ph) * 0.31)) * 1.5, 0.0, 1.0), sharp);
+  // cloud break-through: higher gdCloud lowers the gap threshold so more light
+  // passes. Radial decorrelation folded into the circle sample (dist offsets).
+  let cirG = vec2f(cos(ang), sin(ang)) * 3.0;
+  let gaps  = smoothstep(mix(0.55, 0.18, p.gdCloud), 0.85,
+                         fbm(cirG + sway * 0.8 + vec2f(dist * 2.0 + 1.0, dist * -1.3)));
+  // dappled foliage / tree-canopy breakup (finer, swaying; aspect-corrected so
+  // the dapple stays round on very wide surfaces instead of smearing 8× wide)
+  var q = uv; q.x = q.x * p.canvasAspect;
+  let foliage = smoothstep(0.35, 0.78, fbm(q * 9.0 + vec2f(sin(ph), cos(ph)) * (0.25 + p.driftAmount * 0.8)));
   let fade  = exp(-dist * 1.0) * mix(0.55, 1.0, foliage);   // brighter near the sun, fading down
   // pulse: the light grows in and out / more & less intense over the loop
-  let pulse = mix(1.0, 0.35 + 0.65 * (0.5 + 0.5 * sin(ph + fbm(vec2f(ph * 0.2, 3.0)) * 3.0)), p.gdPulse);
+  let pulse = mix(1.0, 0.35 + 0.65 * (0.5 + 0.5 * sin(ph + fbm(vec2f(sin(ph), cos(ph)) * 0.5 + 3.0) * 3.0)), p.gdPulse);
   // footage occluder: with a clip loaded, light streams through ITS bright gaps
   // instead of procedural clouds — "light through your footage" (blinds, leaves,
   // a window, a crowd…). March toward the sun accumulating footage openness so
   // the beams emanate from the gaps; gdCloud lifts the gap threshold.
   if (p.footageMask > 0.5) {
-    let drff = (vec2f(sin(ph * 0.7), cos(ph * 0.5))) * 0.02 * p.foliageDrift;
+    let drff = (vec2f(sin(ph), cos(ph))) * 0.02 * p.foliageDrift;   // whole cycles = loop-safe
     var shaft = 0.0;
     for (var i = 1; i <= 6; i = i + 1) {
       let tt = f32(i) / 7.0;
@@ -515,7 +559,9 @@ fn ambClouds(uv: vec2f) -> f32 {
   var auv = uv; auv.x = auv.x * p.canvasAspect;
   let a = p.driftAngle * 6.2831853;
   let dir = vec2f(cos(a), sin(a));
-  let drift = dir * ph * (0.04 + p.ambSpeed * 0.5);          // wind travel
+  // wind sway: travel out and back over the loop (sin) so t=1 matches t=0 —
+  // the old linear ph·t drift snapped the whole sky sideways at the loop seam.
+  let drift = dir * sin(ph) * (0.13 + p.ambSpeed * 1.6);
   let sc = mix(1.3, 5.0, p.ambSize);                         // cloud scale
   let w = vec2f(fbm(auv * sc * 0.5 + drift * 0.7 + 11.0),
                 fbm(auv * sc * 0.5 - drift * 0.6 + 23.0)) - vec2f(0.5);
@@ -523,25 +569,38 @@ fn ambClouds(uv: vec2f) -> f32 {
   c = c + (fbm(auv * sc * 2.3 + w + drift * 1.7) - 0.5) * mix(0.12, 0.55, p.ambDetail);  // wisps
   let cov = mix(0.64, 0.16, p.ambCount);                     // low=sparse, high=overcast
   let soft = mix(0.05, 0.45, p.ambSoft);
-  return clamp(smoothstep(cov, cov + soft, c), 0.0, 1.0);
+  var v = clamp(smoothstep(cov, cov + soft, c), 0.0, 1.0);
+  // interior shading: the bare threshold saturates everything past cov+soft to
+  // flat dead white — re-modulate with the billow field so the cloud body keeps
+  // volumetric structure instead of reading as a white slab (also where banding
+  // shows on an 8K-wide gradient).
+  let body = fbm(auv * sc * 1.6 + w + drift * 1.3);
+  v = v * mix(0.78, 1.0, body);
+  return clamp(v, 0.0, 1.0);
 }
 fn ambCaustics(uv: vec2f) -> f32 {
   // water-surface caustic web: domain-warped ridged noise that flows + glimmers.
-  let ph = p.t * 6.2831853 * (0.25 + p.ambSpeed * 0.6);
+  // loop-safe: whole cycles + sway drifts (linear drifts pop at the seam).
+  let ph = p.t * 6.2831853 * loopCycles(1.0 + p.ambSpeed * 2.0);
   var q = uv; q.x = q.x * p.canvasAspect;
   let a = p.driftAngle * 6.2831853;
-  let wind = vec2f(cos(a), sin(a)) * ph * 0.15 * p.driftAmount;
+  let wind = vec2f(cos(a), sin(a)) * sin(ph) * 0.24 * p.driftAmount;
   var s = q * mix(3.5, 12.0, p.ambSize) + wind;
-  let w = vec2f(fbm(s * 0.6 + ph * 0.1), fbm(s * 0.6 + 5.2 - ph * 0.08)) - vec2f(0.5);
+  let w = vec2f(fbm(s * 0.6 + vec2f(sin(ph), cos(ph)) * 0.1),
+                fbm(s * 0.6 + 5.2 - vec2f(cos(ph), sin(ph)) * 0.08)) - vec2f(0.5);
   s = s + w * 1.5;
+  // squared ridges thin the wide value-noise plateaus into the convergent
+  // filaments real caustics have (plain 1-|2n-1| reads as soft blobby maxima);
+  // a 4th octave adds the fine thread detail that registers at 8K width.
   var v = 0.0; var amp = 0.6; var fr = 1.0;
-  for (var i = 0; i < 3; i = i + 1) {
-    let n = vnoise(s * fr + ph * (0.2 + 0.1 * f32(i)));
-    v = v + amp * (1.0 - abs(2.0 * n - 1.0));
+  for (var i = 0; i < 4; i = i + 1) {
+    let n = vnoise(s * fr + vec2f(sin(ph + f32(i)), cos(ph + f32(i) * 1.3)) * (0.2 + 0.1 * f32(i)));
+    let rg = 1.0 - abs(2.0 * n - 1.0);
+    v = v + amp * rg * rg;
     fr = fr * 2.1; amp = amp * 0.55;
   }
-  v = pow(clamp(v, 0.0, 1.0), mix(3.0, 1.0, p.ambSoft));
-  let glim = (fbm(s * 6.0 + ph * 0.6) - 0.5) * p.ambDetail * 0.9;
+  v = pow(clamp(v * 1.25, 0.0, 1.0), mix(4.0, 1.4, p.ambSoft));
+  let glim = (fbm(s * 6.0 + vec2f(sin(ph), cos(ph)) * 0.6) - 0.5) * p.ambDetail * 0.9;
   return clamp(v * (1.0 + glim), 0.0, 1.0);
 }
 fn caus2_cell(pt: vec2f, ph: f32) -> vec2f {
@@ -566,16 +625,19 @@ fn ambCaustics2(uv: vec2f) -> f32 {
   // Voronoi light-net caustics: bright threads where refracted rays bunch along
   // moving cell borders — the sharp polygonal net you see on a sunlit pool floor.
   // Distinct from mode 41 (soft ridged-noise webbing); this is crisp + nodal.
-  let ph = p.t * 6.2831853 * (0.15 + p.ambSpeed * 0.7);
+  // loop-safe: whole cycles (cell orbits are sin(ph) so they need integer ph
+  // multipliers everywhere), wind sways instead of drifting linearly.
+  let ph = p.t * 6.2831853 * loopCycles(0.15 + p.ambSpeed * 2.0);
   var q = uv; q.x = q.x * p.canvasAspect;
   let a = p.driftAngle * 6.2831853;
-  let wind = vec2f(cos(a), sin(a)) * ph * 0.12 * p.driftAmount;
+  let wind = vec2f(cos(a), sin(a)) * sin(ph) * 0.19 * p.driftAmount;
   let sc = mix(4.0, 14.0, p.ambSize);
   // gentle domain warp so the net flows instead of sitting on a rigid lattice
-  let warp = vec2f(fbm(q * sc * 0.5 + ph * 0.1), fbm(q * sc * 0.5 + 9.1 - ph * 0.08)) - vec2f(0.5);
+  let warp = vec2f(fbm(q * sc * 0.5 + vec2f(sin(ph), cos(ph)) * 0.1),
+                   fbm(q * sc * 0.5 + 9.1 - vec2f(cos(ph), sin(ph)) * 0.08)) - vec2f(0.5);
   let base = q * sc + wind + warp * 0.8;
   let c0 = caus2_cell(base, ph);                 // coarse net
-  let c1 = caus2_cell(base * 2.3 + 3.1, ph * 1.4); // fine net
+  let c1 = caus2_cell(base * 2.3 + 3.1, ph * 2.0); // fine net (integer multiple = loop-safe)
   // border distance F2-F1 is small on cell edges -> bright threads. ambSoft maps
   // thread width: soft (wide glow) -> thin (sharp filament).
   let w0 = mix(0.18, 0.045, p.ambSoft);
@@ -600,15 +662,21 @@ fn ambEmbers(uv: vec2f) -> f32 {
     let fi = f32(i) + 1.0;
     let speed = 0.3 + 0.7 * hash21(vec2f(fi, 2.1));
     let base = vec2f(hash21(vec2f(fi, 1.3)), hash21(vec2f(fi, 7.7)));
-    var c = fract(base + dir * ph * 0.04 * speed * p.driftAmount
-                + vec2f(0.0, -ph * 0.05 * speed)
-                + 0.02 * vec2f(sin(ph * speed * 2.0 + fi), cos(ph * speed * 1.7 + fi)));
+    // loop-exact travel: each ember rises a WHOLE number of frame-heights per
+    // loop (fract wraps cleanly only on integer travel — the old fractional
+    // hashed speeds made every mote teleport at the seam). Sideways drift sways
+    // (sin) and the wobble/twinkle frequencies are per-ember integers.
+    let rise = floor(1.0 + hash21(vec2f(fi, 2.1)) * 2.0);
+    let wobF = floor(2.0 + speed * 3.0);
+    var c = fract(base + dir * sin(ph) * 0.05 * speed * p.driftAmount
+                + vec2f(0.0, -p.t * rise)
+                + 0.02 * vec2f(sin(ph * wobF + fi), cos(ph * (wobF + 1.0) + fi)));
     let efade = smoothstep(0.0, 0.08, c.x) * smoothstep(1.0, 0.92, c.x)
               * smoothstep(0.0, 0.08, c.y) * smoothstep(1.0, 0.92, c.y);
     c.x = c.x * p.canvasAspect;
     let d = length(q - c);
     let r = mix(0.004, 0.02, hash21(vec2f(fi, 5.5))) * mix(0.6, 1.6, p.ambSize);
-    let tw = 0.5 + 0.5 * sin(ph * (1.5 + speed * 3.0) + fi * 2.0);
+    let tw = 0.5 + 0.5 * sin(ph * floor(2.0 + speed * 3.0) + fi * 2.0);
     let core = exp(-d * d / (r * r));
     let glow = exp(-d / (r * 4.0 + 0.002)) * (0.2 + 0.2 * p.ambDetail);
     v = v + (core * 1.3 + glow * 1.4) * mix(0.45, 1.0, tw) * efade;
@@ -617,7 +685,9 @@ fn ambEmbers(uv: vec2f) -> f32 {
 }
 fn ambMist(uv: vec2f) -> f32 {
   // slow low-lying fog: parallax fbm layers sliding on the wind.
-  let ph = p.t * 6.2831853 * (0.15 + p.ambSpeed * 0.4);
+  // loop-safe: whole cycles + per-layer sway with phase offsets (the staggered
+  // sin phases keep the parallax feel without a linear never-returning drift).
+  let ph = p.t * 6.2831853 * loopCycles(0.5 + p.ambSpeed * 1.5);
   var q = uv; q.x = q.x * p.canvasAspect;
   let a = p.driftAngle * 6.2831853;
   let wind = vec2f(cos(a), sin(a));
@@ -625,17 +695,17 @@ fn ambMist(uv: vec2f) -> f32 {
   var v = 0.0; var amp = 0.55;
   for (var i = 0; i < 3; i = i + 1) {
     let fi = f32(i);
-    let off = wind * ph * (0.1 + 0.08 * fi) + vec2f(0.0, fi * 3.3);
+    let off = wind * sin(ph + fi * 1.9) * (0.16 + 0.13 * fi) + vec2f(0.0, fi * 3.3);
     let w = vec2f(fbm(q * sc * 0.5 + off), fbm(q * sc * 0.5 + off + 5.0)) - vec2f(0.5);
     v = v + amp * fbm(q * sc * (1.0 + fi * 0.6) + w * 0.8 + off);
     amp = amp * 0.6;
   }
   let cov = mix(0.7, 0.25, p.ambCount);
   v = smoothstep(cov, cov + mix(0.05, 0.4, p.ambSoft), v);
-  v = v * (1.0 + (fbm(q * sc * 4.0 + ph) - 0.5) * p.ambDetail * 0.4);
+  v = v * (1.0 + (fbm(q * sc * 4.0 + vec2f(sin(ph), cos(ph))) - 0.5) * p.ambDetail * 0.4);
   return clamp(v, 0.0, 1.0);
 }
-fn ambSmoke(uv: vec2f) -> f32 {
+fn smokeField(uv: vec2f, lt: f32) -> f32 {
   // Volumetric smoke / fog. Real rolling fog comes from PARALLAX: several noise
   // layers drifting along the wind at different speeds + scales, summed — that
   // depth-cued sliding is what reads as a fog bank rolling through, vs. one flat
@@ -646,6 +716,7 @@ fn ambSmoke(uv: vec2f) -> f32 {
   //   flow        = how fast it rolls across      turbulence = billow / curl
   //   undulate    = slow sideways sway            ambSpeed   = in-place churn rate
   //   ambSize     = scale   ambSoft = edge softness   ambCount = coverage/density
+  // Time comes in as lt (not p.t) so ambSmoke can seam-crossfade the loop.
   let rise = clamp(p.driftAmount, 0.0, 1.0);                 // 0 fog .. 1 plume
   var q = uv; q.x = q.x * p.canvasAspect;
   let sc = mix(1.0, 4.0, p.ambSize);
@@ -653,10 +724,10 @@ fn ambSmoke(uv: vec2f) -> f32 {
   let a = p.driftAngle * 6.2831853;
   let windDir = vec2f(cos(a), sin(a));                       // toward driftAngle
   let perp = vec2f(-windDir.y, windDir.x);
-  let churn = p.t * 6.2831853 * (0.05 + p.ambSpeed * 0.4);   // in-place morph
+  let churn = lt * 6.2831853 * (0.05 + p.ambSpeed * 0.4);    // in-place morph
   // drift travels across the frame; a plume also lifts upward (y=0 is up).
-  let drift = windDir * (p.t * 6.2831853) * (0.04 + p.flow * 0.5)
-            + vec2f(0.0, (p.t * 6.2831853) * 0.4 * rise);
+  let drift = windDir * (lt * 6.2831853) * (0.04 + p.flow * 0.5)
+            + vec2f(0.0, (lt * 6.2831853) * 0.4 * rise);
 
   // anisotropy: fog = wide horizontal banks, plume = tall vertical columns.
   var s = q * sc;
@@ -707,7 +778,14 @@ fn ambSmoke(uv: vec2f) -> f32 {
   v = v * mix(0.82, 1.0, rise);                             // thin the fog (translucent)
   return clamp(v, 0.0, 1.0);
 }
-fn ambFire(uv: vec2f) -> f32 {
+fn ambSmoke(uv: vec2f) -> f32 {
+  // seam crossfade: the rolling travel is linear in t and can't wrap, so blend
+  // the end of the loop into the field one loop earlier (t=1 == t=0 exactly).
+  let x = seamX(p.t);
+  if (x > 0.0001) { return mix(smokeField(uv, p.t), smokeField(uv, p.t - 1.0), x); }
+  return smokeField(uv, p.t);
+}
+fn fireField(uv: vec2f, lt: f32) -> f32 {
   // Rising flames: the smoke field cranked hot — strong upward buoyancy, vertical
   // tongue stretch, fast flicker, density concentrated at the base and licking up.
   // Returns 0..1 heat intensity (white-hot matte); pair with a fire gradient LUT
@@ -715,8 +793,9 @@ fn ambFire(uv: vec2f) -> f32 {
   // Extra movement params (active for mode 51): flow = rise speed / reach,
   // turbulence = curl/lick strength, undulate = side-to-side sway. ambSoft now
   // spans crisp tongues all the way to a soft luminous glow.
+  // Time comes in as lt (not p.t) so ambFire can seam-crossfade the loop.
   let riseSpd = 0.6 + p.flow * 1.9;
-  let ph = p.t * 6.2831853 * (0.5 + p.ambSpeed * 1.5);
+  let ph = lt * 6.2831853 * (0.5 + p.ambSpeed * 1.5);
   var q = uv; q.x = q.x * p.canvasAspect;
   let sc = mix(1.0, 6.0, p.ambSize);                       // wider scale range
   let h = uv.y;                                            // 0 top .. 1 bottom (base)
@@ -747,7 +826,14 @@ fn ambFire(uv: vec2f) -> f32 {
   v = v * (0.78 + 0.34 * fbm(q * 5.0 + vec2f(0.0, ph * 2.2)));
   return clamp(v, 0.0, 1.0);
 }
-fn ambVolFog(uv: vec2f) -> f32 {
+fn ambFire(uv: vec2f) -> f32 {
+  // seam crossfade: the upward advection is linear in t and can't wrap, so blend
+  // the end of the loop into the field one loop earlier (t=1 == t=0 exactly).
+  let x = seamX(p.t);
+  if (x > 0.0001) { return mix(fireField(uv, p.t), fireField(uv, p.t - 1.0), x); }
+  return fireField(uv, p.t);
+}
+fn volFogField(uv: vec2f, lt: f32) -> f32 {
   // FOG 2 — raymarched volumetric fog. For each pixel we march a 3D noise volume
   // front-to-back, accumulating density with Beer-Lambert extinction (transmittance
   // T *= exp(-density*dt)). A short secondary march toward a movable light gives
@@ -755,7 +841,8 @@ fn ambVolFog(uv: vec2f) -> f32 {
   //   ambSize = scale   ambCount = density/thickness   ambSpeed = evolution + drift
   //   ambDetail = (reserved)   ambSoft = ambient fill   driftAngle = wind direction
   //   driftAmount = light intensity   sunX/sunY = light position
-  let tt = p.t * 6.2831853;
+  // Time comes in as lt (not p.t) so ambVolFog can seam-crossfade the loop.
+  let tt = lt * 6.2831853;
   var q = uv; q.x = q.x * p.canvasAspect;
   let scale = mix(2.6, 7.5, p.ambSize);
 
@@ -776,8 +863,13 @@ fn ambVolFog(uv: vec2f) -> f32 {
   let dz = 1.4 / f32(STEPS);
   var trans = 1.0;                                            // transmittance front->back
   var lum = 0.0;                                              // accumulated in-scatter
+  // per-pixel jitter on the march start: identical step positions across the
+  // screen quantize the accumulation into coherent density shelves (classic
+  // raymarch slicing); a stochastic offset turns the shelves into noise the
+  // output dither then hides completely.
+  let jit = hash21(uv * vec2f(911.3, 733.7)) * dz;
   for (var i = 0; i < STEPS; i = i + 1) {
-    let z = -0.2 + f32(i) * dz;
+    let z = -0.2 + jit + f32(i) * dz;
     // strongly anisotropic: wide flat horizontal banks (low x-freq), layered in y.
     let sp = vec3f(q.x * scale * 0.42, q.y * scale * 0.85, z * scale) + wind + evo;
     var dens = max(0.0, fbm3(sp) - floorD) * ext;
@@ -800,6 +892,13 @@ fn ambVolFog(uv: vec2f) -> f32 {
   let raw = lum * mix(1.0, 2.2, p.driftAmount) + opacity * mix(0.04, 0.26, p.ambSoft);
   let v = 1.0 - exp(-raw * 1.6);
   return clamp(v, 0.0, 1.0);
+}
+fn ambVolFog(uv: vec2f) -> f32 {
+  // seam crossfade: the wind/evolution drift is linear in t and can't wrap, so
+  // blend the end of the loop into the field one loop earlier (t=1 == t=0).
+  let x = seamX(p.t);
+  if (x > 0.0001) { return mix(volFogField(uv, p.t), volFogField(uv, p.t - 1.0), x); }
+  return volFogField(uv, p.t);
 }
 fn hash22(p: vec2f) -> vec2f {
   return fract(sin(vec2f(dot(p, vec2f(127.1, 311.7)), dot(p, vec2f(269.5, 183.3)))) * 43758.5453);
@@ -851,12 +950,14 @@ fn ambForestLight(uv: vec2f) -> f32 {
   let a = p.driftAngle * 6.2831853;
   let wind = vec2f(cos(a), sin(a));
   let scale = mix(4.0, 11.0, 1.0 - p.ambSize);            // bigger size = bigger clumps
-  let sway = wind * tt * (0.01 + p.ambSpeed * 0.05) + vec2f(sin(tt * 0.4) * 0.02, cos(tt * 0.3) * 0.02);
+  // loop-safe sway: every sin/cos runs whole cycles over t 0..1 (the old
+  // tt·0.4 / tt·0.3 / tt·(0.3+speed) multipliers were fractional → seam pop).
+  let sway = wind * sin(tt) * (0.03 + p.ambSpeed * 0.16) + vec2f(sin(tt) * 0.02, cos(tt) * 0.02);
   // footage drift: a bounded (oscillating, loop-safe) sway for the loaded clip so
   // the leaves feel alive beyond raw playback. layB also gets a small constant
   // offset so near/far footage layers misalign back into parallax depth.
   let fdr = p.foliageDrift;
-  let foot = (wind * sin(tt * (0.3 + p.ambSpeed)) + vec2f(sin(tt * 0.7), cos(tt * 0.5)) * 0.4) * 0.02 * fdr;
+  let foot = (wind * sin(tt * loopCycles(0.3 + p.ambSpeed)) + vec2f(sin(tt), cos(tt)) * 0.4) * 0.02 * fdr;
   // local canopy: two depth layers — light only where BOTH are open (real depth).
   let layA = canopyOpen(uv, sway, scale, p.ambDetail, foot);
   let layB = canopyOpen(uv, sway * 1.7 + 4.0, scale * 1.9, p.ambDetail, foot * 1.4 + vec2f(0.03, 0.0) * fdr);
@@ -873,9 +974,10 @@ fn ambForestLight(uv: vec2f) -> f32 {
   let falloff = exp(-dist * mix(1.2, 3.0, p.ambSoft));
   let core = exp(-dist * mix(5.0, 12.0, 1.0 - p.ambSize));        // bright sun disc
   // radial god-ray striations — visible beams fanning out from the sun.
+  // integer spoke count + circle-sampled fbm = no seam at the atan2 branch cut
   let ang = atan2(dd.y, dd.x);
-  let rayStr = 0.5 + 0.5 * pow(0.5 + 0.5 * sin(ang * mix(14.0, 40.0, p.ambDetail)
-             + fbm(vec2f(ang * 4.0, dist * 3.0)) * 5.0), 2.2);
+  let rayStr = 0.5 + 0.5 * pow(0.5 + 0.5 * sin(ang * floor(mix(14.0, 40.0, p.ambDetail))
+             + fbm(vec2f(cos(ang), sin(ang)) * 4.0 + vec2f(dist * 3.0, dist * -1.7)) * 5.0), 2.2);
   var v = core * 1.2 + shaft * falloff * rayStr * 1.9 * openLocal + openLocal * 0.1;
   // bokeh dapples floating in the lit gaps.
   let count = u32(mix(3.0, 16.0, p.ambCount) + 0.5);
@@ -884,7 +986,7 @@ fn ambForestLight(uv: vec2f) -> f32 {
     let fi = f32(i) + 1.0;
     let sp2 = 0.3 + 0.7 * hash21(vec2f(fi, 2.1));
     var c = fract(vec2f(hash21(vec2f(fi, 1.3)), hash21(vec2f(fi, 7.7)))
-              + wind * tt * 0.015 * sp2 * (0.3 + p.ambSpeed));
+              + wind * sin(tt + fi) * 0.05 * sp2 * (0.3 + p.ambSpeed));
     let fade = smoothstep(0.0, 0.1, c.x) * smoothstep(1.0, 0.9, c.x)
              * smoothstep(0.0, 0.1, c.y) * smoothstep(1.0, 0.9, c.y);
     c.x = c.x * p.canvasAspect;
@@ -945,14 +1047,14 @@ fn ambSunBokeh(uv: vec2f) -> f32 {
   let streak = exp(-abs(dd.y) * mix(40.0, 95.0, 1.0 - p.ambSize)) * exp(-abs(dd.x) * 1.2);
   direct = direct + streak * mix(0.15, 1.4, p.ambDetail);
   let ang = atan2(dd.y, dd.x);
-  let rays = pow(0.5 + 0.5 * sin(ang * mix(6.0, 16.0, p.ambDetail) + p.seed), 5.0) * exp(-r * 3.5);
+  let rays = pow(0.5 + 0.5 * sin(ang * floor(mix(6.0, 16.0, p.ambDetail)) + p.seed), 5.0) * exp(-r * 3.5);
   direct = direct + rays * 0.5;
   // dappled canopy: the sun filters through drifting leaves/branches. A two-scale
   // foliage field (broad branches + fine leaves) gently swaying occludes the direct
   // light into shifting dapples. turbulence = how dense the canopy is.
   let a = p.driftAngle * 6.2831853;
   let dir = vec2f(cos(a), sin(a));
-  let sway = dir * tt * 0.012 + vec2f(sin(tt * 0.5) * 0.02, cos(tt * 0.4) * 0.02);
+  let sway = dir * sin(tt) * 0.04 + vec2f(sin(tt) * 0.02, cos(tt) * 0.02);  // whole cycles = loop-safe
   let leafW = vec2f(fbm(q * 3.5 + sway * 3.0), fbm(q * 3.5 + 9.0 - sway * 2.0)) - vec2f(0.5);
   let canopy = fbm(q * mix(5.0, 13.0, p.ambDetail) + leafW * 1.4 + sway);
   let dapple = mix(1.0, smoothstep(0.34, 0.62, canopy), p.turbulence);   // gaps let light through
@@ -963,7 +1065,7 @@ fn ambSunBokeh(uv: vec2f) -> f32 {
     let fi = f32(i) + 1.0;
     let sp = 0.3 + 0.7 * hash21(vec2f(fi, 2.1));
     var c = fract(vec2f(hash21(vec2f(fi, 1.3)), hash21(vec2f(fi, 7.7)))
-              + dir * tt * 0.02 * sp * (0.3 + p.ambSpeed));
+              + dir * sin(tt + fi) * 0.06 * sp * (0.3 + p.ambSpeed));
     let fade = smoothstep(0.0, 0.1, c.x) * smoothstep(1.0, 0.9, c.x)
              * smoothstep(0.0, 0.1, c.y) * smoothstep(1.0, 0.9, c.y);
     c.x = c.x * p.canvasAspect;
@@ -981,7 +1083,8 @@ fn ambWaterShimmer(uv: vec2f) -> f32 {
   // Sunlit water surface: interfering travelling wavefronts sharpened into caustic
   // ridges that shimmer and flow. Smooth gradients make a lovely displacement map.
   //   ambSize = scale   ambSoft = contrast   ambSpeed = speed   ambDetail = glints
-  let tt = p.t * 6.2831853 * (0.006 + p.ambSpeed * 0.6);    // crawls to near-still at low speed
+  // loop-safe: whole cycles, integer per-wave phase multipliers (1+fi).
+  let tt = p.t * 6.2831853 * loopCycles(0.5 + p.ambSpeed * 2.5);
   var q = uv; q.x = q.x * p.canvasAspect;
   let sc = mix(3.0, 12.0, p.ambSize);
   var w = 0.0;
@@ -989,13 +1092,19 @@ fn ambWaterShimmer(uv: vec2f) -> f32 {
     let fi = f32(i);
     let a = fi * 2.4 + p.seed * 0.5;
     let dir = vec2f(cos(a), sin(a));
-    w = w + sin(dot(q, dir) * sc * (0.6 + 0.18 * fi) + tt * (0.6 + 0.12 * fi)) / (1.0 + 0.3 * fi);
+    // per-wave frequency jitter: 5 fixed-frequency plane waves interfere into a
+    // spatially PERIODIC lattice — a visible wallpaper repeat across an 8K-wide
+    // surface. Hash-jittered frequencies decorrelate the repeat.
+    let fj = 0.85 + 0.3 * hash21(vec2f(fi, p.seed));
+    w = w + sin(dot(q, dir) * sc * (0.6 + 0.18 * fi) * fj + tt * (1.0 + fi)) / (1.0 + 0.3 * fi);
   }
   // the smooth interference of the travelling waves IS the shimmer; a little noise
   // just breaks up the regularity. sin(w·k) turns the wave field into caustic
-  // ridges. Low contrast → clean water surface + displacement map.
-  let warp = vec2f(fbm(q * sc * 0.3 + tt * 0.12), fbm(q * sc * 0.3 + 5.0 - tt * 0.1)) - vec2f(0.5);
-  let caustic = pow(0.5 + 0.5 * sin(w * 1.9 + warp.x * 2.2 + warp.y * 1.6),
+  // ridges. Low contrast → clean water surface + displacement map. The stronger
+  // warp phase decorrelates the interference motif within a screen width.
+  let warp = vec2f(fbm(q * sc * 0.3 + vec2f(sin(tt), cos(tt)) * 0.12),
+                   fbm(q * sc * 0.3 + 5.0 - vec2f(cos(tt), sin(tt)) * 0.1)) - vec2f(0.5);
+  let caustic = pow(0.5 + 0.5 * sin(w * 1.9 + warp.x * 3.4 + warp.y * 2.6),
                     mix(0.7, 3.0, p.ambSoft));
   let glint = pow(caustic, 4.0) * p.ambDetail * 0.7;                     // sparkle
   return clamp(caustic * 0.85 + glint, 0.0, 1.0);
@@ -1005,14 +1114,14 @@ fn ambSilk(uv: vec2f) -> f32 {
   // streamlines, rendered as flowing satin bands with a moving sheen. Gorgeous as
   // a displacement driver. turbulence = flow/curl strength.
   //   ambSize = scale   ambDetail = band frequency   ambSoft = band sharpness
-  let tt = p.t * 6.2831853 * (0.25 + p.ambSpeed * 0.6);
+  let tt = p.t * 6.2831853 * loopCycles(0.25 + p.ambSpeed * 1.8);   // whole cycles = loop-safe
   var q = uv; q.x = q.x * p.canvasAspect;
   let sc = mix(1.5, 5.0, p.ambSize);
   var pp = q * sc;
   for (var i = 0; i < 3; i = i + 1) {
     let fi = f32(i);
-    let wv = vec2f(fbm(pp + vec2f(0.0, tt * 0.2) + fi),
-                   fbm(pp + vec2f(5.2, 0.0 - tt * 0.15) + fi)) - vec2f(0.5);
+    let wv = vec2f(fbm(pp + vec2f(sin(tt), cos(tt)) * 0.2 + fi),
+                   fbm(pp + vec2f(5.2, 0.0) - vec2f(cos(tt), sin(tt)) * 0.15 + fi)) - vec2f(0.5);
     pp = pp + vec2f(-wv.y, wv.x) * mix(0.35, 1.1, p.turbulence);         // curl advection
   }
   // smooth flowing satin bands following the curl field; gentle contrast so it
@@ -1056,12 +1165,15 @@ fn ambNebula(uv: vec2f) -> f32 {
   //   ambCount = nebula density   ambSize = scale   ambSoft = gas contrast
   //   ambSpeed = drift   ambDetail = star density
   //   turbulence = swirl   flow = star glow/size   undulate = dust-lane depth
-  let tt = p.t * 6.2831853 * (0.04 + p.ambSpeed * 0.2);        // very slow
+  // gas wanders on a slow CIRCLE (1 cycle per loop) instead of a linear drift —
+  // keeps the "very slow" feel at low speed while closing the loop exactly.
+  let tt = p.t * 6.2831853;
+  let gasAmp = 0.05 + p.ambSpeed * 0.16;
   var q = uv; q.x = q.x * p.canvasAspect;
   let sc = mix(1.4, 4.0, p.ambSize);
   // iterated warp for billowing gas clouds; turbulence adds curl-swirl wispiness.
-  let w1 = vec2f(fbm(q * sc * 0.5 + vec2f(0.0, tt * 0.1)),
-                 fbm(q * sc * 0.5 + vec2f(5.0, 0.0 - tt * 0.08))) - vec2f(0.5);
+  let w1 = vec2f(fbm(q * sc * 0.5 + vec2f(sin(tt), cos(tt)) * gasAmp),
+                 fbm(q * sc * 0.5 + vec2f(5.0, 0.0) - vec2f(cos(tt), sin(tt)) * gasAmp * 0.8)) - vec2f(0.5);
   let swirl = vec2f(-w1.y, w1.x) * p.turbulence * 2.0;
   let w2 = vec2f(fbm(q * sc + w1 * 1.6 + swirl), fbm(q * sc + w1 * 1.6 + swirl + 7.0)) - vec2f(0.5);
   var neb = fbm(q * sc + w2 * 2.0);
@@ -1082,33 +1194,54 @@ fn ambNebula(uv: vec2f) -> f32 {
     let center = vec2f(hash21(id + vec2f(1.3, 0.0)), hash21(id + vec2f(0.0, 2.7)));
     let sd = length(fract(g) - center);
     let bright = smoothstep(0.78, 1.0, rnd);                  // rarer = brighter
-    let tw = 0.5 + 0.5 * sin(tt * 40.0 + rnd * 50.0);
+    // integer cycles per star (floor) so no star pops at the loop seam; the
+    // hashed count desynchronizes them — the old tt·40 made the whole starfield
+    // flicker simultaneously every loop wrap.
+    let tw = 0.5 + 0.5 * sin(tt * floor(mix(2.0, 9.0, p.ambSpeed) + rnd * 4.0) + rnd * 50.0);
     let glow = mix(0.6, 1.8, p.flow);
     star = (exp(-sd * sd * mix(360.0, 150.0, p.flow)) + exp(-sd * 9.0) * 0.25 * glow) * (0.5 + 0.9 * bright) * tw;
   }
   return clamp(neb + star, 0.0, 1.0);
 }
 fn ambRain(uv: vec2f) -> f32 {
-  // falling rain streaks, slanted by direction; faint haze behind.
-  let ph = p.t * 6.2831853 * (0.6 + p.ambSpeed * 1.2);
+  // Falling rain in 3 parallax depth layers (far = denser/slower/fainter),
+  // slanted by direction, with a y-graded haze behind. Loop-exact: each
+  // column's drops fall a WHOLE number of frame-heights per loop, so fract()
+  // wraps cleanly at the seam (fractional hashed speeds teleported every drop).
+  // Streak length varies per column (own hash) and is decoupled from width —
+  // the old single-layer version tied both to ambSize so long+thin rain was
+  // impossible, and its pow-26 width aliased to ~1px shimmer at 8K.
   var q = uv; q.x = q.x * p.canvasAspect;
   let slant = (p.driftAngle - 0.5) * 1.4;
-  let sx = q.x + q.y * slant;
-  let cols = mix(60.0, 200.0, p.ambCount);
-  let colf = sx * cols;
-  let col = floor(colf);
-  let fx = fract(colf);
-  let seed = hash21(vec2f(col, 1.7));
-  let speed = 0.6 + seed;
-  let yy = fract(q.y * mix(1.0, 3.0, p.ambSize) + ph * speed + seed * 10.0);
-  let streak = pow(1.0 - yy, mix(8.0, 28.0, 1.0 - p.ambSoft));
-  let lineW = pow(smoothstep(0.5, 0.0, abs(fx - 0.5)), mix(6.0, 26.0, p.ambSize));
-  var v = streak * lineW * (0.7 + 0.5 * seed);
-  v = v + fbm(q * 8.0 + ph * 0.3) * 0.08 * p.ambDetail;
-  return clamp(v, 0.0, 1.0);
+  var v = 0.0;
+  for (var L = 0; L < 3; L = L + 1) {
+    let lf = f32(L);
+    let cols = mix(60.0, 200.0, p.ambCount) * (0.6 + lf * 0.5);
+    let colf = (q.x + q.y * slant + lf * 0.37) * cols;
+    let col = floor(colf);
+    let fx = fract(colf);
+    let seed = hash21(vec2f(col, 1.7 + lf * 5.1));
+    let travel = floor(mix(2.0, 9.0, p.ambSpeed) * (0.6 + seed * 0.7) * (1.0 - lf * 0.22)) + 1.0;
+    let yy = fract(q.y * mix(1.0, 3.0, p.ambSize) + p.t * travel + seed * 10.0);
+    let lenE = mix(7.0, 26.0, hash21(vec2f(col, 9.3 + lf))) * mix(1.4, 0.7, p.ambSoft);
+    let streak = pow(1.0 - yy, lenE);
+    let lineW = pow(smoothstep(0.5, 0.0, abs(fx - 0.5)), mix(4.0, 14.0, p.ambSize));
+    v = v + streak * lineW * (0.7 + 0.5 * seed) * (1.0 - lf * 0.3);
+  }
+  // y-graded haze (denser low, loop-safe sway) keeps usable luminance between
+  // streaks instead of a ~95% dead-black matte.
+  let ph = p.t * 6.2831853;
+  let haze = fbm(q * 8.0 + vec2f(sin(ph), cos(ph)) * 0.3)
+           * (0.06 + 0.12 * smoothstep(0.2, 1.0, uv.y)) * p.ambDetail;
+  return clamp(v + haze, 0.0, 1.0);
 }
 fn ambSnow(uv: vec2f) -> f32 {
-  // drifting snow in parallax depth layers, gentle sway.
+  // drifting snow in parallax depth layers, gentle sway. Loop-exact: each
+  // layer falls a WHOLE number of cells per loop (the old fractional fall
+  // teleported the sheet at the seam), columns are de-synchronized with a
+  // per-column y offset, and each flake wanders inside its cell (the old
+  // per-flake "sway" only modulated brightness — the layers slid as three
+  // rigid transparencies).
   let ph = p.t * 6.2831853;
   var q = uv; q.x = q.x * p.canvasAspect;
   let a = p.driftAngle * 6.2831853;
@@ -1118,33 +1251,48 @@ fn ambSnow(uv: vec2f) -> f32 {
     let lf = f32(L);
     let dens = mix(12.0, 34.0, p.ambCount) * (1.0 + lf * 0.5);
     let sz = mix(0.5, 1.4, p.ambSize) * (1.0 - lf * 0.22);
-    let sp = (0.05 + 0.04 * lf) * (0.5 + p.ambSpeed);
-    let drift = dir * ph * 0.02 * p.driftAmount + vec2f(sin(ph * 0.5 + lf) * 0.02, -ph * sp);
-    let g = (q + drift) * dens;
+    // whole cells per loop: keeps the old speed feel but wraps exactly
+    let fall = max(1.0, floor(dens * (0.05 + 0.04 * lf) * (0.5 + p.ambSpeed) * 6.2831853));
+    let drift = dir * sin(ph) * 0.03 * p.driftAmount + vec2f(sin(ph + lf) * 0.02, -p.t * fall / dens);
+    var g = (q + drift) * dens;
+    g.y = g.y + hash21(vec2f(floor(g.x), lf)) * 0.5;   // de-sync the columns
     let cell = floor(g); let f = fract(g);
     let rnd = hash21(cell + lf * 13.0);
     let rnd2 = hash21(cell + lf * 7.0 + 3.0);
-    let center = vec2f(0.3 + 0.4 * rnd, 0.3 + 0.4 * rnd2);
+    // per-flake flutter: the centre wanders on its own loop-safe orbit
+    let center = vec2f(0.3 + 0.4 * rnd, 0.3 + 0.4 * rnd2)
+               + 0.07 * vec2f(sin(ph * (1.0 + floor(rnd * 2.0)) + rnd * 6.28),
+                              cos(ph * (1.0 + floor(rnd2 * 2.0)) + rnd2 * 6.28));
     let d = length(f - center);
     let r = 0.10 * sz * (0.6 + 0.5 * rnd);
     let flake = smoothstep(r, r * 0.2, d);
-    let sway = 0.5 + 0.5 * sin(ph * (1.0 + rnd * 2.0) + cell.x);
+    let sway = 0.5 + 0.5 * sin(ph * (1.0 + floor(rnd * 2.0)) + cell.x);
     v = v + flake * mix(0.6, 1.0, sway) * (0.7 + 0.5 / (1.0 + lf));
   }
   return clamp(v, 0.0, 1.0);
 }
 fn ambMarble(uv: vec2f) -> f32 {
-  // flowing liquid marble veins from repeated domain warping.
-  let ph = p.t * 6.2831853 * (0.1 + p.ambSpeed * 0.4);
+  // flowing liquid marble veins from repeated domain warping. Loop-safe: the
+  // wind sways and the warp drifts circularly (1 whole cycle per loop).
+  let ph = p.t * 6.2831853;
+  let spd = 0.1 + p.ambSpeed * 0.4;
   var q = uv; q.x = q.x * p.canvasAspect;
   let a = p.driftAngle * 6.2831853;
-  let wind = vec2f(cos(a), sin(a)) * ph * 0.1 * p.driftAmount;
+  let wind = vec2f(cos(a), sin(a)) * sin(ph) * 0.3 * spd * p.driftAmount;
   var s = q * mix(2.0, 6.0, p.ambSize) + wind;
   for (var i = 0; i < 3; i = i + 1) {
-    let w = vec2f(fbm(s + ph * 0.1 + f32(i) * 2.0), fbm(s + 5.0 - ph * 0.08 + f32(i) * 2.0)) - vec2f(0.5);
+    let w = vec2f(fbm(s + vec2f(sin(ph), cos(ph)) * 0.4 * spd + f32(i) * 2.0),
+                  fbm(s + 5.0 - vec2f(cos(ph), sin(ph)) * 0.32 * spd + f32(i) * 2.0)) - vec2f(0.5);
     s = s + w * mix(0.6, 1.4, p.ambDetail);
   }
-  var v = 0.5 + 0.5 * sin((s.x + s.y) * 1.5 + fbm(s * 2.0) * 4.0);
+  // carrier follows driftAngle (the old (s.x+s.y) plane wave was locked to the
+  // +45° diagonal at any setting) and the fbm phase dominates more so low-detail
+  // marble doesn't read as warped diagonal stripes; fine ridged veins add the
+  // multi-scale hierarchy real marble has.
+  let vd = vec2f(cos(a), sin(a));
+  var v = 0.5 + 0.5 * sin(dot(s, vd) * 1.5 + fbm(s * 2.0) * 7.0);
+  let fine = 1.0 - abs(2.0 * fbm(s * 3.5) - 1.0);
+  v = v * mix(1.0, fine * fine, 0.4 * p.ambDetail);
   v = pow(v, mix(2.5, 0.8, p.ambSoft));
   return clamp(v, 0.0, 1.0);
 }
@@ -1967,7 +2115,10 @@ fn radialBurstMask(uv: vec2f) -> f32 {
   let r = length(d) / diag;                         // 0 at centre .. ~1 at corner
   let ang = atan2(d.y, d.x);
   let dir = vec2f(cos(ang), sin(ang));              // periodic -> no angular seam
-  let anim = p.t * p.flow * 0.8 + p.seed * 0.37;
+  // oscillating churn (loop-safe): the standalone breathing variant of this mask
+  // loops, so the noise churn must return to its start at t=1 too. During a
+  // one-shot reveal the sway reads the same as the old linear drift.
+  let anim = sin(p.t * 6.2831853) * p.flow * 0.4 + p.seed * 0.37;
   let freq = mix(10.0, 60.0, p.organic);            // streak density
   // Domain-warp the angular streak field by a radius-dependent offset so filaments
   // meander and branch along their length instead of reading as straight rays.
@@ -1998,7 +2149,7 @@ fn smokeRingMask(uv: vec2f) -> f32 {
   let diag = 0.5 * sqrt(p.canvasAspect * p.canvasAspect + 1.0);
   let ang = atan2(d.y, d.x);
   let dir = vec2f(cos(ang), sin(ang));
-  let anim = p.t * p.flow * 0.6 + p.seed * 0.2;
+  let anim = sin(p.t * 6.2831853) * p.flow * 0.3 + p.seed * 0.2;   // oscillating churn = loop-safe
   // Domain-warp field: a slow noise vector that curls the boundary samples into
   // billowing, rolling tendrils (the signature of smoke vs. a plain blobby edge).
   let wf = vec2f(
