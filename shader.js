@@ -2461,10 +2461,27 @@ fn frostMask(uv: vec2f) -> f32 {
     mask = organicMask(uv, lA, lB, max(eA, eB));
   }
 
-  // Global mask shift: lets the user rebalance any mode's mask distribution
-  // earlier (negative) or later (positive) without touching its inner logic.
-  // Useful for image-driven masks whose values cluster around the source's
-  // tonal distribution rather than spreading evenly across [0,1].
+  // Spread the mask across the full [0,1] timeline so the reveal keeps arriving
+  // as organic shapes right up to t=1, instead of the bulk crossing by ~0.7 and
+  // overblowing to white early. (Noise-derived masks cluster mid-range.)
+  // ONLY for noise/image-derived masks: masks whose values are ENGINEERED reveal
+  // times must keep their exact [0,1] span — the -0.1 clip pre-opens a band at
+  // t=0 and the /0.78 makes the tail pop as one block at the end. Exempt:
+  //   64/65/68 centre-out geometry, 63 swipe (linear column progress), 7 iris
+  //   (radial distance), 29 cells + 31 regions + 37 paint (authored stagger
+  //   times), 28 video luminance.
+  // Runs BEFORE the texture/origin/turbulence perturbations so those operate in
+  // final reveal-time units (the origin field spans [0,1] exactly by design and
+  // was previously chopped by this normalize — breaking grow-from-origin).
+  let needsNorm = !(p.mode == 64u || p.mode == 65u || p.mode == 68u
+                 || p.mode == 63u || p.mode == 7u  || p.mode == 29u
+                 || p.mode == 31u || p.mode == 37u || p.mode == 28u);
+  if (needsNorm) {
+    mask = clamp((mask - 0.1) / 0.78, 0.0, 1.0);
+  }
+  if (p.mode != 64u && p.mode != 65u && p.mode != 68u) {
+    mask = clamp(mask + p.maskShift, 0.0, 1.0);
+  }
   // Texture-driven dissolve: a loaded grunge / watercolor-paper texture's
   // luminance perturbs the reveal threshold, so the transition breaks up and
   // wicks along the texture instead of advancing as a clean front.
@@ -2549,29 +2566,25 @@ fn frostMask(uv: vec2f) -> f32 {
     let wave = fbm(u2 * 1.4 + vec2f(sin(fp) * 0.4, cos(fp * 0.8) * 0.4) + p.seed * 0.2);
     mask = clamp(mask + (wave - 0.5) * p.undulate, 0.0, 1.0);
   }
-  // Spread the mask across the full [0,1] timeline so the reveal keeps arriving
-  // as organic shapes right up to t=1, instead of the bulk crossing by ~0.7 and
-  // overblowing to white early. (Masks tend to cluster mid-range otherwise.)
-  // Skipped for the centre-out geometric reveals (mirror 64 / door 65 / box 68):
-  // their mask IS the distance from the seed, and the -0.1 clip would collapse the
-  // central band to instant-reveal — they must grow from a true centre line/rect.
-  if (p.mode != 64u && p.mode != 65u && p.mode != 68u) {
-    mask = clamp((mask - 0.1) / 0.78, 0.0, 1.0);
-    mask = clamp(mask + p.maskShift, 0.0, 1.0);
-  }
-  var mixT = sstep5(mask - sp, mask + sp, t);
+  // Per-pixel AA floor on the reveal window: steep masks (frost spines, cell
+  // borders, fractal burn fronts) can make sp/|∇mask| drop below one pixel at
+  // 8K — the front then renders as crawling pixel stairs. fwidth(mask) widens
+  // the window to at least ~a pixel of front width, never narrows it.
+  let mAA = fwidth(mask) * 0.7;
+  var mixT = sstep5(mask - max(sp, mAA), mask + max(sp, mAA), t);
   if (p.mode == 29u) {
     // snap: a tiny reveal window so each cell ignites near-instantly. Edge
     // softness still scales it, but with a much lower floor than the default.
-    let w29 = mix(0.004, 0.25, clamp(p.spread, 0.0, 1.0));
+    let w29 = max(mix(0.004, 0.25, clamp(p.spread, 0.0, 1.0)), mAA);
     mixT = sstep5(mask - w29, mask + w29, t);
   }
   // Burn mode: hard step at the front — no crossfade between A and B at all.
   // The char band + glow at the front provide the only visible transition.
   // Per-pixel: A while the front hasn't passed, B once it has, with the burn
-  // visuals overlaid in the brief window where char/glow are active.
+  // visuals overlaid in the brief window where char/glow are active. The step
+  // is derivative-clamped to ~1px so the fractal front doesn't staircase at 8K.
   if (p.mode == 27u) {
-    mixT = select(0.0, 1.0, t >= mask);
+    mixT = clamp((t - mask) / max(2.0 * mAA, 1e-5) + 0.5, 0.0, 1.0);
   }
 
   // ---- wet diffusion (mode 4): anticipatory tint of B into A ----
